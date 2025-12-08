@@ -3,6 +3,7 @@
 import { visionModel, embeddingModel, textModel } from '@/lib/gemini';
 import { supabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
+import { loadCentroid, projectEmbedding } from '@/lib/embeddings';
 
 async function fetchImage(url: string) {
     const response = await fetch(url);
@@ -30,7 +31,13 @@ export async function addItem(imageUrl: string) {
         // 2. Generate Embedding
         const embeddingInput = `${metadata.description} ${metadata.style_tags.join(' ')}`;
         const embeddingResult = await embeddingModel.embedContent(embeddingInput);
-        const embedding = embeddingResult.embedding.values;
+        let embedding = embeddingResult.embedding.values;
+
+        // 2.5 Project Embedding (Refinement)
+        const centroid = loadCentroid();
+        if (centroid) {
+            embedding = projectEmbedding(embedding, centroid);
+        }
 
         // 3. Store in Supabase
         const { error } = await supabase.from('wardrobe_items').insert({
@@ -73,7 +80,13 @@ export async function checkCompatibility(candidateUrl: string) {
 
         // 3. Generate Embedding for Query
         const embeddingResult = await embeddingModel.embedContent(styleQuery);
-        const queryEmbedding = embeddingResult.embedding.values;
+        let queryEmbedding = embeddingResult.embedding.values;
+
+        // 3.5 Project Query Embedding (Refinement)
+        const centroid = loadCentroid();
+        if (centroid) {
+            queryEmbedding = projectEmbedding(queryEmbedding, centroid);
+        }
 
         // 4. Search Wardrobe for SIMILAR items
         const { data: similarItems, error: similarError } = await supabase.rpc('match_wardrobe_items', {
