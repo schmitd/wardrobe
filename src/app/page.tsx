@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { supabase, createAuthenticatedClient } from '@/lib/supabase';
 import WardrobeGrid from '@/components/WardrobeGrid';
 import AddItemSection from '@/components/AddItemSection';
 import { SignInButton, SignedOut } from '@clerk/nextjs';
@@ -8,18 +8,25 @@ export const dynamic = 'force-dynamic';
 import { auth } from '@clerk/nextjs/server';
 
 export default async function Home() {
-    const session = await auth();
-    const userId = session.userId;
+    const { userId, getToken } = await auth();
 
     let items: any[] = [];
 
     if (userId) {
-        const { data } = await supabase
-            .from('wardrobe_items')
-            .select('*')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false });
-        items = data || [];
+        const token = await getToken();
+        if (token) {
+            const supabase = createAuthenticatedClient(token);
+            const { data, error } = await supabase
+                .from('wardrobe_items')
+                .select('*')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error("Error fetching wardrobe items:", error);
+            }
+            items = data || [];
+        }
     }
 
     return (

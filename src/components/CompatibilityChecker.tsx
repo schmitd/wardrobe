@@ -11,7 +11,8 @@ export default function CompatibilityChecker() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [status, setStatus] = useState<string | null>(null);
 
-    const handleCheck = async (url: string) => {
+    const handleCheck = async (urls: string[]) => {
+        const url = urls[0];
         setIsProcessing(true);
         setStatus("Analyzing candidate item...");
         setResult(null);

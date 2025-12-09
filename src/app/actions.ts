@@ -1,27 +1,45 @@
 'use server';
 
 import { visionModel, embeddingModel, textModel } from '@/lib/gemini';
-import { supabase } from '@/lib/supabase';
+import { createAuthenticatedClient } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { loadCentroid, projectEmbedding } from '@/lib/embeddings';
 import { auth } from '@clerk/nextjs/server';
 
 async function fetchImage(url: string) {
-    const response = await fetch(url);
-    const buffer = await response.arrayBuffer();
-    return Buffer.from(buffer).toString('base64');
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    try {
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(id);
+        if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+        const buffer = await response.arrayBuffer();
+        return Buffer.from(buffer).toString('base64');
+    } catch (error) {
+        clearTimeout(id);
+        throw error;
+    }
 }
 
 export async function addItem(imageUrl: string) {
     try {
-        const session = await auth();
-        const userId = session.userId;
+        console.log("addItem: Starting for url", imageUrl);
+        const { userId, getToken } = await auth();
 
         if (!userId) {
             return { success: false, error: 'Unauthorized' };
         }
 
+        const supabaseToken = await getToken();
+        if (!supabaseToken) {
+            console.error("Failed to get Supabase token");
+            return { success: false, error: 'Authorization failed' };
+        }
+
+        const supabase = createAuthenticatedClient(supabaseToken);
+
         const imageBase64 = await fetchImage(imageUrl);
+        console.log("addItem: Fetched image, length:", imageBase64.length);
 
         // 1. Analyze Image
         const prompt = "Analyze this clothing item. Extract category, color, material, and 3-5 style tags. Describe it in detail focusing on fashion elements. Return JSON with keys: category, description, style_tags (array of strings).";
@@ -35,11 +53,13 @@ export async function addItem(imageUrl: string) {
         // Clean up JSON if needed (Gemini sometimes adds markdown)
         const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
         const metadata = JSON.parse(jsonStr);
+        console.log("addItem: Image analyzed", metadata.category);
 
         // 2. Generate Embedding
         const embeddingInput = `${metadata.description} ${metadata.style_tags.join(' ')}`;
         const embeddingResult = await embeddingModel.embedContent(embeddingInput);
         let embedding = embeddingResult.embedding.values;
+        console.log("addItem: Embedding generated");
 
         // 2.5 Project Embedding (Refinement)
         const centroid = loadCentroid();
@@ -56,8 +76,12 @@ export async function addItem(imageUrl: string) {
             embedding: embedding,
             user_id: userId,
         });
+        console.log("addItem: Inserted into Supabase, error:", error);
 
-        if (error) throw error;
+        if (error) {
+            console.error("Supabase insert error:", error);
+            throw error;
+        }
 
         revalidatePath('/');
         return { success: true, metadata };
@@ -69,12 +93,18 @@ export async function addItem(imageUrl: string) {
 
 export async function checkCompatibility(candidateUrl: string) {
     try {
-        const session = await auth();
-        const userId = session.userId;
+        const { userId, getToken } = await auth();
 
         if (!userId) {
             return { success: false, error: 'Unauthorized' };
         }
+
+        const supabaseToken = await getToken();
+        if (!supabaseToken) {
+            return { success: false, error: 'Authorization failed' };
+        }
+
+        const supabase = createAuthenticatedClient(supabaseToken);
 
         const imageBase64 = await fetchImage(candidateUrl);
 

@@ -17,7 +17,8 @@ create table wardrobe_items (
 create or replace function match_wardrobe_items (
   query_embedding vector(768),
   match_threshold float,
-  match_count int
+  match_count int,
+  p_user_id text
 )
 returns table (
   id uuid,
@@ -28,6 +29,7 @@ returns table (
   similarity float
 )
 language plpgsql
+set search_path = public, extensions
 as $$
 begin
   return query
@@ -39,7 +41,8 @@ begin
     wardrobe_items.style_tags,
     1 - (wardrobe_items.embedding <=> query_embedding) as similarity
   from wardrobe_items
-  where 1 - (wardrobe_items.embedding <=> query_embedding) > match_threshold
+  where wardrobe_items.user_id = p_user_id
+    and 1 - (wardrobe_items.embedding <=> query_embedding) > match_threshold
   order by wardrobe_items.embedding <=> query_embedding
   limit match_count;
 end;
