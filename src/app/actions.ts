@@ -3,7 +3,6 @@
 import { visionModel, embeddingModel, textModel } from '@/lib/gemini';
 import { createAuthenticatedClient } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
-import { loadCentroid, projectEmbedding } from '@/lib/embeddings';
 import { auth } from '@clerk/nextjs/server';
 
 async function fetchImage(url: string) {
@@ -58,14 +57,8 @@ export async function addItem(imageUrl: string) {
         // 2. Generate Embedding
         const embeddingInput = `${metadata.description} ${metadata.style_tags.join(' ')}`;
         const embeddingResult = await embeddingModel.embedContent(embeddingInput);
-        let embedding = embeddingResult.embedding.values;
+        const embedding = embeddingResult.embedding.values;
         console.log("addItem: Embedding generated");
-
-        // 2.5 Project Embedding (Refinement)
-        const centroid = loadCentroid();
-        if (centroid) {
-            embedding = projectEmbedding(embedding, centroid);
-        }
 
         // 3. Store in Supabase
         const { error } = await supabase.from('wardrobe_items').insert({
@@ -126,18 +119,12 @@ export async function checkCompatibility(candidateUrl: string) {
 
         // 3. Generate Embedding for Query
         const embeddingResult = await embeddingModel.embedContent(styleQuery);
-        let queryEmbedding = embeddingResult.embedding.values;
-
-        // 3.5 Project Query Embedding (Refinement)
-        const centroid = loadCentroid();
-        if (centroid) {
-            queryEmbedding = projectEmbedding(queryEmbedding, centroid);
-        }
+        const queryEmbedding = embeddingResult.embedding.values;
 
         // 4. Search Wardrobe for SIMILAR items
         const { data: similarItems, error: similarError } = await supabase.rpc('match_wardrobe_items', {
             query_embedding: queryEmbedding,
-            match_threshold: 0.5,
+            match_threshold: 0.3,
             match_count: 5,
             p_user_id: userId
         });
@@ -145,6 +132,7 @@ export async function checkCompatibility(candidateUrl: string) {
         if (similarError) throw similarError;
 
         // 5. Also get DISSIMILAR items (lowest similarity scores)
+        // XXX seems inefficent that we are getting all items and then filtering them
         const { data: allItems, error: allError } = await supabase
             .from('wardrobe_items')
             .select('id, image_url, category, description, style_tags, embedding')

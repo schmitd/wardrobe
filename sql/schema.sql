@@ -4,7 +4,7 @@ create extension if not exists vector;
 -- Create the wardrobe_items table
 create table wardrobe_items (
   id uuid primary key default gen_random_uuid(),
-  user_id uuid not null default auth.uid(), -- Assuming you use Supabase Auth, otherwise remove default
+  user_id text not null, -- Changed to text for Clerk IDs
   image_url text not null,
   category text,
   description text,
