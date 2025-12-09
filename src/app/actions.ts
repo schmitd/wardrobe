@@ -4,6 +4,7 @@ import { visionModel, embeddingModel, textModel } from '@/lib/gemini';
 import { supabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { loadCentroid, projectEmbedding } from '@/lib/embeddings';
+import { auth } from '@clerk/nextjs/server';
 
 async function fetchImage(url: string) {
     const response = await fetch(url);
@@ -13,6 +14,13 @@ async function fetchImage(url: string) {
 
 export async function addItem(imageUrl: string) {
     try {
+        const session = await auth();
+        const userId = session.userId;
+
+        if (!userId) {
+            return { success: false, error: 'Unauthorized' };
+        }
+
         const imageBase64 = await fetchImage(imageUrl);
 
         // 1. Analyze Image
@@ -46,6 +54,7 @@ export async function addItem(imageUrl: string) {
             description: metadata.description,
             style_tags: metadata.style_tags,
             embedding: embedding,
+            user_id: userId,
         });
 
         if (error) throw error;
@@ -60,6 +69,13 @@ export async function addItem(imageUrl: string) {
 
 export async function checkCompatibility(candidateUrl: string) {
     try {
+        const session = await auth();
+        const userId = session.userId;
+
+        if (!userId) {
+            return { success: false, error: 'Unauthorized' };
+        }
+
         const imageBase64 = await fetchImage(candidateUrl);
 
         // 1. Analyze Candidate
@@ -92,7 +108,8 @@ export async function checkCompatibility(candidateUrl: string) {
         const { data: similarItems, error: similarError } = await supabase.rpc('match_wardrobe_items', {
             query_embedding: queryEmbedding,
             match_threshold: 0.5,
-            match_count: 5
+            match_count: 5,
+            p_user_id: userId
         });
 
         if (similarError) throw similarError;
@@ -101,6 +118,7 @@ export async function checkCompatibility(candidateUrl: string) {
         const { data: allItems, error: allError } = await supabase
             .from('wardrobe_items')
             .select('id, image_url, category, description, style_tags, embedding')
+            .eq('user_id', userId)
             .limit(100);
 
         if (allError) throw allError;
