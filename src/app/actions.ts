@@ -125,14 +125,26 @@ Return the data strictly complying with the schema, maintaining the order of ima
             // For now, proceed if we can, or just slice/fill.
         }
 
-        // 3. Generate Embeddings & Insert
-        const itemsToInsert = await Promise.all(metadataArray.map(async (metadata, i) => {
-            const originalImage = validImages[i]; // Assuming order is preserved as requested
-            if (!originalImage) return null;
+        // 3. Generate Embeddings in Batch (up to 100 at once)
+        console.log("addItems: Generating embeddings in batch for", metadataArray.length, "items");
 
-            const embeddingInput = `${metadata.description} ${metadata.style_tags.join(' ')}`;
-            const embeddingResult = await embeddingModel.embedContent(embeddingInput);
-            const embedding = embeddingResult.embedding.values;
+        const embeddingRequests = metadataArray.map(metadata => ({
+            content: {
+                role: 'user',
+                parts: [{ text: `${metadata.description} ${metadata.style_tags.join(' ')}` }]
+            }
+        }));
+
+        const batchEmbeddingResult = await embeddingModel.batchEmbedContents({
+            requests: embeddingRequests
+        });
+
+        // 4. Combine embeddings with metadata
+        const itemsToInsert = metadataArray.map((metadata, i) => {
+            const originalImage = validImages[i];
+            if (!originalImage || !batchEmbeddingResult.embeddings[i]) return null;
+
+            const embedding = batchEmbeddingResult.embeddings[i].values;
 
             return {
                 image_url: originalImage.url,
@@ -142,7 +154,7 @@ Return the data strictly complying with the schema, maintaining the order of ima
                 embedding: embedding,
                 user_id: userId,
             };
-        }));
+        });
 
         const cleanItemsToInsert = itemsToInsert.filter(item => item !== null);
 
