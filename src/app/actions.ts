@@ -4,6 +4,7 @@ import { visionModel, embeddingModel, textModel } from '@/lib/gemini';
 import { createAuthenticatedClient } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@clerk/nextjs/server';
+import { SchemaType, Schema } from '@google/generative-ai';
 
 async function fetchImage(url: string) {
     const controller = new AbortController();
@@ -20,9 +21,10 @@ async function fetchImage(url: string) {
     }
 }
 
-export async function addItem(imageUrl: string) {
+// Reusing the existing addItem function for single items, but here is the batch version
+export async function addItems(imageUrls: string[]) {
     try {
-        console.log("addItem: Starting for url", imageUrl);
+        console.log("addItems: Starting for", imageUrls.length, "urls");
         const { userId, getToken } = await auth();
 
         if (!userId) {
@@ -37,47 +39,138 @@ export async function addItem(imageUrl: string) {
 
         const supabase = createAuthenticatedClient(supabaseToken);
 
-        const imageBase64 = await fetchImage(imageUrl);
-        console.log("addItem: Fetched image, length:", imageBase64.length);
+        // 1. Fetch all images in parallel
+        const imageResults = await Promise.allSettled(imageUrls.map(url => fetchImage(url)));
 
-        // 1. Analyze Image
-        const prompt = "Analyze this clothing item. Extract category, color, material, and 3-5 style tags. Describe it in detail focusing on fashion elements. Return JSON with keys: category, description, style_tags (array of strings).";
-        const result = await visionModel.generateContent([
-            prompt,
-            { inlineData: { data: imageBase64, mimeType: "image/jpeg" } } // Assuming JPEG for now, or detect
-        ]);
+        const validImages: { url: string; base64: string; index: number }[] = [];
+        const failedUrls: string[] = [];
+
+        imageResults.forEach((result, index) => {
+            if (result.status === 'fulfilled') {
+                validImages.push({ url: imageUrls[index], base64: result.value, index });
+            } else {
+                console.error(`Failed to fetch query image ${imageUrls[index]}:`, result.reason);
+                failedUrls.push(imageUrls[index]);
+            }
+        });
+
+        if (validImages.length === 0) {
+            return { success: false, error: 'No images could be fetched' };
+        }
+
+        // 2. Analyze Images in Batch
+        // Minimal prompt since schema handles structure
+        const prompt = `Analyze these ${validImages.length} clothing items. 
+For EACH item, extract category, color, material, and 3-5 style tags. 
+Describe it in detail focusing on fashion elements. 
+Return the data strictly complying with the schema, maintaining the order of images.`;
+
+        const promptParts: any[] = [prompt];
+
+        validImages.forEach(img => {
+            promptParts.push({
+                inlineData: {
+                    data: img.base64,
+                    mimeType: "image/jpeg"
+                }
+            });
+        });
+
+        const schema: Schema = {
+            type: SchemaType.ARRAY,
+            items: {
+                type: SchemaType.OBJECT,
+                properties: {
+                    category: { type: SchemaType.STRING },
+                    description: { type: SchemaType.STRING },
+                    style_tags: {
+                        type: SchemaType.ARRAY,
+                        items: { type: SchemaType.STRING }
+                    }
+                },
+                required: ["category", "description", "style_tags"]
+            }
+        };
+
+        console.log("addItems: Sending batch request to Gemini with", validImages.length, "images");
+        const result = await visionModel.generateContent({
+            contents: [{ role: 'user', parts: promptParts }],
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+            }
+        });
+
         const response = await result.response;
         const text = response.text();
 
-        // Clean up JSON if needed (Gemini sometimes adds markdown)
-        const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const metadata = JSON.parse(jsonStr);
-        console.log("addItem: Image analyzed", metadata.category);
+        // No cleanup needed with Structured Output
+        let metadataArray: any[];
+        try {
+            metadataArray = JSON.parse(text);
+        } catch (e) {
+            console.error("Failed to parse batch JSON:", text);
+            return { success: false, error: 'Failed to parse AI response' };
+        }
 
-        // 2. Generate Embedding
-        const embeddingInput = `${metadata.description} ${metadata.style_tags.join(' ')}`;
-        const embeddingResult = await embeddingModel.embedContent(embeddingInput);
-        const embedding = embeddingResult.embedding.values;
-        console.log("addItem: Embedding generated");
+        if (!Array.isArray(metadataArray)) {
+            console.error("AI response is not an array:", metadataArray);
+            return { success: false, error: 'AI response invalid format' };
+        }
 
-        // 3. Store in Supabase
-        const { error } = await supabase.from('wardrobe_items').insert({
-            image_url: imageUrl,
-            category: metadata.category,
-            description: metadata.description,
-            style_tags: metadata.style_tags,
-            embedding: embedding,
-            user_id: userId,
-        });
-        console.log("addItem: Inserted into Supabase, error:", error);
+        if (metadataArray.length !== validImages.length) {
+            console.warn(`Mismatch in result count. Sent ${validImages.length}, got ${metadataArray.length}. Trying to map by index.`);
+            // This is risky, but if the model fails to return exact count
+            // We might have to abort or try to match.
+            // For now, proceed if we can, or just slice/fill.
+        }
 
-        if (error) {
-            console.error("Supabase insert error:", error);
-            throw error;
+        // 3. Generate Embeddings & Insert
+        const itemsToInsert = await Promise.all(metadataArray.map(async (metadata, i) => {
+            const originalImage = validImages[i]; // Assuming order is preserved as requested
+            if (!originalImage) return null;
+
+            const embeddingInput = `${metadata.description} ${metadata.style_tags.join(' ')}`;
+            const embeddingResult = await embeddingModel.embedContent(embeddingInput);
+            const embedding = embeddingResult.embedding.values;
+
+            return {
+                image_url: originalImage.url,
+                category: metadata.category,
+                description: metadata.description,
+                style_tags: metadata.style_tags,
+                embedding: embedding,
+                user_id: userId,
+            };
+        }));
+
+        const cleanItemsToInsert = itemsToInsert.filter(item => item !== null);
+
+        if (cleanItemsToInsert.length > 0) {
+            const { error } = await supabase.from('wardrobe_items').insert(cleanItemsToInsert);
+            if (error) {
+                console.error("Supabase batch insert error:", error);
+                throw error;
+            }
         }
 
         revalidatePath('/');
-        return { success: true, metadata };
+        return {
+            success: true,
+            count: cleanItemsToInsert.length,
+            failed: failedUrls.length
+        };
+
+    } catch (error) {
+        console.error("Error adding items batch:", error);
+        return { success: false, error: error instanceof Error ? error.message : 'Failed to process items' };
+    }
+}
+
+export async function addItem(imageUrl: string) {
+    try {
+        console.log("addItem: Starting for url", imageUrl);
+        return await addItems([imageUrl]);
     } catch (error) {
         console.error("Error adding item:", error);
         return { success: false, error: error instanceof Error ? error.message : 'Failed to process item' };

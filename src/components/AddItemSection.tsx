@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import ImageUploader from './ui/ImageUploader';
-import { addItem } from '@/app/actions';
+import { addItems } from '@/app/actions';
 import { Loader2 } from 'lucide-react';
 
 export default function AddItemSection() {
@@ -11,37 +11,29 @@ export default function AddItemSection() {
 
     const handleUpload = async (urls: string[]) => {
         setIsProcessing(true);
-        setStatus(`Preparing to analyze ${urls.length} items...`);
-        console.log("Starting processing for URLs:", urls);
+        setStatus(`Analyzing ${urls.length} items in batch...`);
+        console.log("Starting batch processing for URLs:", urls);
 
-        let successCount = 0;
-        let failCount = 0;
+        try {
+            const result = await addItems(urls);
+            console.log("Batch result:", result);
 
-        for (let i = 0; i < urls.length; i++) {
-            setStatus(`Analyzing item ${i + 1} of ${urls.length}...`);
-            console.log(`Processing item ${i + 1}/${urls.length}:`, urls[i]);
-            try {
-                const result = await addItem(urls[i]);
-                console.log(`Result for item ${i + 1}:`, result);
-                if (result.success) {
-                    successCount++;
+            if (result.success) {
+                const count = (result as any).count || 0;
+                const failed = (result as any).failed || 0;
+
+                if (failed === 0) {
+                    setStatus(`Successfully added ${count} items!`);
+                    setTimeout(() => setStatus(null), 3000);
                 } else {
-                    failCount++;
-                    console.error(`Failed to add item ${i}:`, result.error);
+                    setStatus(`Added ${count} items. Failed to fetch/process ${failed} images.`);
                 }
-            } catch (e) {
-                console.error(`Exception processing item ${i}:`, e);
-                failCount++;
+            } else {
+                setStatus(`Batch processing failed: ${result.error}`);
             }
-        }
-
-        console.log("Processing complete. Success:", successCount, "Fail:", failCount);
-
-        if (failCount === 0) {
-            setStatus(`Successfully added ${successCount} items!`);
-            setTimeout(() => setStatus(null), 3000);
-        } else {
-            setStatus(`Finished. Added ${successCount} items. Failed: ${failCount}.`);
+        } catch (e) {
+            console.error("Exception in batch processing:", e);
+            setStatus("An unexpected error occurred.");
         }
         setIsProcessing(false);
     };
