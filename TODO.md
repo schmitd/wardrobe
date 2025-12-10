@@ -1,1 +1,5 @@
-- [ ] Private uploads (uploadthing premium or migrate to s3)
+- [ ] Allow users to delete items
+- [ ] Rate limiting
+- [ ] Private uploads (~~uploadthing premium~~ or migrate to s3)
+- [ ] Stripe integration
+- [ ] Improve UI/UX
