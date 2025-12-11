@@ -40,7 +40,7 @@ export default async function Home() {
                 ) : (
                     <div className="text-center py-20">
                         <h2 className="text-3xl font-bold text-gray-900 mb-4">Welcome to WardrobeAI</h2>
-                        <p className="text-xl text-gray-600 mb-8">Sign in to manage your digital wardrobe and get AI styling advice.</p>
+                        <p className="text-xl text-gray-600 mb-8">Sign in to manage your digital wardrobe and get styling advice.</p>
                         <SignedOut>
                             <SignInButton mode="modal">
                                 <button className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-lg">

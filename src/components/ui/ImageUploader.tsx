@@ -52,7 +52,7 @@ export default function ImageUploader({ onUploadComplete, label = "Upload Image"
                 ) : (
                     <div className="w-full">
                         <h3 className="text-center font-semibold mb-2 text-gray-700">{label}</h3>
-                        <p className="text-center text-xs text-gray-500 mb-4">Upload up to 10 images at once</p>
+                        <p className="text-center text-xs text-gray-500 mb-4">Upload up to 5 images at once</p>
                         <UploadDropzone
                             endpoint="imageUploader"
                             onClientUploadComplete={(res: any) => {
