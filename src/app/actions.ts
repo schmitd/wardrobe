@@ -65,7 +65,7 @@ For EACH item, extract category, color, material, and 3-5 style tags.
 Describe it in detail focusing on fashion elements. 
 Return the data strictly complying with the schema, maintaining the order of images.`;
 
-        const promptParts: any[] = [prompt];
+        const promptParts: any[] = [{ text: prompt }];
 
         validImages.forEach(img => {
             promptParts.push({
@@ -175,7 +175,10 @@ Return the data strictly complying with the schema, maintaining the order of ima
 
     } catch (error) {
         console.error("Error adding items batch:", error);
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to process items' };
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : JSON.stringify(error)
+        };
     }
 }
 

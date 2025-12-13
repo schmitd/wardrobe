@@ -4,4 +4,4 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export const visionModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
 export const textModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
-export const embeddingModel = genAI.getGenerativeModel({ model: 'gemini-embedding-001' });
+export const embeddingModel = genAI.getGenerativeModel({ model: 'text-embedding-004' });

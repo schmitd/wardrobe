@@ -17,9 +17,7 @@ export default function CheckPage() {
                         <span className="font-medium">Back to Wardrobe</span>
                     </Link>
                 </div>
-                <SubscriptionGate>
-                    <CompatibilityChecker />
-                </SubscriptionGate>
+                <CompatibilityChecker />
             </div>
         </main>
     );
