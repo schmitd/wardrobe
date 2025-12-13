@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Shirt } from 'lucide-react';
 import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
-import { useSubscription } from '@/hooks/useSubscription';
+import { useSubscription } from '../hooks/useSubscription';
 
 
 
