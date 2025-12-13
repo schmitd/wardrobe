@@ -1,6 +1,6 @@
 - [ ] Allow users to delete items
 - [ ] Rate limiting
 - [ ] Private uploads (~~uploadthing premium or migrate to s3~~ supabase storage)
-- [ ] Stripe integration
+- [x] Stripe integration
 - [ ] Improve UI/UX
-- [ ] Ensure upload dropzone is limited to a batch of 5
+- [x] Ensure upload dropzone is limited to a batch of 5

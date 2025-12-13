@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Virtual Wardrobe Stylist",
-  description: "AI-powered wardrobe stylist and compatibility checker.",
+  description: "Wardrobe stylist and compatibility checker.",
 };
 
 export default function RootLayout({

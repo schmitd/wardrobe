@@ -1,4 +1,5 @@
 import CompatibilityChecker from '@/components/CompatibilityChecker';
+import SubscriptionGate from '@/components/SubscriptionGate';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
@@ -16,7 +17,9 @@ export default function CheckPage() {
                         <span className="font-medium">Back to Wardrobe</span>
                     </Link>
                 </div>
-                <CompatibilityChecker />
+                <SubscriptionGate>
+                    <CompatibilityChecker />
+                </SubscriptionGate>
             </div>
         </main>
     );
