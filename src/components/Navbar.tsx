@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { Shirt } from 'lucide-react';
 import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
 import { useSubscription } from '@/hooks/useSubscription';
-import SubscribeButton from './SubscribeButton';
+
 
 
 export default function Navbar() {
@@ -33,7 +33,12 @@ export default function Navbar() {
                     )}
 
                     {!isSubscribed && (
-                        <SubscribeButton />
+                        <Link
+                            href="/pricing"
+                            className="px-4 py-2 text-orange-600 font-medium text-sm hover:bg-orange-50 rounded-lg transition-colors border border-orange-200"
+                        >
+                            Upgrade
+                        </Link>
                     )}
 
                     <div className="flex items-center">

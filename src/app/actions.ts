@@ -330,29 +330,4 @@ Return JSON with keys:
     }
 }
 
-export async function getSubscriptionStatus() {
-    try {
-        const { userId, getToken } = await auth();
-        if (!userId) return { status: 'none', isSubscribed: false };
 
-        const supabaseToken = await getToken();
-        if (!supabaseToken) return { status: 'none', isSubscribed: false };
-
-        const supabase = createAuthenticatedClient(supabaseToken);
-        const { data, error } = await supabase
-            .from('subscriptions')
-            .select('status')
-            .eq('user_id', userId)
-            .single();
-
-        if (error || !data) return { status: 'none', isSubscribed: false };
-
-        return {
-            status: data.status,
-            isSubscribed: data.status === 'active' || data.status === 'trialing'
-        };
-    } catch (error) {
-        console.error('Error fetching subscription:', error);
-        return { status: 'none', isSubscribed: false };
-    }
-}
