@@ -1,5 +1,7 @@
 'use server';
 
+import { checkBotId } from 'botid/server';
+
 import { visionModel, embeddingModel, textModel } from '@/lib/gemini';
 import { createAuthenticatedClient } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
@@ -24,6 +26,11 @@ async function fetchImage(url: string) {
 // Reusing the existing addItem function for single items, but here is the batch version
 export async function addItems(imageUrls: string[]) {
     try {
+        const verification = await checkBotId();
+        if (verification.isBot) {
+            return { success: false, error: 'Access denied: Bot detected' };
+        }
+
         console.log("addItems: Starting for", imageUrls.length, "urls");
         const { userId, getToken } = await auth();
 
@@ -194,6 +201,11 @@ export async function addItem(imageUrl: string) {
 
 export async function checkCompatibility(candidateUrl: string) {
     try {
+        const verification = await checkBotId();
+        if (verification.isBot) {
+            return { success: false, error: 'Access denied: Bot detected' };
+        }
+
         const { userId, getToken } = await auth();
 
         if (!userId) {
