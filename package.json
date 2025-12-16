@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@arcjet/next": "^1.0.0-beta.15",
     "@clerk/nextjs": "^6.36.1",
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.86.0",

@@ -7,6 +7,8 @@ import { createAuthenticatedClient } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@clerk/nextjs/server';
 import { SchemaType, Schema } from '@google/generative-ai';
+import { aj } from '@/lib/arcjet';
+import { fixedWindow } from '@arcjet/next';
 
 async function fetchImage(url: string) {
     const controller = new AbortController();
@@ -206,10 +208,26 @@ export async function checkCompatibility(candidateUrl: string) {
             return { success: false, error: 'Access denied: Bot detected' };
         }
 
-        const { userId, getToken } = await auth();
+        const { userId, getToken, has } = await auth();
 
         if (!userId) {
             return { success: false, error: 'Unauthorized' };
+        }
+
+        const isPro = has({ permission: 'compatibility_check' });
+        const limit = isPro ? 20 : 3;
+
+        const decision = await (aj as any).protect(
+            fixedWindow({
+                mode: "LIVE",
+                window: "1d",
+                max: limit,
+            }),
+            { userId } as any
+        );
+
+        if (decision.isDenied()) {
+            return { success: false, error: 'Rate limit exceeded. Upgrade to Pro for more checks!' };
         }
 
         const supabaseToken = await getToken();

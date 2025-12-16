@@ -1,16 +1,42 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
+import { UploadThingError } from "uploadthing/server";
+import { auth } from "@clerk/nextjs/server";
+import { aj } from "@/lib/arcjet";
+import { fixedWindow } from "@arcjet/next";
 
 const f = createUploadthing();
 
 export const ourFileRouter = {
     imageUploader: f({ image: { maxFileSize: "4MB", maxFileCount: 5 } })
-        .onUploadError((err: { error: { message: string } }) => {
+        .middleware(async ({ req }) => {
+            const { userId, has } = await auth();
+            if (!userId) throw new UploadThingError("Unauthorized");
+
+            const isPro = has({ permission: 'compatibility_check' });
+            const limit = isPro ? 20 : 5;
+
+            const decision = await (aj as any).protect(
+                fixedWindow({
+                    mode: "LIVE",
+                    window: "1d",
+                    max: limit,
+                }),
+                { userId } as any
+            );
+
+            if (decision.isDenied()) {
+                throw new UploadThingError("Rate limit exceeded");
+            }
+
+            return { uploadedBy: userId };
+        })
+        .onUploadError((err) => {
             console.error("UploadThing Error for imageUploader:", err);
         })
         .onUploadComplete(async ({ metadata, file }) => {
-            console.log("Upload complete for userId:", metadata);
+            console.log("Upload complete for userId:", metadata.uploadedBy);
             console.log("file url", file.url);
-            return { uploadedBy: "user" };
+            return { uploadedBy: metadata.uploadedBy };
         }),
 } satisfies FileRouter;
 
