@@ -2,7 +2,7 @@ import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
 import { auth } from "@clerk/nextjs/server";
 import { aj } from "@/lib/arcjet";
-import { fixedWindow } from "@arcjet/next";
+import { fixedWindow, slidingWindow } from "@arcjet/next";
 
 const f = createUploadthing();
 
@@ -16,11 +16,18 @@ export const ourFileRouter = {
             const limit = isPro ? 20 : 5;
 
             const decision = await (aj as any).protect(
-                fixedWindow({
-                    mode: "LIVE",
-                    window: "1d",
-                    max: limit,
-                }),
+                [
+                    fixedWindow({
+                        mode: "LIVE",
+                        window: "1d",
+                        max: limit,
+                    }),
+                    slidingWindow({
+                        mode: "LIVE",
+                        interval: "10s",
+                        max: 1,
+                    }),
+                ],
                 { userId } as any
             );
 

@@ -8,7 +8,7 @@ import { revalidatePath } from 'next/cache';
 import { auth } from '@clerk/nextjs/server';
 import { SchemaType, Schema } from '@google/generative-ai';
 import { aj } from '@/lib/arcjet';
-import { fixedWindow } from '@arcjet/next';
+import { fixedWindow, slidingWindow } from '@arcjet/next';
 
 async function fetchImage(url: string) {
     const controller = new AbortController();
@@ -218,11 +218,18 @@ export async function checkCompatibility(candidateUrl: string) {
         const limit = isPro ? 20 : 3;
 
         const decision = await (aj as any).protect(
-            fixedWindow({
-                mode: "LIVE",
-                window: "1d",
-                max: limit,
-            }),
+            [
+                fixedWindow({
+                    mode: "LIVE",
+                    window: "1d",
+                    max: limit,
+                }),
+                slidingWindow({
+                    mode: "LIVE",
+                    interval: "10s",
+                    max: 1,
+                }),
+            ],
             { userId } as any
         );
 
