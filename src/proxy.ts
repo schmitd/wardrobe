@@ -13,12 +13,13 @@ export default clerkMiddleware(async (auth, req) => {
     const isStripeWebhook = req.nextUrl.pathname === '/api/stripe/webhook';
 
     if ((isApiRoute || isServerAction) && !isStripeWebhook) {
-        // Pass headers to BotID for better context (missing headers = false positives)
+        console.log(`[BotID] Starting check for ${req.nextUrl.pathname}`);
         const verification = await checkBotId({
             advancedOptions: {
                 headers: Object.fromEntries(req.headers.entries())
             }
         });
+        console.log(`[BotID] Check complete: isBot=${verification.isBot}`);
 
         console.log(`[BotID] Path: ${req.nextUrl.pathname}, isBot: ${verification.isBot}, isServerAction: ${isServerAction}`);
 

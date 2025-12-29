@@ -15,21 +15,22 @@ export const ourFileRouter = {
             const isPro = has({ permission: 'compatibility_check' });
             const limit = isPro ? 20 : 5;
 
-            const decision = await (aj as any).protect(
-                [
+            const decision = await aj
+                .withRule(
                     fixedWindow({
                         mode: "LIVE",
                         window: "1d",
                         max: limit,
-                    }),
+                    })
+                )
+                .withRule(
                     slidingWindow({
                         mode: "LIVE",
                         interval: "10s",
                         max: 1,
-                    }),
-                ],
-                { userId } as any
-            );
+                    })
+                )
+                .protect(req, { userId });
 
             if (decision.isDenied()) {
                 throw new UploadThingError("Rate limit exceeded");
