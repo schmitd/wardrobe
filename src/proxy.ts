@@ -13,17 +13,50 @@ export default clerkMiddleware(async (auth, req) => {
     const isStripeWebhook = req.nextUrl.pathname === '/api/stripe/webhook';
 
     if ((isApiRoute || isServerAction) && !isStripeWebhook) {
-        console.log(`[BotID] Starting check for ${req.nextUrl.pathname}`);
-        const verification = await checkBotId({
-            advancedOptions: {
-                headers: Object.fromEntries(req.headers.entries())
-            }
-        });
-        console.log(`[BotID] Check complete: isBot=${verification.isBot}`);
+        // Structured logging for better observability
+        console.log(JSON.stringify({
+            level: 'info',
+            message: 'BotID check starting',
+            path: req.nextUrl.pathname,
+            isServerAction
+        }));
 
-        console.log(`[BotID] Path: ${req.nextUrl.pathname}, isBot: ${verification.isBot}, isServerAction: ${isServerAction}`);
+        let isBot = false;
 
-        if (verification.isBot) {
+        try {
+            // Sanitize headers to prevent leaking sensitive credentials
+            const headers = Object.fromEntries(req.headers.entries());
+            const safeHeaders = { ...headers };
+            delete safeHeaders['authorization'];
+            // Note: Cookies are preserved as they are often critical for bot detection.
+
+            const verification = await checkBotId({
+                advancedOptions: {
+                    headers: safeHeaders
+                }
+            });
+
+            isBot = verification.isBot;
+
+            console.log(JSON.stringify({
+                level: 'info',
+                message: 'BotID check complete',
+                path: req.nextUrl.pathname,
+                isBot
+            }));
+
+        } catch (error) {
+            // Fail-open strategy: log error but allow request to proceed
+            console.error(JSON.stringify({
+                level: 'error',
+                message: 'BotID check failed',
+                error: String(error),
+                path: req.nextUrl.pathname
+            }));
+            // isBot remains false
+        }
+
+        if (isBot) {
             return NextResponse.json({ error: 'Access denied: Bot detected' }, { status: 403 });
         }
     }
