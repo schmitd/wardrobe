@@ -46,14 +46,19 @@ export default clerkMiddleware(async (auth, req) => {
             }));
 
         } catch (error) {
-            // Fail-open strategy: log error but allow request to proceed
+            // Fail-closed strategy: ensure security even if verification service fails
             console.error(JSON.stringify({
                 level: 'error',
                 message: 'BotID check failed',
                 error: String(error),
                 path: req.nextUrl.pathname
             }));
-            // isBot remains false
+
+            // Deny the request if we cannot verify it isn't a bot
+            return NextResponse.json(
+                { error: 'Security verification unavailable. Please try again later.' },
+                { status: 503 }
+            );
         }
 
         if (isBot) {
