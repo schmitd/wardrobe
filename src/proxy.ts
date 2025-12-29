@@ -1,4 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { checkBotId } from 'botid/server'
+import { NextResponse } from 'next/server'
 
 const isPublicRoute = createRouteMatcher([
     '/api/uploadthing(.*)',
@@ -6,6 +8,11 @@ const isPublicRoute = createRouteMatcher([
 ])
 
 export default clerkMiddleware(async (auth, req) => {
+    const verification = await checkBotId();
+    if (verification.isBot) {
+        return NextResponse.json({ error: 'Access denied: Bot detected' }, { status: 403 });
+    }
+
     if (!isPublicRoute(req)) await auth.protect()
 })
 
