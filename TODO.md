@@ -29,3 +29,6 @@
 
 
 Note: if graphitti is python we can also pull in python under the same ffi or host (seperate microservice)
+
+Headaches to deal with later:
+- [ ] Preview enviroment seems to struggle with either botID or clerk cookies because of the dynamic urls of the preview
