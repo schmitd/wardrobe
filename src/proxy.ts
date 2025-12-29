@@ -8,9 +8,23 @@ const isPublicRoute = createRouteMatcher([
 ])
 
 export default clerkMiddleware(async (auth, req) => {
-    const verification = await checkBotId();
-    if (verification.isBot) {
-        return NextResponse.json({ error: 'Access denied: Bot detected' }, { status: 403 });
+    const isApiRoute = req.nextUrl.pathname.startsWith('/api/');
+    const isServerAction = req.headers.has('next-action');
+    const isStripeWebhook = req.nextUrl.pathname === '/api/stripe/webhook';
+
+    if ((isApiRoute || isServerAction) && !isStripeWebhook) {
+        // Pass headers to BotID for better context (missing headers = false positives)
+        const verification = await checkBotId({
+            advancedOptions: {
+                headers: Object.fromEntries(req.headers.entries())
+            }
+        });
+
+        console.log(`[BotID] Path: ${req.nextUrl.pathname}, isBot: ${verification.isBot}, isServerAction: ${isServerAction}`);
+
+        if (verification.isBot) {
+            return NextResponse.json({ error: 'Access denied: Bot detected' }, { status: 403 });
+        }
     }
 
     if (!isPublicRoute(req)) await auth.protect()
