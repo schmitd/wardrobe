@@ -5,10 +5,6 @@ initBotId({
         {
             path: '/api/uploadthing',
             method: 'POST',
-        },
-        {
-            path: '/api/stripe/webhook',
-            method: 'POST',
         }
     ],
 });

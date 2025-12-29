@@ -98,7 +98,7 @@ Return the data strictly complying with the schema, maintaining the order of ima
             }
         };
 
-        console.log("addItems: Sending batch request to Gemini with", validImages.length, "images");
+        console.log("addItems: Sending batch request to Gemini with", validImages.length, "images...");
         const result = await visionModel.generateContent({
             contents: [{ role: 'user', parts: promptParts }],
             generationConfig: {
@@ -106,6 +106,7 @@ Return the data strictly complying with the schema, maintaining the order of ima
                 responseSchema: schema,
             }
         });
+        console.log("addItems: Gemini request completed.");
 
         const response = await result.response;
         const text = response.text();
@@ -211,21 +212,22 @@ export async function checkCompatibility(candidateUrl: string) {
         const isPro = has({ permission: 'compatibility_check' });
         const limit = isPro ? 20 : 3;
 
-        const decision = await (aj as any).protect(
-            [
+        const decision = await aj
+            .withRule(
                 fixedWindow({
                     mode: "LIVE",
                     window: "1d",
                     max: limit,
-                }),
+                })
+            )
+            .withRule(
                 slidingWindow({
                     mode: "LIVE",
                     interval: "10s",
                     max: 1,
-                }),
-            ],
-            { userId } as any
-        );
+                })
+            )
+            .protect({}, { userId });
 
         if (decision.isDenied()) {
             return { success: false, error: 'Rate limit exceeded. Upgrade to Pro for more checks!' };
