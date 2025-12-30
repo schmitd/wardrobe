@@ -1,7 +1,7 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
 import { auth } from "@clerk/nextjs/server";
-import { aj } from "@/lib/arcjet";
+import { aj, botDetectionRule } from "@/lib/arcjet";
 import { fixedWindow, slidingWindow } from "@arcjet/next";
 
 const f = createUploadthing();
@@ -14,6 +14,12 @@ export const ourFileRouter = {
 
             const isPro = has({ permission: 'compatibility_check' });
             const limit = isPro ? 20 : 5;
+
+            // Bot detection
+            const botDecision = await aj.withRule(botDetectionRule).protect(req, { userId });
+            if (botDecision.isDenied()) {
+                throw new UploadThingError("Bot detected");
+            }
 
             const decision = await aj
                 .withRule(

@@ -7,8 +7,8 @@ import { createAuthenticatedClient } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
 import { auth } from '@clerk/nextjs/server';
 import { SchemaType, Schema } from '@google/generative-ai';
-import { aj } from '@/lib/arcjet';
-import { fixedWindow, slidingWindow } from '@arcjet/next';
+import { aj, botDetectionRule } from '@/lib/arcjet';
+import { fixedWindow, slidingWindow, request } from '@arcjet/next';
 
 async function fetchImage(url: string) {
     const controller = new AbortController();
@@ -35,6 +35,14 @@ export async function addItems(imageUrls: string[]) {
 
         if (!userId) {
             return { success: false, error: 'Unauthorized' };
+        }
+
+        // Bot detection for costly AI inference
+        const req = await request();
+        const botDecision = await aj.withRule(botDetectionRule).protect(req, { userId });
+        if (botDecision.isDenied()) {
+            console.warn("Bot detected in addItems:", userId);
+            return { success: false, error: 'Access denied' };
         }
 
         const supabaseToken = await getToken();
@@ -207,6 +215,14 @@ export async function checkCompatibility(candidateUrl: string) {
 
         if (!userId) {
             return { success: false, error: 'Unauthorized' };
+        }
+
+        // Bot detection for costly AI inference
+        const req = await request();
+        const botDecision = await aj.withRule(botDetectionRule).protect(req, { userId });
+        if (botDecision.isDenied()) {
+            console.warn("Bot detected in checkCompatibility:", userId);
+            return { success: false, error: 'Access denied' };
         }
 
         const isPro = has({ permission: 'compatibility_check' });

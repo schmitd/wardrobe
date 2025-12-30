@@ -11,6 +11,4 @@ const nextConfig: NextConfig = {
   },
 };
 
-import { withBotId } from 'botid/next/config';
-
-export default withBotId(nextConfig);
+export default nextConfig;
