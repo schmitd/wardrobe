@@ -24,15 +24,11 @@ export default clerkMiddleware(async (auth, req) => {
         let isBot = false;
 
         try {
-            // Sanitize headers to prevent leaking sensitive credentials
             const headers = Object.fromEntries(req.headers.entries());
-            const safeHeaders = { ...headers };
-            delete safeHeaders['authorization'];
-            // Note: Cookies are preserved as they are often critical for bot detection.
 
             const verification = await checkBotId({
                 advancedOptions: {
-                    headers: safeHeaders
+                    headers: headers
                 }
             });
 
@@ -46,12 +42,12 @@ export default clerkMiddleware(async (auth, req) => {
             }));
 
         } catch (error) {
-            // Fail-closed strategy: ensure security even if verification service fails
             console.error(JSON.stringify({
                 level: 'error',
                 message: 'BotID check failed',
                 error: String(error),
-                path: req.nextUrl.pathname
+                path: req.nextUrl.pathname,
+                env: process.env.VERCEL_ENV
             }));
 
             // Deny the request if we cannot verify it isn't a bot
