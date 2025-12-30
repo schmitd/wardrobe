@@ -12,8 +12,11 @@ export default clerkMiddleware(async (auth, req) => {
     const isServerAction = req.headers.has('next-action');
     const isStripeWebhook = req.nextUrl.pathname === '/api/stripe/webhook';
     const isUploadThing = req.nextUrl.pathname.startsWith('/api/uploadthing');
+    const isClerk = req.nextUrl.pathname.startsWith('/.clerk') ||
+        req.nextUrl.pathname.startsWith('/__clerk') ||
+        req.headers.has('x-clerk-nextjs');
 
-    if ((isApiRoute || isServerAction) && !isStripeWebhook && !isUploadThing) {
+    if ((isApiRoute || isServerAction) && !isStripeWebhook && !isUploadThing && !isClerk) {
         // Structured logging for better observability
         console.log(JSON.stringify({
             level: 'info',
