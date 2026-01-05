@@ -1,86 +1,92 @@
 'use server';
 
-
-
-import { visionModel, embeddingModel, textModel } from '@/lib/gemini';
-import { createAuthenticatedClient } from '@/lib/supabase';
+import { Effect, Schedule } from 'effect'
 import { revalidatePath } from 'next/cache';
 import { auth } from '@clerk/nextjs/server';
 import { SchemaType, Schema } from '@google/generative-ai';
-import { aj, botDetectionRule } from '@/lib/arcjet';
-import { fixedWindow, slidingWindow, request } from '@arcjet/next';
+import { fixedWindow, slidingWindow, request, Primitive, Product } from '@arcjet/next';
 
-async function fetchImage(url: string) {
-    const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), 10000); // 10s timeout
-    try {
-        const response = await fetch(url, { signal: controller.signal });
-        clearTimeout(id);
-        if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
-        const buffer = await response.arrayBuffer();
-        return Buffer.from(buffer).toString('base64');
-    } catch (error) {
-        clearTimeout(id);
-        throw error;
-    }
-}
+import { runServerAction } from '@/lib/run-effect';
+import { GeminiService, GeminiLive } from '@/services/GeminiService';
+import { SupabaseService, SupabaseLive } from '@/services/SupabaseService';
+import { ArcjetService, ArcjetLive, BotDetectionRule } from '@/services/ArcjetService';
 
-// Reusing the existing addItem function for single items, but here is the batch version
-export async function addItems(imageUrls: string[]) {
-    try {
-
-
-        console.log("addItems: Starting for", imageUrls.length, "urls");
-        const { userId, getToken } = await auth();
-
-        if (!userId) {
-            return { success: false, error: 'Unauthorized' };
-        }
-
-        // Bot detection for costly AI inference
-        const req = await request();
-        const botDecision = await aj.withRule(botDetectionRule).protect(req, { userId });
-        if (botDecision.isDenied()) {
-            console.warn("Bot detected in addItems:", userId);
-            return { success: false, error: 'Access denied' };
-        }
-
-        const supabaseToken = await getToken();
-        if (!supabaseToken) {
-            console.error("Failed to get Supabase token");
-            return { success: false, error: 'Authorization failed' };
-        }
-
-        const supabase = createAuthenticatedClient(supabaseToken);
-
-        // 1. Fetch all images in parallel
-        const imageResults = await Promise.allSettled(imageUrls.map(url => fetchImage(url)));
-
-        const validImages: { url: string; base64: string; index: number }[] = [];
-        const failedUrls: string[] = [];
-
-        imageResults.forEach((result, index) => {
-            if (result.status === 'fulfilled') {
-                validImages.push({ url: imageUrls[index], base64: result.value, index });
-            } else {
-                console.error(`Failed to fetch query image ${imageUrls[index]}:`, result.reason);
-                failedUrls.push(imageUrls[index]);
+// Helper to fetch image as base64
+const fetchImage = (url: string) =>
+    Effect.tryPromise({
+        try: async () => {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 10000); // 10s timeout
+            try {
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(id);
+                if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+                const buffer = await response.arrayBuffer();
+                return Buffer.from(buffer).toString('base64');
+            } catch (error) {
+                clearTimeout(id);
+                throw error;
             }
-        });
+        },
+        catch: (error) => new Error(`Failed to fetch image ${url}: ${String(error)}`)
+    })
+
+export async function addItems(imageUrls: string[]) {
+    const { userId, getToken } = await auth();
+
+    if (!userId) {
+        return { success: false, error: 'Unauthorized' };
+    }
+
+    const program = Effect.gen(function* () {
+        const arcjet = yield* ArcjetService
+        const gemini = yield* GeminiService
+        const supabaseService = yield* SupabaseService
+
+        // 1. Bot Detection
+        // We need to construct the request object for Arcjet
+        const req = yield* Effect.promise(() => request())
+        const botDecision = yield* arcjet.protect(req, { userId }, BotDetectionRule)
+
+        if (botDecision.isDenied()) {
+            yield* Effect.logWarning("Bot detected in addItems", { userId })
+            return { success: false, error: 'Access denied' }
+        }
+
+        const token = yield* Effect.promise(() => getToken())
+        if (!token) return { success: false, error: 'Authorization failed' }
+
+        const supabase = yield* supabaseService.getClient(token)
+
+        yield* Effect.logInfo("Starting batch item addition", { imageCount: imageUrls.length })
+
+        // 2. Fetch all images in parallel
+        // We use Effect.all with concurrency to fetch images
+        const images = yield* Effect.all(
+            imageUrls.map((url, index) =>
+                fetchImage(url).pipe(
+                    Effect.map(base64 => ({ url, base64, index })),
+                    Effect.tapError(e => Effect.logError(e.message)), // Log errors but don't fail all?
+                    Effect.orElseSucceed(() => null) // Return null on failure to keep going
+                )
+            ),
+            { concurrency: 5 }
+        )
+
+        const validImages = images.filter((img): img is { url: string; base64: string; index: number } => img !== null)
+        const failedCount = imageUrls.length - validImages.length
 
         if (validImages.length === 0) {
-            return { success: false, error: 'No images could be fetched' };
+            return { success: false, error: 'No images could be fetched' }
         }
 
-        // 2. Analyze Images in Batch
-        // Minimal prompt since schema handles structure
+        // 3. Analyze Images in Batch
         const prompt = `Analyze these ${validImages.length} clothing items. 
 For EACH item, extract category, color, material, and 3-5 style tags. 
 Describe it in detail focusing on fashion elements. 
 Return the data strictly complying with the schema, maintaining the order of images.`;
 
         const promptParts: any[] = [{ text: prompt }];
-
         validImages.forEach(img => {
             promptParts.push({
                 inlineData: {
@@ -106,202 +112,180 @@ Return the data strictly complying with the schema, maintaining the order of ima
             }
         };
 
-        console.log("addItems: Sending batch request to Gemini with", validImages.length, "images...");
-        const result = await visionModel.generateContent({
+        yield* Effect.logInfo("Sending batch request to Gemini")
+
+        const geminiResult = yield* gemini.generateContent('gemini-2.5-flash-lite', {
             contents: [{ role: 'user', parts: promptParts }],
             generationConfig: {
                 responseMimeType: "application/json",
                 responseSchema: schema,
             }
-        });
-        console.log("addItems: Gemini request completed.");
+        })
 
-        const response = await result.response;
-        const text = response.text();
+        const text = geminiResult.response.text()
 
-        // No cleanup needed with Structured Output
-        let metadataArray: any[];
-        try {
-            metadataArray = JSON.parse(text);
-        } catch (e) {
-            console.error("Failed to parse batch JSON:", text);
-            return { success: false, error: 'Failed to parse AI response' };
-        }
+        // Parse JSON safely
+        const metadataArray = yield* Effect.try({
+            try: () => JSON.parse(text),
+            catch: (e) => new Error("Failed to parse AI response: " + String(e))
+        })
 
         if (!Array.isArray(metadataArray)) {
-            console.error("AI response is not an array:", metadataArray);
-            return { success: false, error: 'AI response invalid format' };
+            return { success: false, error: 'AI response invalid format' }
         }
 
-        if (metadataArray.length !== validImages.length) {
-            console.warn(`Mismatch in result count. Sent ${validImages.length}, got ${metadataArray.length}. Trying to map by index.`);
-            // This is risky, but if the model fails to return exact count
-            // We might have to abort or try to match.
-            // For now, proceed if we can, or just slice/fill.
-        }
+        // 4. Generate Embeddings
+        yield* Effect.logInfo("Generating embeddings in batch", { count: metadataArray.length })
 
-        // 3. Generate Embeddings in Batch (up to 100 at once)
-        console.log("addItems: Generating embeddings in batch for", metadataArray.length, "items");
-
-        const embeddingRequests = metadataArray.map(metadata => ({
+        const embeddingRequests = metadataArray.map((metadata: any) => ({
             content: {
                 role: 'user',
                 parts: [{ text: `${metadata.description} ${metadata.style_tags.join(' ')}` }]
             }
         }));
 
-        const batchEmbeddingResult = await embeddingModel.batchEmbedContents({
+        const batchEmbeddingResult = yield* gemini.batchEmbedContents({
             requests: embeddingRequests
-        });
+        })
 
-        // 4. Combine embeddings with metadata
-        const itemsToInsert = metadataArray.map((metadata, i) => {
+        // 5. Insert into Supabase
+        const itemsToInsert = metadataArray.map((metadata: any, i: number) => {
             const originalImage = validImages[i];
+            // Check bounds
             if (!originalImage || !batchEmbeddingResult.embeddings[i]) return null;
-
-            const embedding = batchEmbeddingResult.embeddings[i].values;
 
             return {
                 image_url: originalImage.url,
                 category: metadata.category,
                 description: metadata.description,
                 style_tags: metadata.style_tags,
-                embedding: embedding,
+                embedding: batchEmbeddingResult.embeddings[i].values,
                 user_id: userId,
-            };
-        });
-
-        const cleanItemsToInsert = itemsToInsert.filter(item => item !== null);
-
-        if (cleanItemsToInsert.length > 0) {
-            const { error } = await supabase.from('wardrobe_items').insert(cleanItemsToInsert);
-            if (error) {
-                console.error("Supabase batch insert error:", error);
-                throw error;
             }
+        }).filter(item => item !== null)
+
+        if (itemsToInsert.length > 0) {
+            yield* Effect.tryPromise({
+                try: async () => {
+                    const { error } = await supabase.from('wardrobe_items').insert(itemsToInsert as any)
+                    if (error) throw error
+                },
+                catch: (e) => new Error("Supabase insert failed: " + String(e))
+            })
         }
 
-        revalidatePath('/');
+        Effect.sync(() => revalidatePath('/'))
+
+        yield* Effect.logInfo("Successfully added items", { successCount: itemsToInsert.length, failedCount })
+
         return {
             success: true,
-            count: cleanItemsToInsert.length,
-            failed: failedUrls.length
-        };
+            count: itemsToInsert.length,
+            failed: failedCount
+        }
 
-    } catch (error) {
-        console.error("Error adding items batch:", error);
-        return {
-            success: false,
-            error: error instanceof Error ? error.message : JSON.stringify(error)
-        };
-    }
+    }).pipe(
+        Effect.catchAll(error => Effect.gen(function* () {
+            yield* Effect.logError("Error in addItems", { error: error['message'] || String(error) })
+            return { success: false, error: String(error['message'] || error) }
+        })),
+        Effect.withSpan("action.addItems", { attributes: { userId } }),
+        Effect.provide(GeminiLive),
+        Effect.provide(SupabaseLive),
+        Effect.provide(ArcjetLive)
+    )
+
+    return runServerAction(program)
 }
 
 export async function addItem(imageUrl: string) {
-    try {
-        console.log("addItem: Starting for url", imageUrl);
-        return await addItems([imageUrl]);
-    } catch (error) {
-        console.error("Error adding item:", error);
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to process item' };
-    }
+    return addItems([imageUrl])
 }
 
 export async function checkCompatibility(candidateUrl: string) {
-    try {
+    const { userId, getToken, has } = await auth();
+    if (!userId) return { success: false, error: 'Unauthorized' };
 
+    const program = Effect.gen(function* () {
+        const arcjet = yield* ArcjetService
+        const gemini = yield* GeminiService
+        const supabaseService = yield* SupabaseService
 
-        const { userId, getToken, has } = await auth();
+        // 1. Rate Limiting / Bot Detection
+        const req = yield* Effect.promise(() => request())
 
-        if (!userId) {
-            return { success: false, error: 'Unauthorized' };
-        }
+        // Check bot first
+        const botDecision = yield* arcjet.protect(req, { userId }, BotDetectionRule)
+        if (botDecision.isDenied()) return { success: false, error: 'Access denied' }
 
-        // Bot detection for costly AI inference
-        const req = await request();
-        const botDecision = await aj.withRule(botDetectionRule).protect(req, { userId });
-        if (botDecision.isDenied()) {
-            console.warn("Bot detected in checkCompatibility:", userId);
-            return { success: false, error: 'Access denied' };
-        }
-
+        // Check rate limits
         const isPro = has({ permission: 'compatibility_check' });
         const limit = isPro ? 20 : 3;
 
-        const decision = await aj
-            .withRule(
-                fixedWindow({
-                    mode: "LIVE",
-                    window: "1d",
-                    max: limit,
-                })
-            )
-            .withRule(
-                slidingWindow({
-                    mode: "LIVE",
-                    interval: "10s",
-                    max: 1,
-                })
-            )
-            .protect({}, { userId });
+        const rateLimitRules: (Primitive | Product)[] = [
+            fixedWindow({ mode: "LIVE", window: "1d", max: limit }),
+            slidingWindow({ mode: "LIVE", interval: "10s", max: 1 })
+        ]
 
-        if (decision.isDenied()) {
+        const rlDecision = yield* arcjet.protect(req, { userId }, rateLimitRules)
+        if (rlDecision.isDenied()) {
             return { success: false, error: 'Rate limit exceeded. Upgrade to Pro for more checks!' };
         }
 
-        const supabaseToken = await getToken();
-        if (!supabaseToken) {
-            return { success: false, error: 'Authorization failed' };
-        }
+        const token = yield* Effect.promise(() => getToken())
+        if (!token) return { success: false, error: 'Authorization failed' }
 
-        const supabase = createAuthenticatedClient(supabaseToken);
+        const supabase = yield* supabaseService.getClient(token)
 
-        const imageBase64 = await fetchImage(candidateUrl);
+        // 2. Fetch Candidate Image
+        const imageBase64 = yield* fetchImage(candidateUrl)
 
-        // 1. Analyze Candidate
+        // 3. Analyze Candidate
         const prompt = "Analyze this clothing item. Extract category, color, material, and 3-5 style tags. Describe it in detail focusing on fashion elements. Return JSON with keys: category, description, style_tags (array of strings).";
-        const result = await visionModel.generateContent([
+
+        const analysisResult = yield* gemini.generateContent('gemini-2.5-flash-lite', [
             prompt,
             { inlineData: { data: imageBase64, mimeType: "image/jpeg" } }
-        ]);
-        const response = await result.response;
-        const text = response.text();
-        const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        const candidateMetadata = JSON.parse(jsonStr);
+        ])
 
-        // 2. Generate Style Query
+        const analysisText = analysisResult.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+        const candidateMetadata = yield* Effect.try(() => JSON.parse(analysisText))
+
+        // 4. Generate Style Query
         const queryPrompt = `Given this clothing item description: "${candidateMetadata.description}" and style tags: "${candidateMetadata.style_tags.join(', ')}", generate a search query to find compatible items in a wardrobe. For example, if the item is a "Red leather jacket", the query might be "Black jeans, white t-shirt, boots, edgy style". Return just the query string.`;
-        const queryResult = await textModel.generateContent(queryPrompt);
-        const styleQuery = queryResult.response.text().trim();
 
-        // 3. Generate Embedding for Query
-        const embeddingResult = await embeddingModel.embedContent(styleQuery);
-        const queryEmbedding = embeddingResult.embedding.values;
+        const queryResult = yield* gemini.generateContent('gemini-2.5-flash-lite', queryPrompt)
+        const styleQuery = queryResult.response.text().trim()
 
-        // 4. Search Wardrobe for SIMILAR items
-        const { data: similarItems, error: similarError } = await supabase.rpc('match_wardrobe_items', {
-            query_embedding: queryEmbedding,
-            match_threshold: 0.3,
-            match_count: 5,
-            p_user_id: userId
-        });
+        // 5. Generate Embedding
+        const embeddingResult = yield* gemini.embedContent(styleQuery)
+        const queryEmbedding = embeddingResult.embedding.values
 
-        if (similarError) throw similarError;
+        // 6. Search Wardrobe
+        const { data: similarItems, error: similarError } = yield* Effect.promise(() =>
+            supabase.rpc('match_wardrobe_items', {
+                query_embedding: queryEmbedding,
+                match_threshold: 0.3,
+                match_count: 5,
+                p_user_id: userId
+            })
+        )
 
-        // 5. Also get DISSIMILAR items (lowest similarity scores)
-        // XXX seems inefficent that we are getting all items and then filtering them
-        const { data: allItems, error: allError } = await supabase
-            .from('wardrobe_items')
-            .select('id, image_url, category, description, style_tags, embedding')
-            .eq('user_id', userId)
-            .limit(100);
+        if (similarError) return yield* Effect.fail(new Error(similarError.message))
 
-        if (allError) throw allError;
+        // 7. Get Dissimilar
+        const { data: allItems, error: allError } = yield* Effect.promise(() =>
+            supabase
+                .from('wardrobe_items')
+                .select('id, image_url, category, description, style_tags, embedding')
+                .eq('user_id', userId)
+                .limit(100)
+        )
 
-        // Calculate similarity for all items and get the most dissimilar ones
+        if (allError) return yield* Effect.fail(new Error(allError.message))
+
         const dissimilarItems = allItems
             .map((item: any) => {
-                // Calculate cosine distance manually
                 const embedding = item.embedding;
                 let dotProduct = 0;
                 let normA = 0;
@@ -314,11 +298,10 @@ export async function checkCompatibility(candidateUrl: string) {
                 const similarity = dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
                 return { ...item, similarity };
             })
-            .sort((a, b) => a.similarity - b.similarity) // Sort by LOWEST similarity
-            .slice(0, 3) // Get top 3 most dissimilar
-            .filter(item => item.similarity < 0.5); // Only include if actually dissimilar
+            .sort((a: any, b: any) => a.similarity - b.similarity)
+            .slice(0, 3)
+            .filter((item: any) => item.similarity < 0.5);
 
-        // If there are no similar items AND no dissimilar items, skip LLM critique
         if ((similarItems?.length ?? 0) === 0 && dissimilarItems.length === 0) {
             return {
                 success: true,
@@ -330,7 +313,7 @@ export async function checkCompatibility(candidateUrl: string) {
             };
         }
 
-        // 6. Evaluate Fit with CRITICAL eye
+        // 8. Evaluate Fit
         const evaluationPrompt = `You are a professional fashion stylist with high standards. Your job is to critically evaluate whether a candidate clothing item fits well with an existing wardrobe.
 
 CANDIDATE ITEM:
@@ -352,21 +335,15 @@ CRITICAL EVALUATION GUIDELINES:
 - Score 30-49%: Poor fit, clashes with most items or redundant
 - Score 0-29%: Terrible fit, completely incompatible with wardrobe style
 
-Consider:
-1. Does this item PAIR WELL with existing wardrobe pieces?
-2. Does it fill a GAP or is it REDUNDANT?
-3. Are there COLOR CLASHES with existing items?
-4. Does it match the OVERALL STYLE of the wardrobe?
-
 Return JSON with keys:
 - score (number 0-100): Your critical compatibility score
 - explanation (string): Focus on how it compares to the WARDROBE, not its internal quality
 - best_pairings (array of indices): Which wardrobe items it pairs best with
 - worst_clashes (array of indices): Which wardrobe items it clashes with most (if any)`;
 
-        const evalResult = await textModel.generateContent(evaluationPrompt);
+        const evalResult = yield* gemini.generateContent('gemini-2.5-flash-lite', evaluationPrompt)
         const evalText = evalResult.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
-        const evaluation = JSON.parse(evalText);
+        const evaluation = yield* Effect.try(() => JSON.parse(evalText))
 
         return {
             success: true,
@@ -376,10 +353,17 @@ Return JSON with keys:
             evaluation
         };
 
-    } catch (error) {
-        console.error("Error checking compatibility:", error);
-        return { success: false, error: 'Failed to check compatibility' };
-    }
+    }).pipe(
+        Effect.catchAll(error => Effect.gen(function* () {
+            yield* Effect.logError("Error in checkCompatibility", { error: String(error) })
+            return { success: false, error: String(error) }
+        })),
+        Effect.withSpan("action.checkCompatibility", { attributes: { userId } }),
+        // Provide all services
+        Effect.provide(GeminiLive),
+        Effect.provide(SupabaseLive),
+        Effect.provide(ArcjetLive)
+    )
+
+    return runServerAction(program)
 }
-
-
