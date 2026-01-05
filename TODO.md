@@ -4,7 +4,6 @@
     - [ ] poor fit (replace oppurtunity)
     - [ ] 
 - [x] Rate limiting
-- [ ] Private uploads (~~uploadthing premium or migrate to s3~~ supabase storage)
 - [x] Stripe integration
 - [ ] Improve UI/UX
 - [-] Individual or batch uploads
@@ -14,11 +13,11 @@
     - [ ] specific haul shopping"user prompts"
     - [ ] upload user selfie (what color season for hair/complexion)
     - [ ] selfie of that day's fit
-        - [] allow user to reflect/rate either immediately or defer to EOD
+        - [ ] allow user to reflect/rate either immediately or defer to EOD
             - [] inbox/notifications (also useful for affiliate marketing feat)
-        - [] automatically detect the coresponding clothes in closet & tally
+        - [ ] automatically detect the coresponding clothes in closet & tally
             - [] statistics for "load bearing"/high-utility items
-        - [] annotates events/occasions for that day's fit
+        - [ ] annotates events/occasions for that day's fit
 - [ ] Knowledge graph (graphitti?)
     - [ ] item addition/removals
     - [ ] timestamped events (worn together)
@@ -32,3 +31,6 @@ Note: if graphitti is python we can also pull in python under the same ffi or ho
 
 Headaches to deal with later:
 - [x] Preview enviroment seems to struggle with either botID or clerk cookies because of the dynamic urls of the preview
+- [ ] Use the async batch api for the analysis of closet uploads cheaply (bypass with premium feature)
+- [ ] Integrate Axiom for logging
+- [ ] Private uploads (~~uploadthing premium or migrate to s3~~ supabase storage)
