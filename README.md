@@ -22,7 +22,7 @@ A Single Page Application (SPA) that acts as a "Virtual Wardrobe Stylist". The a
 1.  **Clone the repository**.
 2.  **Install dependencies**:
     ```bash
-    npm install
+    bun install
     ```
 3.  **Environment Variables**:
     Copy `.env.local` (or create it) and fill in the following:
@@ -38,7 +38,7 @@ A Single Page Application (SPA) that acts as a "Virtual Wardrobe Stylist". The a
     -   This will enable `pgvector` and create the `wardrobe_items` table and matching function.
 5.  **Run the app**:
     ```bash
-    npm run dev
+    bun dev
     ```
 
 ## Usage

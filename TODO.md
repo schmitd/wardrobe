@@ -5,6 +5,7 @@
     - [ ] 
 - [x] Rate limiting
 - [x] Stripe integration
+- [x] Migrate to Bun
 - [ ] Improve UI/UX
 - [-] Individual or batch uploads
     - [ ] async batch uploads over aistudio api (some system for defering)
