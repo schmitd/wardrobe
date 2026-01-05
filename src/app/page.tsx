@@ -1,5 +1,7 @@
-import { supabase, createAuthenticatedClient } from '@/lib/supabase';
 import WardrobeGrid from '@/components/WardrobeGrid';
+import { Effect } from 'effect';
+import { runtime } from '@/lib/run-effect';
+import { SupabaseService, SupabaseLive } from '@/services/SupabaseService';
 import AddItemSection from '@/components/AddItemSection';
 import { SignInButton, SignedOut } from '@clerk/nextjs';
 
@@ -15,17 +17,28 @@ export default async function Home() {
     if (userId) {
         const token = await getToken();
         if (token) {
-            const supabase = createAuthenticatedClient(token);
-            const { data, error } = await supabase
-                .from('wardrobe_items')
-                .select('*')
-                .eq('user_id', userId)
-                .order('created_at', { ascending: false });
+            items = await runtime.runPromise(
+                Effect.gen(function* () {
+                    const params = yield* SupabaseService
+                    const supabase = yield* params.getClient(token)
+                    const { data, error } = yield* Effect.tryPromise({
+                        try: () => supabase
+                            .from('wardrobe_items')
+                            .select('*')
+                            .eq('user_id', userId)
+                            .order('created_at', { ascending: false }),
+                        catch: (e) => new Error("Supabase query failed: " + String(e))
+                    })
 
-            if (error) {
-                console.error("Error fetching wardrobe items:", error);
-            }
-            items = data || [];
+                    if (error) {
+                        yield* Effect.logError("Error fetching wardrobe items", { error })
+                        return []
+                    }
+                    return data || []
+                }).pipe(
+                    Effect.provide(SupabaseLive)
+                )
+            )
         }
     }
 
