@@ -1,6 +1,9 @@
-import { embeddingModel } from './gemini';
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import fs from 'fs';
 import path from 'path';
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const embeddingModel = genAI.getGenerativeModel({ model: 'text-embedding-004' });
 
 const CENTROID_FILE_PATH = path.join(process.cwd(), 'src/lib/clothing-centroid.json');
 

@@ -33,5 +33,5 @@ Note: if graphitti is python we can also pull in python under the same ffi or ho
 Headaches to deal with later:
 - [x] Preview enviroment seems to struggle with either botID or clerk cookies because of the dynamic urls of the preview
 - [ ] Use the async batch api for the analysis of closet uploads cheaply (bypass with premium feature)
-- [ ] Integrate Axiom for logging
+- [-] Integrate Axiom for logging (verify this is complete)
 - [ ] Private uploads (~~uploadthing premium or migrate to s3~~ supabase storage)
