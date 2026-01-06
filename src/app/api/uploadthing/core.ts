@@ -17,7 +17,7 @@ export const ourFileRouter = {
             const isPro = has({ permission: 'compatibility_check' });
             const limit = isPro ? 20 : 5;
 
-            // Use Effect to run Arcjet protection
+            // Use Effect to run Arcjet protection idiomatic way
             await runtime.runPromise(
                 Effect.gen(function* () {
                     const arcjet = yield* ArcjetService
@@ -25,7 +25,7 @@ export const ourFileRouter = {
                     // 1. Bot Detection
                     const botDecision = yield* arcjet.protect(req, { userId }, BotDetectionRule)
                     if (botDecision.isDenied()) {
-                        yield* Effect.fail(new UploadThingError("Bot detected"))
+                        return yield* Effect.fail(new UploadThingError("Bot detected"))
                     }
 
                     // 2. Rate Limiting
@@ -36,9 +36,13 @@ export const ourFileRouter = {
 
                     const rlDecision = yield* arcjet.protect(req, { userId }, rateLimitRules)
                     if (rlDecision.isDenied()) {
-                        yield* Effect.fail(new UploadThingError("Rate limit exceeded"))
+                        return yield* Effect.fail(new UploadThingError("Rate limit exceeded"))
                     }
                 }).pipe(
+                    Effect.catchAll((error) => {
+                        if (error instanceof UploadThingError) return Effect.fail(error)
+                        return Effect.fail(new UploadThingError("Internal server error"))
+                    }),
                     Effect.provide(ArcjetLive)
                 )
             )

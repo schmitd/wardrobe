@@ -7,14 +7,29 @@ import { SchemaType, Schema } from '@google/generative-ai';
 import { fixedWindow, slidingWindow, request, Primitive, Product } from '@arcjet/next';
 
 import { runServerAction } from '@/lib/run-effect';
-import { GeminiService, GeminiLive } from '@/services/GeminiService';
-import { SupabaseService, SupabaseLive } from '@/services/SupabaseService';
-import { ArcjetService, ArcjetLive, BotDetectionRule } from '@/services/ArcjetService';
+import { GeminiService } from '@/services/GeminiService';
+import { SupabaseService } from '@/services/SupabaseService';
+import { ArcjetService, BotDetectionRule } from '@/services/ArcjetService';
+import { AppLive } from '@/services';
 
 // Helper to fetch image as base64
 const fetchImage = (url: string) =>
     Effect.tryPromise({
         try: async () => {
+            // SSRF Check
+            try {
+                const parsed = new URL(url);
+                if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+                    throw new Error(`Invalid protocol: ${parsed.protocol}`);
+                }
+                const isLocal = ['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(parsed.hostname);
+                if (isLocal && process.env.NODE_ENV === 'production') {
+                    throw new Error('Localhost access denied entirely in production');
+                }
+            } catch (e) {
+                throw new Error(`Invalid URL: ${url}`);
+            }
+
             const controller = new AbortController();
             const id = setTimeout(() => controller.abort(), 10000); // 10s timeout
             try {
@@ -28,7 +43,7 @@ const fetchImage = (url: string) =>
                 throw error;
             }
         },
-        catch: (error) => new Error(`Failed to fetch image ${url}: ${String(error)}`)
+        catch: (error) => new Error(`Failed to process image: ${String(error)}`) // Sanitized error
     })
 
 export async function addItems(imageUrls: string[]) {
@@ -58,7 +73,7 @@ export async function addItems(imageUrls: string[]) {
 
         const supabase = yield* supabaseService.getClient(token)
 
-        yield* Effect.logInfo("Starting batch item addition", { imageCount: imageUrls.length })
+        yield* Effect.logInfo("Starting batch item addition", { userId, imageCount: imageUrls.length })
 
         // 2. Fetch all images in parallel
         // We use Effect.all with concurrency to fetch images
@@ -112,7 +127,7 @@ Return the data strictly complying with the schema, maintaining the order of ima
             }
         };
 
-        yield* Effect.logInfo("Sending batch request to Gemini")
+        yield* Effect.logInfo("Sending batch request to Gemini", { userId })
 
         const geminiResult = yield* gemini.generateContent('gemini-2.5-flash-lite', {
             contents: [{ role: 'user', parts: promptParts }],
@@ -125,19 +140,35 @@ Return the data strictly complying with the schema, maintaining the order of ima
         const text = geminiResult.response.text()
 
         // Parse JSON safely
-        const metadataArray = yield* Effect.try({
+        // Parse JSON safely
+        const metadataArrayEntry = yield* Effect.try({
             try: () => JSON.parse(text),
             catch: (e) => new Error("Failed to parse AI response: " + String(e))
         })
+
+        // Ensure it's an array
+        const metadataArray = Array.isArray(metadataArrayEntry) ? metadataArrayEntry : [metadataArrayEntry];
 
         if (!Array.isArray(metadataArray)) {
             return { success: false, error: 'AI response invalid format' }
         }
 
-        // 4. Generate Embeddings
-        yield* Effect.logInfo("Generating embeddings in batch", { count: metadataArray.length })
+        const count = Math.min(validImages.length, metadataArray.length)
+        if (count !== validImages.length) {
+            yield* Effect.logWarning("Mismatch between images and AI results", {
+                imageCount: validImages.length,
+                resultCount: metadataArray.length
+            })
+        }
 
-        const embeddingRequests = metadataArray.map((metadata: any) => ({
+        // Align data
+        const alignedImages = validImages.slice(0, count)
+        const alignedMetadata = metadataArray.slice(0, count)
+
+        // 4. Generate Embeddings
+        yield* Effect.logInfo("Generating embeddings in batch", { count: alignedMetadata.length })
+
+        const embeddingRequests = alignedMetadata.map((metadata: any) => ({
             content: {
                 role: 'user',
                 parts: [{ text: `${metadata.description} ${metadata.style_tags.join(' ')}` }]
@@ -174,9 +205,9 @@ Return the data strictly complying with the schema, maintaining the order of ima
             })
         }
 
-        Effect.sync(() => revalidatePath('/'))
+        yield* Effect.sync(() => revalidatePath('/'))
 
-        yield* Effect.logInfo("Successfully added items", { successCount: itemsToInsert.length, failedCount })
+        yield* Effect.logInfo("Successfully added items", { userId, successCount: itemsToInsert.length, failedCount })
 
         return {
             success: true,
@@ -186,13 +217,11 @@ Return the data strictly complying with the schema, maintaining the order of ima
 
     }).pipe(
         Effect.catchAll(error => Effect.gen(function* () {
-            yield* Effect.logError("Error in addItems", { error: error['message'] || String(error) })
-            return { success: false, error: String(error['message'] || error) }
+            yield* Effect.logError("Error in addItems", { userId, error: error['message'] || String(error) })
+            return { success: false, error: 'Failed to add items to wardrobe. Please try again.' }
         })),
         Effect.withSpan("action.addItems", { attributes: { userId } }),
-        Effect.provide(GeminiLive),
-        Effect.provide(SupabaseLive),
-        Effect.provide(ArcjetLive)
+        Effect.provide(AppLive)
     )
 
     return runServerAction(program)
@@ -241,15 +270,39 @@ export async function checkCompatibility(candidateUrl: string) {
         const imageBase64 = yield* fetchImage(candidateUrl)
 
         // 3. Analyze Candidate
-        const prompt = "Analyze this clothing item. Extract category, color, material, and 3-5 style tags. Describe it in detail focusing on fashion elements. Return JSON with keys: category, description, style_tags (array of strings).";
+        const analysisPrompt = "Analyze this clothing item. Extract category, color, material, and 3-5 style tags. Describe it in detail focusing on fashion elements. Return JSON with keys: category, description, style_tags (array of strings).";
 
-        const analysisResult = yield* gemini.generateContent('gemini-2.5-flash-lite', [
-            prompt,
-            { inlineData: { data: imageBase64, mimeType: "image/jpeg" } }
-        ])
+        const evaluationSchema: Schema = {
+            type: SchemaType.OBJECT,
+            properties: {
+                category: { type: SchemaType.STRING },
+                description: { type: SchemaType.STRING },
+                style_tags: {
+                    type: SchemaType.ARRAY,
+                    items: { type: SchemaType.STRING }
+                }
+            },
+            required: ["category", "description", "style_tags"]
+        };
 
-        const analysisText = analysisResult.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
-        const candidateMetadata = yield* Effect.try(() => JSON.parse(analysisText))
+        const analysisResult = yield* gemini.generateContent('gemini-2.5-flash-lite', {
+            contents: [{
+                role: 'user',
+                parts: [
+                    { text: analysisPrompt },
+                    { inlineData: { data: imageBase64, mimeType: "image/jpeg" } }
+                ]
+            }],
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: evaluationSchema,
+            }
+        })
+
+        const candidateMetadata = yield* Effect.try({
+            try: () => JSON.parse(analysisResult.response.text()),
+            catch: (e) => new Error("Failed to parse AI response: " + String(e))
+        })
 
         // 4. Generate Style Query
         const queryPrompt = `Given this clothing item description: "${candidateMetadata.description}" and style tags: "${candidateMetadata.style_tags.join(', ')}", generate a search query to find compatible items in a wardrobe. For example, if the item is a "Red leather jacket", the query might be "Black jeans, white t-shirt, boots, edgy style". Return just the query string.`;
@@ -341,9 +394,35 @@ Return JSON with keys:
 - best_pairings (array of indices): Which wardrobe items it pairs best with
 - worst_clashes (array of indices): Which wardrobe items it clashes with most (if any)`;
 
-        const evalResult = yield* gemini.generateContent('gemini-2.5-flash-lite', evaluationPrompt)
-        const evalText = evalResult.response.text().replace(/```json/g, '').replace(/```/g, '').trim();
-        const evaluation = yield* Effect.try(() => JSON.parse(evalText))
+        const compatibilitySchema: Schema = {
+            type: SchemaType.OBJECT,
+            properties: {
+                score: { type: SchemaType.NUMBER },
+                explanation: { type: SchemaType.STRING },
+                best_pairings: {
+                    type: SchemaType.ARRAY,
+                    items: { type: SchemaType.NUMBER }
+                },
+                worst_clashes: {
+                    type: SchemaType.ARRAY,
+                    items: { type: SchemaType.NUMBER }
+                }
+            },
+            required: ["score", "explanation", "best_pairings", "worst_clashes"]
+        };
+
+        const evalResult = yield* gemini.generateContent('gemini-2.5-flash-lite', {
+            contents: [{ role: 'user', parts: [{ text: evaluationPrompt }] }],
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: compatibilitySchema,
+            }
+        })
+
+        const evaluation = yield* Effect.try({
+            try: () => JSON.parse(evalResult.response.text()),
+            catch: (e) => new Error("Failed to parse evaluation response: " + String(e))
+        })
 
         return {
             success: true,
@@ -355,14 +434,12 @@ Return JSON with keys:
 
     }).pipe(
         Effect.catchAll(error => Effect.gen(function* () {
-            yield* Effect.logError("Error in checkCompatibility", { error: String(error) })
-            return { success: false, error: String(error) }
+            yield* Effect.logError("Error in checkCompatibility", { userId, error: String(error) })
+            return { success: false, error: 'Failed to check compatibility. Please try again.' }
         })),
         Effect.withSpan("action.checkCompatibility", { attributes: { userId } }),
         // Provide all services
-        Effect.provide(GeminiLive),
-        Effect.provide(SupabaseLive),
-        Effect.provide(ArcjetLive)
+        Effect.provide(AppLive)
     )
 
     return runServerAction(program)

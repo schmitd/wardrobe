@@ -1,7 +1,8 @@
 import WardrobeGrid from '@/components/WardrobeGrid';
 import { Effect } from 'effect';
 import { runtime } from '@/lib/run-effect';
-import { SupabaseService, SupabaseLive } from '@/services/SupabaseService';
+import { SupabaseService } from '@/services/SupabaseService';
+import { AppLive } from '@/services';
 import AddItemSection from '@/components/AddItemSection';
 import { SignInButton, SignedOut } from '@clerk/nextjs';
 
@@ -19,8 +20,8 @@ export default async function Home() {
         if (token) {
             items = await runtime.runPromise(
                 Effect.gen(function* () {
-                    const params = yield* SupabaseService
-                    const supabase = yield* params.getClient(token)
+                    const supabaseService = yield* SupabaseService
+                    const supabase = yield* supabaseService.getClient(token)
                     const { data, error } = yield* Effect.tryPromise({
                         try: () => supabase
                             .from('wardrobe_items')
@@ -31,12 +32,12 @@ export default async function Home() {
                     })
 
                     if (error) {
-                        yield* Effect.logError("Error fetching wardrobe items", { error })
+                        yield* Effect.logError("Error fetching wardrobe items", { userId, error })
                         return []
                     }
                     return data || []
                 }).pipe(
-                    Effect.provide(SupabaseLive)
+                    Effect.provide(AppLive)
                 )
             )
         }

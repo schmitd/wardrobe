@@ -46,12 +46,8 @@ const make = Effect.gen(function* () {
                 try: async () => {
                     let client = aj
                     if (rules) {
-                        if (Array.isArray(rules)) {
-                            // @ts-ignore - Arcjet types can be tricky with chaining
-                            rules.forEach(r => { client = client.withRule(r) })
-                        } else {
-                            client = client.withRule(rules)
-                        }
+                        const rulesArray = Array.isArray(rules) ? rules : [rules]
+                        client = rulesArray.reduce((acc, rule) => acc.withRule(rule as any), aj)
                     }
                     return client.protect(req, props)
                 },
