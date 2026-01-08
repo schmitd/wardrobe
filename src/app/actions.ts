@@ -327,33 +327,16 @@ export async function checkCompatibility(candidateUrl: string) {
         if (similarError) return yield* Effect.fail(new Error(similarError.message))
 
         // 7. Get Dissimilar
-        const { data: allItems, error: allError } = yield* Effect.promise(() =>
-            supabase
-                .from('wardrobe_items')
-                .select('id, image_url, category, description, style_tags, embedding')
-                .eq('user_id', userId)
-                .limit(100)
-        )
-
-        if (allError) return yield* Effect.fail(new Error(allError.message))
-
-        const dissimilarItems = allItems
-            .map((item: any) => {
-                const embedding = item.embedding;
-                let dotProduct = 0;
-                let normA = 0;
-                let normB = 0;
-                for (let i = 0; i < queryEmbedding.length; i++) {
-                    dotProduct += queryEmbedding[i] * embedding[i];
-                    normA += queryEmbedding[i] * queryEmbedding[i];
-                    normB += embedding[i] * embedding[i];
-                }
-                const similarity = dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
-                return { ...item, similarity };
+        const { data: dissimilarItems, error: dissimilarError } = yield* Effect.promise(() =>
+            supabase.rpc('get_dissimilar_items', {
+                query_embedding: queryEmbedding,
+                match_threshold: 0.5,
+                match_count: 3,
+                p_user_id: userId
             })
-            .sort((a: any, b: any) => a.similarity - b.similarity)
-            .slice(0, 3)
-            .filter((item: any) => item.similarity < 0.5);
+        );
+
+        if (dissimilarError) return yield* Effect.fail(new Error(dissimilarError.message));
 
         if ((similarItems?.length ?? 0) === 0 && dissimilarItems.length === 0) {
             return {
