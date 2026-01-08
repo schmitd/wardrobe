@@ -1,8 +1,10 @@
 import { createUploadthing, type FileRouter } from "uploadthing/next";
 import { UploadThingError } from "uploadthing/server";
 import { auth } from "@clerk/nextjs/server";
-import { aj, botDetectionRule } from "@/lib/arcjet";
-import { fixedWindow, slidingWindow } from "@arcjet/next";
+import { fixedWindow, slidingWindow, Primitive, Product } from "@arcjet/next";
+import { Effect } from "effect";
+import { runtime } from "@/lib/run-effect";
+import { ArcjetService, ArcjetLive, BotDetectionRule } from "@/services/ArcjetService";
 
 const f = createUploadthing();
 
@@ -15,32 +17,35 @@ export const ourFileRouter = {
             const isPro = has({ permission: 'compatibility_check' });
             const limit = isPro ? 20 : 5;
 
-            // Bot detection
-            const botDecision = await aj.withRule(botDetectionRule).protect(req, { userId });
-            if (botDecision.isDenied()) {
-                throw new UploadThingError("Bot detected");
-            }
+            // Use Effect to run Arcjet protection idiomatic way
+            await runtime.runPromise(
+                Effect.gen(function* () {
+                    const arcjet = yield* ArcjetService
 
-            const decision = await aj
-                .withRule(
-                    fixedWindow({
-                        mode: "LIVE",
-                        window: "1d",
-                        max: limit,
-                    })
-                )
-                .withRule(
-                    slidingWindow({
-                        mode: "LIVE",
-                        interval: "10s",
-                        max: 1,
-                    })
-                )
-                .protect(req, { userId });
+                    // 1. Bot Detection
+                    const botDecision = yield* arcjet.protect(req, { userId }, BotDetectionRule)
+                    if (botDecision.isDenied()) {
+                        return yield* Effect.fail(new UploadThingError("Bot detected"))
+                    }
 
-            if (decision.isDenied()) {
-                throw new UploadThingError("Rate limit exceeded");
-            }
+                    // 2. Rate Limiting
+                    const rateLimitRules: (Primitive | Product)[] = [
+                        fixedWindow({ mode: "LIVE", window: "1d", max: limit }),
+                        slidingWindow({ mode: "LIVE", interval: "10s", max: 1 })
+                    ]
+
+                    const rlDecision = yield* arcjet.protect(req, { userId }, rateLimitRules)
+                    if (rlDecision.isDenied()) {
+                        return yield* Effect.fail(new UploadThingError("Rate limit exceeded"))
+                    }
+                }).pipe(
+                    Effect.catchAll((error) => {
+                        if (error instanceof UploadThingError) return Effect.fail(error)
+                        return Effect.fail(new UploadThingError("Internal server error"))
+                    }),
+                    Effect.provide(ArcjetLive)
+                )
+            )
 
             return { uploadedBy: userId };
         })
