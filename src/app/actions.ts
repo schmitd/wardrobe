@@ -8,7 +8,7 @@ import { fixedWindow, slidingWindow, request, Primitive, Product } from '@arcjet
 
 import { runServerAction } from '@/lib/run-effect';
 import { GeminiService } from '@/services/GeminiService';
-import { SupabaseService } from '@/services/SupabaseService';
+import { DatabaseService } from '@/services/DatabaseService';
 import { ArcjetService, BotDetectionRule } from '@/services/ArcjetService';
 import { AppLive } from '@/services';
 
@@ -47,7 +47,7 @@ const fetchImage = (url: string) =>
     })
 
 export async function addItems(imageUrls: string[]) {
-    const { userId, getToken } = await auth();
+    const { userId } = await auth();
 
     if (!userId) {
         return { success: false, error: 'Unauthorized' };
@@ -56,7 +56,7 @@ export async function addItems(imageUrls: string[]) {
     const program = Effect.gen(function* () {
         const arcjet = yield* ArcjetService
         const gemini = yield* GeminiService
-        const supabaseService = yield* SupabaseService
+        const dbService = yield* DatabaseService
 
         // 1. Bot Detection
         // We need to construct the request object for Arcjet
@@ -67,11 +67,6 @@ export async function addItems(imageUrls: string[]) {
             yield* Effect.logWarning("Bot detected in addItems", { userId })
             return { success: false, error: 'Access denied' }
         }
-
-        const token = yield* Effect.promise(() => getToken())
-        if (!token) return { success: false, error: 'Authorization failed' }
-
-        const supabase = yield* supabaseService.getClient(token)
 
         yield* Effect.logInfo("Starting batch item addition", { userId, imageCount: imageUrls.length })
 
@@ -179,7 +174,7 @@ Return the data strictly complying with the schema, maintaining the order of ima
             requests: embeddingRequests
         })
 
-        // 5. Insert into Supabase
+        // 5. Insert into Database
         const itemsToInsert = metadataArray.map((metadata: any, i: number) => {
             const originalImage = validImages[i];
             // Check bounds
@@ -196,13 +191,7 @@ Return the data strictly complying with the schema, maintaining the order of ima
         }).filter(item => item !== null)
 
         if (itemsToInsert.length > 0) {
-            yield* Effect.tryPromise({
-                try: async () => {
-                    const { error } = await supabase.from('wardrobe_items').insert(itemsToInsert as any)
-                    if (error) throw error
-                },
-                catch: (e) => new Error("Supabase insert failed: " + String(e))
-            })
+            yield* dbService.addWardrobeItems(itemsToInsert as any)
         }
 
         yield* Effect.sync(() => revalidatePath('/'))
@@ -232,13 +221,13 @@ export async function addItem(imageUrl: string) {
 }
 
 export async function checkCompatibility(candidateUrl: string) {
-    const { userId, getToken, has } = await auth();
+    const { userId, has } = await auth();
     if (!userId) return { success: false, error: 'Unauthorized' };
 
     const program = Effect.gen(function* () {
         const arcjet = yield* ArcjetService
         const gemini = yield* GeminiService
-        const supabaseService = yield* SupabaseService
+        const dbService = yield* DatabaseService
 
         // 1. Rate Limiting / Bot Detection
         const req = yield* Effect.promise(() => request())
@@ -260,11 +249,6 @@ export async function checkCompatibility(candidateUrl: string) {
         if (rlDecision.isDenied()) {
             return { success: false, error: 'Rate limit exceeded. Upgrade to Pro for more checks!' };
         }
-
-        const token = yield* Effect.promise(() => getToken())
-        if (!token) return { success: false, error: 'Authorization failed' }
-
-        const supabase = yield* supabaseService.getClient(token)
 
         // 2. Fetch Candidate Image
         const imageBase64 = yield* fetchImage(candidateUrl)
@@ -315,27 +299,11 @@ export async function checkCompatibility(candidateUrl: string) {
         const queryEmbedding = embeddingResult.embedding.values
 
         // 6. Search Wardrobe
-        const { data: similarItems, error: similarError } = yield* Effect.promise(() =>
-            supabase.rpc('match_wardrobe_items', {
-                query_embedding: queryEmbedding,
-                match_threshold: 0.3,
-                match_count: 5,
-                p_user_id: userId
-            })
-        )
-
-        if (similarError) return yield* Effect.fail(new Error(similarError.message))
+        const similarItems = yield* dbService.searchWardrobeItems(userId, queryEmbedding, 0.3, 5)
 
         // 7. Get Dissimilar
-        const { data: allItems, error: allError } = yield* Effect.promise(() =>
-            supabase
-                .from('wardrobe_items')
-                .select('id, image_url, category, description, style_tags, embedding')
-                .eq('user_id', userId)
-                .limit(100)
-        )
-
-        if (allError) return yield* Effect.fail(new Error(allError.message))
+        // Note: Drizzle service returns array directly, not { data, error } object
+        const allItems = yield* dbService.getDissimilarWardrobeItems(userId, queryEmbedding, 100)
 
         const dissimilarItems = allItems
             .map((item: any) => {
