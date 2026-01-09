@@ -9,8 +9,66 @@ import { fixedWindow, slidingWindow, request, Primitive, Product } from '@arcjet
 import { runServerAction } from '@/lib/run-effect';
 import { GeminiService } from '@/services/GeminiService';
 import { DatabaseService } from '@/services/DatabaseService';
-import { ArcjetService, BotDetectionRule } from '@/services/ArcjetService';
+import { ArcjetService } from '@/services/ArcjetService';
+import { SupabaseService } from '@/services/SupabaseService';
 import { AppLive } from '@/services';
+
+export async function getUploadUrl(filename: string) {
+    const { userId, has } = await auth();
+    if (!userId) return { success: false, error: 'Unauthorized' };
+
+    const isPro = has({ permission: 'compatibility_check' });
+
+    const program = Effect.gen(function* () {
+        const arcjet = yield* ArcjetService
+        const supabase = yield* SupabaseService
+
+        const tier = isPro ? 'pro' : 'free'
+        yield* Effect.logInfo(`Checking Arcjet protection`, { userId, isPro, tier })
+
+        // 1. Bot Detection / Rate Limit
+        const req = yield* Effect.promise(() => request())
+        const decision = yield* arcjet.protect(req, { userId }, tier)
+
+        if (decision.isDenied()) {
+            const deniedResult = decision.results.find(res => res.isDenied())
+            const arcjetReason = decision.reason.isBot() ? {
+                type: 'Bot',
+                ruleId: deniedResult?.ruleId,
+                bots: decision.reason.denied
+            } : decision.reason.isRateLimit() ? {
+                type: 'RateLimit',
+                ruleId: deniedResult?.ruleId,
+                limit: decision.reason.max,
+                remaining: decision.reason.remaining,
+                reset: decision.reason.reset,
+                window: decision.reason.window
+            } : {
+                type: 'Other',
+                ruleId: deniedResult?.ruleId
+            }
+            yield* Effect.logWarning(`Arcjet denied in getUploadUrl`, { userId, arcjetReason })
+            return { success: false, error: 'Access denied' }
+        }
+
+        // 2. Generate Path & URL
+        // Use a random ID + sanitized filename
+        const ext = filename.split('.').pop()
+        const path = `${userId}/${crypto.randomUUID()}.${ext}`
+
+        const { signedUrl, token } = yield* supabase.createSignedUploadUrl(path)
+
+        return { success: true, url: signedUrl, path }
+    }).pipe(
+        Effect.catchAll(error => Effect.gen(function* () {
+            yield* Effect.logError("Error in getUploadUrl", { userId, error })
+            return { success: false, error: 'Failed to generate upload URL' }
+        })),
+        Effect.provide(AppLive)
+    )
+
+    return runServerAction(program)
+}
 
 // Helper to fetch image as base64
 const fetchImage = (url: string) =>
@@ -47,24 +105,44 @@ const fetchImage = (url: string) =>
     })
 
 export async function addItems(imageUrls: string[]) {
-    const { userId } = await auth();
+    const { userId, has } = await auth();
 
     if (!userId) {
         return { success: false, error: 'Unauthorized' };
     }
 
+    const isPro = has({ permission: 'compatibility_check' });
+
     const program = Effect.gen(function* () {
         const arcjet = yield* ArcjetService
         const gemini = yield* GeminiService
         const dbService = yield* DatabaseService
+        const supabase = yield* SupabaseService
 
         // 1. Bot Detection
         // We need to construct the request object for Arcjet
         const req = yield* Effect.promise(() => request())
-        const botDecision = yield* arcjet.protect(req, { userId }, BotDetectionRule)
+        // Determine tier
+        const botDecision = yield* arcjet.protect(req, { userId }, isPro ? 'pro' : 'free')
 
         if (botDecision.isDenied()) {
-            yield* Effect.logWarning("Bot detected in addItems", { userId })
+            const deniedResult = botDecision.results.find(res => res.isDenied())
+            const arcjetReason = botDecision.reason.isBot() ? {
+                type: 'Bot',
+                ruleId: deniedResult?.ruleId,
+                bots: botDecision.reason.denied
+            } : botDecision.reason.isRateLimit() ? {
+                type: 'RateLimit',
+                ruleId: deniedResult?.ruleId,
+                limit: botDecision.reason.max,
+                remaining: botDecision.reason.remaining,
+                reset: botDecision.reason.reset,
+                window: botDecision.reason.window
+            } : {
+                type: 'Other',
+                ruleId: deniedResult?.ruleId
+            }
+            yield* Effect.logWarning(`Arcjet denied in addItems`, { userId, arcjetReason })
             return { success: false, error: 'Access denied' }
         }
 
@@ -73,9 +151,16 @@ export async function addItems(imageUrls: string[]) {
         // 2. Fetch all images in parallel
         // We use Effect.all with concurrency to fetch images
         const images = yield* Effect.all(
-            imageUrls.map((url, index) =>
-                fetchImage(url).pipe(
-                    Effect.map(base64 => ({ url, base64, index })),
+            imageUrls.map((urlOrPath, index) =>
+                Effect.gen(function* () {
+                    let urlToFetch = urlOrPath
+                    // If it's a storage path (no protocol), sign it
+                    if (!urlOrPath.startsWith('http')) {
+                        urlToFetch = yield* supabase.createSignedUrl(urlOrPath, 60) // 1 min expiry
+                    }
+                    const base64 = yield* fetchImage(urlToFetch)
+                    return { url: urlOrPath, base64, index } // Keep original identifier (path or url)
+                }).pipe(
                     Effect.tapError(e => Effect.logError(e.message)), // Log errors but don't fail all?
                     Effect.orElseSucceed(() => null) // Return null on failure to keep going
                 )
@@ -231,23 +316,33 @@ export async function checkCompatibility(candidateUrl: string) {
 
         // 1. Rate Limiting / Bot Detection
         const req = yield* Effect.promise(() => request())
-
-        // Check bot first
-        const botDecision = yield* arcjet.protect(req, { userId }, BotDetectionRule)
-        if (botDecision.isDenied()) return { success: false, error: 'Access denied' }
-
-        // Check rate limits
         const isPro = has({ permission: 'compatibility_check' });
-        const limit = isPro ? 20 : 3;
 
-        const rateLimitRules: (Primitive | Product)[] = [
-            fixedWindow({ mode: "LIVE", window: "1d", max: limit }),
-            slidingWindow({ mode: "LIVE", interval: "10s", max: 1 })
-        ]
+        const decision = yield* arcjet.protect(req, { userId }, isPro ? 'pro' : 'free')
 
-        const rlDecision = yield* arcjet.protect(req, { userId }, rateLimitRules)
-        if (rlDecision.isDenied()) {
-            return { success: false, error: 'Rate limit exceeded. Upgrade to Pro for more checks!' };
+        if (decision.isDenied()) {
+            const deniedResult = decision.results.find(res => res.isDenied())
+            const arcjetReason = decision.reason.isBot() ? {
+                type: 'Bot',
+                ruleId: deniedResult?.ruleId,
+                bots: decision.reason.denied
+            } : decision.reason.isRateLimit() ? {
+                type: 'RateLimit',
+                ruleId: deniedResult?.ruleId,
+                limit: decision.reason.max,
+                remaining: decision.reason.remaining,
+                reset: decision.reason.reset,
+                window: decision.reason.window
+            } : {
+                type: 'Other',
+                ruleId: deniedResult?.ruleId
+            }
+            yield* Effect.logWarning(`Arcjet denied in checkCompatibility`, { userId, arcjetReason })
+
+            if (decision.reason.isRateLimit()) {
+                return { success: false, error: 'Rate limit exceeded. Upgrade to Pro for more checks!' };
+            }
+            return { success: false, error: 'Access denied' }
         }
 
         // 2. Fetch Candidate Image

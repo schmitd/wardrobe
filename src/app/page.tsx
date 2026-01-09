@@ -2,6 +2,7 @@ import WardrobeGrid from '@/components/WardrobeGrid';
 import { Effect } from 'effect';
 import { runtime } from '@/lib/run-effect';
 import { DatabaseService } from '@/services/DatabaseService';
+import { SupabaseService } from '@/services/SupabaseService';
 import { AppLive } from '@/services';
 import AddItemSection from '@/components/AddItemSection';
 import { SignInButton, SignedOut } from '@clerk/nextjs';
@@ -19,8 +20,22 @@ export default async function Home() {
         items = await runtime.runPromise(
             Effect.gen(function* () {
                 const dbService = yield* DatabaseService
-                const data = yield* dbService.getWardrobeItems(userId)
-                return data
+                const supabase = yield* SupabaseService
+                const rawItems = yield* dbService.getWardrobeItems(userId)
+
+                const items = yield* Effect.all(
+                    rawItems.map(item => Effect.gen(function* () {
+                        if (item.image_url && !item.image_url.startsWith('http')) {
+                            // It's a storage path, sign it
+                            const signedUrl = yield* supabase.createSignedUrl(item.image_url, 3600) // 1 hour expiry
+                            return { ...item, image_url: signedUrl }
+                        }
+                        return item
+                    })),
+                    { concurrency: 10 }
+                )
+
+                return items
             }).pipe(
                 Effect.provide(AppLive),
                 Effect.catchAll(error => Effect.gen(function* () {

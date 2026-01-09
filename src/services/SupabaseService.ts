@@ -10,6 +10,8 @@ export class SupabaseError extends Error {
 
 export interface SupabaseService {
     readonly getClient: (token: string) => Effect.Effect<SupabaseClient, SupabaseError>
+    readonly createSignedUploadUrl: (path: string) => Effect.Effect<{ signedUrl: string; token: string; path: string }, SupabaseError>
+    readonly createSignedUrl: (path: string, expiresIn: number) => Effect.Effect<string, SupabaseError>
 }
 
 export const SupabaseService = Context.GenericTag<SupabaseService>("SupabaseService")
@@ -17,21 +19,58 @@ export const SupabaseService = Context.GenericTag<SupabaseService>("SupabaseServ
 const make = Effect.gen(function* () {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-    if (!supabaseUrl || !supabaseKey) {
+    if (!supabaseUrl || !supabaseKey || !serviceRoleKey) {
         return yield* Effect.fail(new SupabaseError("Missing Supabase environment variables"))
     }
 
-    return {
-        getClient: (token: string) =>
-            Effect.try({
-                try: () => createClient(supabaseUrl, supabaseKey, {
-                    global: {
-                        headers: { Authorization: `Bearer ${token}` },
-                    },
-                }),
-                catch: (error) => new SupabaseError(error),
+    const getClient = (token: string) =>
+        Effect.try({
+            try: () => createClient(supabaseUrl, supabaseKey, {
+                global: {
+                    headers: { Authorization: `Bearer ${token}` },
+                },
             }),
+            catch: (error) => new SupabaseError(error),
+        })
+
+    const getServiceRoleClient = () =>
+        Effect.try({
+            try: () => createClient(supabaseUrl, serviceRoleKey),
+            catch: (error) => new SupabaseError(error),
+        })
+
+    return {
+        getClient,
+        createSignedUploadUrl: (path: string) =>
+            Effect.gen(function* () {
+                const client = yield* getServiceRoleClient()
+                return yield* Effect.tryPromise({
+                    try: async () => {
+                        const { data, error } = await client.storage
+                            .from('uploads')
+                            .createSignedUploadUrl(path)
+                        if (error) throw error
+                        return data
+                    },
+                    catch: (error) => new SupabaseError(error)
+                })
+            }),
+        createSignedUrl: (path: string, expiresIn: number) =>
+            Effect.gen(function* () {
+                const client = yield* getServiceRoleClient()
+                return yield* Effect.tryPromise({
+                    try: async () => {
+                        const { data, error } = await client.storage
+                            .from('uploads')
+                            .createSignedUrl(path, expiresIn)
+                        if (error) throw error
+                        return data.signedUrl
+                    },
+                    catch: (error) => new SupabaseError(error)
+                })
+            })
     }
 })
 

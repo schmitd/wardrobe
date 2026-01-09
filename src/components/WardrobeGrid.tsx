@@ -36,7 +36,7 @@ export default function WardrobeGrid({ items }: WardrobeGridProps) {
                     <div className="p-3">
                         <p className="font-bold text-sm text-gray-900">{item.category}</p>
                         <div className="flex flex-wrap gap-1 mt-1">
-                            {item.style_tags.slice(0, 3).map((tag, i) => (
+                            {(item.style_tags || []).slice(0, 3).map((tag, i) => (
                                 <span key={i} className="text-[10px] bg-gray-100 px-2 py-1 rounded-full text-gray-600">
                                     {tag}
                                 </span>

@@ -52,10 +52,18 @@ const make = Effect.gen(function* () {
         getWardrobeItems: (userId: string) =>
             Effect.tryPromise({
                 try: async () => {
-                    return await db.query.wardrobeItems.findMany({
-                        where: eq(wardrobeItems.userId, userId),
-                        orderBy: desc(wardrobeItems.createdAt),
+                    return await db.select({
+                        id: wardrobeItems.id,
+                        user_id: wardrobeItems.userId,
+                        image_url: wardrobeItems.imageUrl,
+                        category: wardrobeItems.category,
+                        description: wardrobeItems.description,
+                        style_tags: wardrobeItems.styleTags,
+                        created_at: wardrobeItems.createdAt
                     })
+                        .from(wardrobeItems)
+                        .where(eq(wardrobeItems.userId, userId))
+                        .orderBy(desc(wardrobeItems.createdAt));
                 },
                 catch: (error) => new DatabaseError(error),
             }),
