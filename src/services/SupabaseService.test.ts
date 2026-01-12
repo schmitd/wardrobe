@@ -9,13 +9,7 @@ const SupabaseTest = Layer.succeed(
             from: () => ({
                 insert: () => Promise.resolve({ error: null })
             })
-        } as any),
-        createSignedUploadUrl: (path) => Effect.succeed({
-            signedUrl: "http://fake.url/upload",
-            token: "fake-token",
-            path: path
-        }),
-        createSignedUrl: (path) => Effect.succeed("http://fake.url/view")
+        } as any)
     })
 )
 

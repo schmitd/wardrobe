@@ -5,171 +5,82 @@ import { revalidatePath } from 'next/cache';
 import { auth } from '@clerk/nextjs/server';
 import { SchemaType, Schema } from '@google/generative-ai';
 import { fixedWindow, slidingWindow, request, Primitive, Product } from '@arcjet/next';
+import { eq, and } from 'drizzle-orm';
 
 import { runServerAction } from '@/lib/run-effect';
 import { GeminiService } from '@/services/GeminiService';
-import { DatabaseService } from '@/services/DatabaseService';
-import { ArcjetService } from '@/services/ArcjetService';
 import { SupabaseService } from '@/services/SupabaseService';
+import { ArcjetService, BotDetectionRule } from '@/services/ArcjetService';
+import { ZepService, WardrobeItemSync } from '@/services/ZepService';
+import { SubscriptionService } from '@/services/SubscriptionService';
 import { AppLive } from '@/services';
-import { validateImageUrl } from '@/lib/security';
-
-export async function getUploadUrl(filename: string) {
-    const { userId, has } = await auth();
-    if (!userId) return { success: false, error: 'Unauthorized' };
-
-    const isPro = has({ permission: 'compatibility_check' });
-
-    const program = Effect.gen(function* () {
-        const arcjet = yield* ArcjetService
-        const supabase = yield* SupabaseService
-
-        const tier = isPro ? 'pro' : 'free'
-        yield* Effect.logInfo(`Checking Arcjet protection`, { userId, isPro, tier })
-
-        // 1. Bot Detection / Rate Limit
-        const req = yield* Effect.promise(() => request())
-        const decision = yield* arcjet.protect(req, { userId }, tier)
-
-        if (decision.isDenied()) {
-            const deniedResult = decision.results.find(res => res.isDenied())
-            const arcjetReason = decision.reason.isBot() ? {
-                type: 'Bot',
-                ruleId: deniedResult?.ruleId,
-                bots: decision.reason.denied
-            } : decision.reason.isRateLimit() ? {
-                type: 'RateLimit',
-                ruleId: deniedResult?.ruleId,
-                limit: decision.reason.max,
-                remaining: decision.reason.remaining,
-                reset: decision.reason.reset,
-                window: decision.reason.window
-            } : {
-                type: 'Other',
-                ruleId: deniedResult?.ruleId
-            }
-            yield* Effect.logWarning(`Arcjet denied in getUploadUrl`, { userId, arcjetReason })
-            return { success: false, error: 'Access denied' }
-        }
-
-        // 2. Generate Path & URL
-        // Use a random ID + sanitized filename
-        const ext = filename.split('.').pop()
-        const path = `${userId}/${crypto.randomUUID()}.${ext}`
-
-        const { signedUrl, token } = yield* supabase.createSignedUploadUrl(path)
-
-        return { success: true, url: signedUrl, path }
-    }).pipe(
-        Effect.catchAll(error => Effect.gen(function* () {
-            yield* Effect.logError("Error in getUploadUrl", { userId, error })
-            return { success: false, error: 'Failed to generate upload URL' }
-        })),
-        Effect.provide(AppLive)
-    )
-
-    return runServerAction(program)
-}
+import { db } from '@/db';
+import { wardrobeItems, profiles } from '@/db/schema';
 
 // Helper to fetch image as base64
 const fetchImage = (url: string) =>
-    Effect.gen(function* () {
-        // SSRF Check
-        yield* validateImageUrl(url).pipe(
-            Effect.mapError(e => new Error(e.message))
-        );
-
-        return yield* Effect.tryPromise({
-            try: async () => {
-                const controller = new AbortController();
-                const id = setTimeout(() => controller.abort(), 10000); // 10s timeout
-                try {
-                    const response = await fetch(url, {
-                        signal: controller.signal,
-                        redirect: 'error',
-                        headers: {
-                            'User-Agent': 'WardrobeBot/1.0',
-                            'Accept': 'image/*'
-                        }
-                    });
-                    clearTimeout(id);
-                    if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
-
-                    const contentType = response.headers.get('content-type');
-                    if (!contentType?.startsWith('image/')) {
-                        throw new Error('URL did not resolve to an image');
-                    }
-
-                    const buffer = await response.arrayBuffer();
-                    return Buffer.from(buffer).toString('base64');
-                } catch (error) {
-                    clearTimeout(id);
-                    throw error;
+    Effect.tryPromise({
+        try: async () => {
+            // SSRF Check
+            try {
+                const parsed = new URL(url);
+                if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+                    throw new Error(`Invalid protocol: ${parsed.protocol}`);
                 }
-            },
-            catch: (error) => new Error(`Failed to process image: ${String(error)}`)
-        });
+                const isLocal = ['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(parsed.hostname);
+                if (isLocal && process.env.NODE_ENV === 'production') {
+                    throw new Error('Localhost access denied entirely in production');
+                }
+            } catch (e) {
+                throw new Error(`Invalid URL: ${url}`);
+            }
+
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 10000); // 10s timeout
+            try {
+                const response = await fetch(url, { signal: controller.signal });
+                clearTimeout(id);
+                if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+                const buffer = await response.arrayBuffer();
+                return Buffer.from(buffer).toString('base64');
+            } catch (error) {
+                clearTimeout(id);
+                throw error;
+            }
+        },
+        catch: (error) => new Error(`Failed to process image: ${String(error)}`) // Sanitized error
     })
 
 export async function addItems(imageUrls: string[]) {
-    const { userId, has } = await auth();
+    const { userId, getToken } = await auth();
 
     if (!userId) {
         return { success: false, error: 'Unauthorized' };
     }
 
-    const isPro = has({ permission: 'compatibility_check' });
-
     const program = Effect.gen(function* () {
         const arcjet = yield* ArcjetService
         const gemini = yield* GeminiService
-        const dbService = yield* DatabaseService
-        const supabase = yield* SupabaseService
+        // SupabaseService removed for addItems as we use Drizzle
 
         // 1. Bot Detection
-        // We need to construct the request object for Arcjet
         const req = yield* Effect.promise(() => request())
-        // Determine tier
-        const botDecision = yield* arcjet.protect(req, { userId }, isPro ? 'pro' : 'free')
+        const botDecision = yield* arcjet.protect(req, { userId }, BotDetectionRule)
 
         if (botDecision.isDenied()) {
-            const deniedResult = botDecision.results.find(res => res.isDenied())
-            const arcjetReason = botDecision.reason.isBot() ? {
-                type: 'Bot',
-                ruleId: deniedResult?.ruleId,
-                bots: botDecision.reason.denied
-            } : botDecision.reason.isRateLimit() ? {
-                type: 'RateLimit',
-                ruleId: deniedResult?.ruleId,
-                limit: botDecision.reason.max,
-                remaining: botDecision.reason.remaining,
-                reset: botDecision.reason.reset,
-                window: botDecision.reason.window
-            } : {
-                type: 'Other',
-                ruleId: deniedResult?.ruleId
-            }
-            yield* Effect.logWarning(`Arcjet denied in addItems`, { userId, arcjetReason })
+            yield* Effect.logWarning("Bot detected in addItems", { userId })
             return { success: false, error: 'Access denied' }
         }
 
         yield* Effect.logInfo("Starting batch item addition", { userId, imageCount: imageUrls.length })
 
         // 2. Fetch all images in parallel
-        // We use Effect.all with concurrency to fetch images
         const images = yield* Effect.all(
-            imageUrls.map((urlOrPath, index) =>
-                Effect.gen(function* () {
-                    let urlToFetch = urlOrPath
-                    // If it's a storage path (no protocol), sign it
-                    if (!urlOrPath.startsWith('http')) {
-                        urlToFetch = yield* supabase.createSignedUrl(urlOrPath, 60) // 1 min expiry
-                    }
-                    const base64 = yield* fetchImage(urlToFetch)
-                    return { url: urlOrPath, base64, index } // Keep original identifier (path or url)
-                }).pipe(
-                    Effect.tapError(e => Effect.logError(e.message)), // Log errors but don't fail all?
-                    Effect.orElseSucceed(() => null) // Return null on failure to keep going
+            imageUrls.map((url, index) =>
+                fetchImage(url).pipe(
+                    Effect.map(base64 => ({ url, base64, index })),
+                    Effect.tapError(e => Effect.logError(e.message)),
+                    Effect.orElseSucceed(() => null)
                 )
             ),
             { concurrency: 5 }
@@ -226,14 +137,11 @@ Return the data strictly complying with the schema, maintaining the order of ima
 
         const text = geminiResult.response.text()
 
-        // Parse JSON safely
-        // Parse JSON safely
         const metadataArrayEntry = yield* Effect.try({
             try: () => JSON.parse(text),
             catch: (e) => new Error("Failed to parse AI response: " + String(e))
         })
 
-        // Ensure it's an array
         const metadataArray = Array.isArray(metadataArrayEntry) ? metadataArrayEntry : [metadataArrayEntry];
 
         if (!Array.isArray(metadataArray)) {
@@ -248,7 +156,6 @@ Return the data strictly complying with the schema, maintaining the order of ima
             })
         }
 
-        // Align data
         const alignedImages = validImages.slice(0, count)
         const alignedMetadata = metadataArray.slice(0, count)
 
@@ -266,29 +173,41 @@ Return the data strictly complying with the schema, maintaining the order of ima
             requests: embeddingRequests
         })
 
-        // 5. Insert into Database
+        // 5. Insert into Database (Drizzle)
         const itemsToInsert = metadataArray.map((metadata: any, i: number) => {
             const originalImage = validImages[i];
-            // Check bounds
             if (!originalImage || !batchEmbeddingResult.embeddings[i]) return null;
 
             return {
-                image_url: originalImage.url,
+                userId: userId,
+                imageUrl: originalImage.url,
                 category: metadata.category,
                 description: metadata.description,
-                style_tags: metadata.style_tags,
+                styleTags: metadata.style_tags,
                 embedding: batchEmbeddingResult.embeddings[i].values,
-                user_id: userId,
             }
-        }).filter(item => item !== null)
+        }).filter((item): item is NonNullable<typeof item> => item !== null);
 
         if (itemsToInsert.length > 0) {
-            yield* dbService.addWardrobeItems(itemsToInsert as any)
+            yield* Effect.tryPromise({
+                try: async () => {
+                    await db.insert(wardrobeItems).values(itemsToInsert);
+                },
+                catch: (e) => new Error("Database insert failed: " + String(e))
+            })
         }
 
         yield* Effect.sync(() => revalidatePath('/'))
 
         yield* Effect.logInfo("Successfully added items", { userId, successCount: itemsToInsert.length, failedCount })
+
+        // 6. Sync to Zep
+        const zepItems: WardrobeItemSync[] = itemsToInsert.map(item => ({
+            description: item.description,
+            category: item.category,
+            style_tags: item.styleTags
+        }));
+        yield* ZepService.addWardrobeItems(userId, zepItems);
 
         return {
             success: true,
@@ -312,45 +231,145 @@ export async function addItem(imageUrl: string) {
     return addItems([imageUrl])
 }
 
+export async function deleteItem(itemId: string, reason: string) {
+    const { userId } = await auth(); // Removed getToken as we don't need Supabase client
+    if (!userId) return { success: false, error: 'Unauthorized' };
+
+    const program = Effect.gen(function* () {
+        // 1. Fetch item details for Zep log (Drizzle)
+        const item = yield* Effect.promise(() =>
+            db.select({ description: wardrobeItems.description })
+              .from(wardrobeItems)
+              .where(and(eq(wardrobeItems.id, itemId), eq(wardrobeItems.userId, userId)))
+              .then(res => res[0])
+        )
+
+        if (!item) {
+             yield* Effect.logWarning("Item not found or access denied", { itemId, userId })
+             return { success: false, error: "Item not found" }
+        }
+
+        // 2. Delete from Database (Drizzle)
+        yield* Effect.tryPromise({
+            try: async () => {
+                await db.delete(wardrobeItems)
+                    .where(and(eq(wardrobeItems.id, itemId), eq(wardrobeItems.userId, userId)));
+            },
+            catch: (e) => new Error("Failed to delete item: " + String(e))
+        })
+
+        // 3. Sync to Zep (Log deletion)
+        yield* ZepService.deleteWardrobeItem(userId, item.description || "Unknown item", reason);
+
+        yield* Effect.sync(() => revalidatePath('/'))
+        return { success: true }
+    }).pipe(
+        Effect.catchAll(error => Effect.gen(function* () {
+            yield* Effect.logError("Error in deleteItem", { userId, error: String(error) })
+            return { success: false, error: 'Failed to delete item.' }
+        })),
+        Effect.provide(AppLive)
+    )
+
+    return runServerAction(program);
+}
+
+export async function updateBio(bio: string) {
+    const { userId } = await auth();
+    if (!userId) return { success: false, error: 'Unauthorized' };
+
+    const isPro = await SubscriptionService.isProUser(userId);
+    if (!isPro) return { success: false, error: "Pro feature only" };
+
+    const program = Effect.gen(function* () {
+         // Update Profile in Database (Drizzle)
+         yield* Effect.tryPromise({
+            try: async () => {
+                await db.insert(profiles)
+                    .values({ userId, bio, updatedAt: new Date() })
+                    .onConflictDoUpdate({
+                        target: profiles.userId,
+                        set: { bio, updatedAt: new Date() }
+                    });
+            },
+            catch: (e) => new Error("Database update failed: " + String(e))
+         })
+
+         // Sync to Zep
+         yield* ZepService.syncUserProfile(userId, { bio });
+
+         yield* Effect.sync(() => revalidatePath('/profile'))
+         return { success: true }
+    }).pipe(
+        Effect.catchAll(error => Effect.gen(function* () {
+             yield* Effect.logError("Error updating bio", { userId, error: String(error) });
+             return { success: false, error: "Failed to update bio" };
+        })),
+        Effect.provide(AppLive)
+    )
+    return runServerAction(program);
+}
+
+export async function getBio() {
+    const { userId } = await auth();
+    if (!userId) return { success: false, error: 'Unauthorized' };
+
+    const program = Effect.gen(function* () {
+         const result = yield* Effect.tryPromise({
+            try: async () => {
+                return await db.select({ bio: profiles.bio })
+                    .from(profiles)
+                    .where(eq(profiles.userId, userId));
+            },
+            catch: (e) => new Error("Database fetch failed: " + String(e))
+         })
+
+         return { success: true, bio: result[0]?.bio || '' }
+    }).pipe(
+        Effect.catchAll(error => Effect.gen(function* () {
+             yield* Effect.logError("Error fetching bio", { userId, error: String(error) });
+             return { success: false, error: "Failed to fetch bio" };
+        })),
+        Effect.provide(AppLive)
+    )
+    return runServerAction(program);
+}
+
+// checkCompatibility remains largely unchanged but uses SupabaseService for vector search RPC
 export async function checkCompatibility(candidateUrl: string) {
-    const { userId, has } = await auth();
+    const { userId, getToken, has } = await auth();
     if (!userId) return { success: false, error: 'Unauthorized' };
 
     const program = Effect.gen(function* () {
         const arcjet = yield* ArcjetService
         const gemini = yield* GeminiService
-        const dbService = yield* DatabaseService
+        const supabaseService = yield* SupabaseService
 
         // 1. Rate Limiting / Bot Detection
         const req = yield* Effect.promise(() => request())
+
+        // Check bot first
+        const botDecision = yield* arcjet.protect(req, { userId }, BotDetectionRule)
+        if (botDecision.isDenied()) return { success: false, error: 'Access denied' }
+
+        // Check rate limits
         const isPro = has({ permission: 'compatibility_check' });
+        const limit = isPro ? 20 : 3;
 
-        const decision = yield* arcjet.protect(req, { userId }, isPro ? 'pro' : 'free')
+        const rateLimitRules: (Primitive | Product)[] = [
+            fixedWindow({ mode: "LIVE", window: "1d", max: limit }),
+            slidingWindow({ mode: "LIVE", interval: "10s", max: 1 })
+        ]
 
-        if (decision.isDenied()) {
-            const deniedResult = decision.results.find(res => res.isDenied())
-            const arcjetReason = decision.reason.isBot() ? {
-                type: 'Bot',
-                ruleId: deniedResult?.ruleId,
-                bots: decision.reason.denied
-            } : decision.reason.isRateLimit() ? {
-                type: 'RateLimit',
-                ruleId: deniedResult?.ruleId,
-                limit: decision.reason.max,
-                remaining: decision.reason.remaining,
-                reset: decision.reason.reset,
-                window: decision.reason.window
-            } : {
-                type: 'Other',
-                ruleId: deniedResult?.ruleId
-            }
-            yield* Effect.logWarning(`Arcjet denied in checkCompatibility`, { userId, arcjetReason })
-
-            if (decision.reason.isRateLimit()) {
-                return { success: false, error: 'Rate limit exceeded. Upgrade to Pro for more checks!' };
-            }
-            return { success: false, error: 'Access denied' }
+        const rlDecision = yield* arcjet.protect(req, { userId }, rateLimitRules)
+        if (rlDecision.isDenied()) {
+            return { success: false, error: 'Rate limit exceeded. Upgrade to Pro for more checks!' };
         }
+
+        const token = yield* Effect.promise(() => getToken())
+        if (!token) return { success: false, error: 'Authorization failed' }
+
+        const supabase = yield* supabaseService.getClient(token)
 
         // 2. Fetch Candidate Image
         const imageBase64 = yield* fetchImage(candidateUrl)
@@ -401,11 +420,29 @@ export async function checkCompatibility(candidateUrl: string) {
         const queryEmbedding = embeddingResult.embedding.values
 
         // 6. Search Wardrobe
-        const similarItems = yield* dbService.searchWardrobeItems(userId, queryEmbedding, 0.3, 5)
+        const { data: similarItems, error: similarError } = yield* Effect.promise(() =>
+            supabase.rpc('match_wardrobe_items', {
+                query_embedding: queryEmbedding,
+                match_threshold: 0.3,
+                match_count: 5,
+                p_user_id: userId
+            })
+        )
+
+        if (similarError) return yield* Effect.fail(new Error(similarError.message))
 
         // 7. Get Dissimilar
-        // Note: Drizzle service returns array directly, not { data, error } object
-        const allItems = yield* dbService.getDissimilarWardrobeItems(userId, queryEmbedding, 100)
+        // Using Supabase here for simplicity as we have the client and it works for now.
+        // Could be refactored to Drizzle later.
+        const { data: allItems, error: allError } = yield* Effect.promise(() =>
+            supabase
+                .from('wardrobe_items')
+                .select('id, image_url, category, description, style_tags, embedding')
+                .eq('user_id', userId)
+                .limit(100)
+        )
+
+        if (allError) return yield* Effect.fail(new Error(allError.message))
 
         const dissimilarItems = allItems
             .map((item: any) => {
@@ -508,7 +545,6 @@ Return JSON with keys:
             return { success: false, error: 'Failed to check compatibility. Please try again.' }
         })),
         Effect.withSpan("action.checkCompatibility", { attributes: { userId } }),
-        // Provide all services
         Effect.provide(AppLive)
     )
 
