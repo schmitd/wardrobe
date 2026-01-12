@@ -35,4 +35,3 @@ Headaches to deal with later:
 - [ ] Use the async batch api for the analysis of closet uploads cheaply (bypass with premium feature)
 - [-] Integrate Axiom for logging (verify this is complete)
 - [ ] Private uploads (~~uploadthing premium or migrate to s3~~ supabase storage)
-- [ ] Migrate away from Supabase JS Client to Drizzle ORM (typesafe)

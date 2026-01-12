@@ -1,8 +1,8 @@
 import WardrobeGrid from '@/components/WardrobeGrid';
 import { Effect } from 'effect';
 import { runtime } from '@/lib/run-effect';
-import { DatabaseService } from '@/services/DatabaseService';
 import { SupabaseService } from '@/services/SupabaseService';
+import { DatabaseService } from '@/services/DatabaseService';
 import { AppLive } from '@/services';
 import AddItemSection from '@/components/AddItemSection';
 import { SignInButton, SignedOut } from '@clerk/nextjs';
