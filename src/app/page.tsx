@@ -2,7 +2,6 @@ import WardrobeGrid from '@/components/WardrobeGrid';
 import { Effect } from 'effect';
 import { runtime } from '@/lib/run-effect';
 import { SupabaseService } from '@/services/SupabaseService';
-import { DatabaseService } from '@/services/DatabaseService';
 import { AppLive } from '@/services';
 import AddItemSection from '@/components/AddItemSection';
 import { SignInButton, SignedOut } from '@clerk/nextjs';
@@ -12,38 +11,36 @@ export const dynamic = 'force-dynamic';
 import { auth } from '@clerk/nextjs/server';
 
 export default async function Home() {
-    const { userId } = await auth();
+    const { userId, getToken } = await auth();
 
     let items: any[] = [];
 
     if (userId) {
-        items = await runtime.runPromise(
-            Effect.gen(function* () {
-                const dbService = yield* DatabaseService
-                const supabase = yield* SupabaseService
-                const rawItems = yield* dbService.getWardrobeItems(userId)
+        const token = await getToken();
+        if (token) {
+            items = await runtime.runPromise(
+                Effect.gen(function* () {
+                    const supabaseService = yield* SupabaseService
+                    const supabase = yield* supabaseService.getClient(token)
+                    const { data, error } = yield* Effect.tryPromise({
+                        try: () => supabase
+                            .from('wardrobe_items')
+                            .select('*')
+                            .eq('user_id', userId)
+                            .order('created_at', { ascending: false }),
+                        catch: (e) => new Error("Supabase query failed: " + String(e))
+                    })
 
-                const items = yield* Effect.all(
-                    rawItems.map(item => Effect.gen(function* () {
-                        if (item.image_url && !item.image_url.startsWith('http')) {
-                            // It's a storage path, sign it
-                            const signedUrl = yield* supabase.createSignedUrl(item.image_url, 3600) // 1 hour expiry
-                            return { ...item, image_url: signedUrl }
-                        }
-                        return item
-                    })),
-                    { concurrency: 10 }
+                    if (error) {
+                        yield* Effect.logError("Error fetching wardrobe items", { userId, error })
+                        return []
+                    }
+                    return data || []
+                }).pipe(
+                    Effect.provide(AppLive)
                 )
-
-                return items
-            }).pipe(
-                Effect.provide(AppLive),
-                Effect.catchAll(error => Effect.gen(function* () {
-                    yield* Effect.logError("Error fetching wardrobe items", { userId, error })
-                    return []
-                }))
             )
-        )
+        }
     }
 
     return (
