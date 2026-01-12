@@ -17,7 +17,7 @@ describe("ArcjetService", () => {
     it("allows requests", async () => {
         const program = Effect.gen(function* () {
             const service = yield* ArcjetService
-            const decision = yield* service.protect(new Request("http://localhost"), { userId: "user" })
+            const decision = yield* service.protect(new Request("http://localhost"), { userId: "user" }, 'free')
             return decision.isAllowed()
         })
 

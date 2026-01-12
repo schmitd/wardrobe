@@ -5,7 +5,7 @@ import {
 import Navbar from '@/components/Navbar';
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import "@uploadthing/react/styles.css";
+
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
