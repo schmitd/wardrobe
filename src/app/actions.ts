@@ -12,6 +12,7 @@ import { DatabaseService } from '@/services/DatabaseService';
 import { ArcjetService } from '@/services/ArcjetService';
 import { SupabaseService } from '@/services/SupabaseService';
 import { AppLive } from '@/services';
+import { validateImageUrl } from '@/lib/security';
 
 export async function getUploadUrl(filename: string) {
     const { userId, has } = await auth();
@@ -72,36 +73,42 @@ export async function getUploadUrl(filename: string) {
 
 // Helper to fetch image as base64
 const fetchImage = (url: string) =>
-    Effect.tryPromise({
-        try: async () => {
-            // SSRF Check
-            try {
-                const parsed = new URL(url);
-                if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-                    throw new Error(`Invalid protocol: ${parsed.protocol}`);
-                }
-                const isLocal = ['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(parsed.hostname);
-                if (isLocal && process.env.NODE_ENV === 'production') {
-                    throw new Error('Localhost access denied entirely in production');
-                }
-            } catch (e) {
-                throw new Error(`Invalid URL: ${url}`);
-            }
+    Effect.gen(function* () {
+        // SSRF Check
+        yield* validateImageUrl(url).pipe(
+            Effect.mapError(e => new Error(e.message))
+        );
 
-            const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), 10000); // 10s timeout
-            try {
-                const response = await fetch(url, { signal: controller.signal });
-                clearTimeout(id);
-                if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
-                const buffer = await response.arrayBuffer();
-                return Buffer.from(buffer).toString('base64');
-            } catch (error) {
-                clearTimeout(id);
-                throw error;
-            }
-        },
-        catch: (error) => new Error(`Failed to process image: ${String(error)}`) // Sanitized error
+        return yield* Effect.tryPromise({
+            try: async () => {
+                const controller = new AbortController();
+                const id = setTimeout(() => controller.abort(), 10000); // 10s timeout
+                try {
+                    const response = await fetch(url, {
+                        signal: controller.signal,
+                        redirect: 'error',
+                        headers: {
+                            'User-Agent': 'WardrobeBot/1.0',
+                            'Accept': 'image/*'
+                        }
+                    });
+                    clearTimeout(id);
+                    if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+
+                    const contentType = response.headers.get('content-type');
+                    if (!contentType?.startsWith('image/')) {
+                        throw new Error('URL did not resolve to an image');
+                    }
+
+                    const buffer = await response.arrayBuffer();
+                    return Buffer.from(buffer).toString('base64');
+                } catch (error) {
+                    clearTimeout(id);
+                    throw error;
+                }
+            },
+            catch: (error) => new Error(`Failed to process image: ${String(error)}`)
+        });
     })
 
 export async function addItems(imageUrls: string[]) {
