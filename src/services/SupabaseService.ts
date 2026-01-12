@@ -10,6 +10,8 @@ export class SupabaseError extends Error {
 
 export interface SupabaseService {
     readonly getClient: (token: string) => Effect.Effect<SupabaseClient, SupabaseError>
+    readonly createSignedUploadUrl: (path: string) => Effect.Effect<{ signedUrl: string; token: string; path: string }, SupabaseError>
+    readonly createSignedUrl: (path: string, expiresIn: number) => Effect.Effect<string, SupabaseError>
 }
 
 export const SupabaseService = Context.GenericTag<SupabaseService>("SupabaseService")
@@ -22,6 +24,12 @@ const make = Effect.gen(function* () {
         return yield* Effect.fail(new SupabaseError("Missing Supabase environment variables"))
     }
 
+    const getServiceRoleClient = () =>
+        Effect.try({
+            try: () => createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY!),
+            catch: (error) => new SupabaseError(error),
+        })
+
     return {
         getClient: (token: string) =>
             Effect.try({
@@ -32,6 +40,34 @@ const make = Effect.gen(function* () {
                 }),
                 catch: (error) => new SupabaseError(error),
             }),
+        createSignedUploadUrl: (path: string) =>
+            Effect.gen(function* () {
+                const client = yield* getServiceRoleClient()
+                return yield* Effect.tryPromise({
+                    try: async () => {
+                        const { data, error } = await client.storage
+                            .from('uploads')
+                            .createSignedUploadUrl(path)
+                        if (error) throw error
+                        return data
+                    },
+                    catch: (error) => new SupabaseError(error)
+                })
+            }),
+        createSignedUrl: (path: string, expiresIn: number) =>
+            Effect.gen(function* () {
+                const client = yield* getServiceRoleClient()
+                return yield* Effect.tryPromise({
+                    try: async () => {
+                        const { data, error } = await client.storage
+                            .from('uploads')
+                            .createSignedUrl(path, expiresIn)
+                        if (error) throw error
+                        return data.signedUrl
+                    },
+                    catch: (error) => new SupabaseError(error)
+                })
+            })
     }
 })
 

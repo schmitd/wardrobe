@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import ImageUploader from './ui/ImageUploader';
+// import ImageUploader from './ui/ImageUploader';
 import { checkCompatibility } from '@/app/actions';
 import { Loader2 } from 'lucide-react';
 import Image from 'next/image';
@@ -36,7 +36,10 @@ export default function CompatibilityChecker() {
         <div className="max-w-4xl mx-auto">
             <div className="bg-white p-8 rounded-xl shadow-sm border border-gray-100 mb-8">
                 <h2 className="text-2xl font-bold mb-6 text-center">Will it fit my style?</h2>
-                <ImageUploader onUploadComplete={handleCheck} label="Upload Item to Check" />
+                {/* <ImageUploader onUploadComplete={handleCheck} label="Upload Item to Check" /> */}
+                <div className="p-4 border border-dashed text-center text-gray-500">
+                    Image Upload Temporarily Disabled (Migration to Supabase Storage)
+                </div>
 
                 {isProcessing && (
                     <div className="mt-8 text-center">

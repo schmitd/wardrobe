@@ -14,42 +14,31 @@ import { ArcjetService, BotDetectionRule } from '@/services/ArcjetService';
 import { ZepService, WardrobeItemSync } from '@/services/ZepService';
 import { SubscriptionService } from '@/services/SubscriptionService';
 import { AppLive } from '@/services';
-import { db } from '@/db';
-import { wardrobeItems, profiles } from '@/db/schema';
+import { DatabaseService } from '@/services/DatabaseService';
 
 // Helper to fetch image as base64
-const fetchImage = (url: string) =>
-    Effect.tryPromise({
-        try: async () => {
-            // SSRF Check
-            try {
-                const parsed = new URL(url);
-                if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-                    throw new Error(`Invalid protocol: ${parsed.protocol}`);
-                }
-                const isLocal = ['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(parsed.hostname);
-                if (isLocal && process.env.NODE_ENV === 'production') {
-                    throw new Error('Localhost access denied entirely in production');
-                }
-            } catch (e) {
-                throw new Error(`Invalid URL: ${url}`);
-            }
+// Helper to fetch image as base64 from Supabase Private Storage using new Service
+const fetchImage = (pathOrUrl: string) =>
+    Effect.gen(function* () {
+        const supabaseService = yield* SupabaseService
+        // If it's a full URL, we might need to download it (e.g. if we still support scraping). 
+        // But for private uploads, we expect a path.
 
-            const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), 10000); // 10s timeout
-            try {
-                const response = await fetch(url, { signal: controller.signal });
-                clearTimeout(id);
-                if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+        // Assuming input is a path for now for the new flow.
+        // We generate a short-lived signed URL to download it for analysis.
+        const signedUrl = yield* supabaseService.createSignedUrl(pathOrUrl, 60);
+
+        return yield* Effect.tryPromise({
+            try: async () => {
+                const response = await fetch(signedUrl);
+                if (!response.ok) throw new Error(`Failed to fetch image from storage: ${response.statusText}`);
                 const buffer = await response.arrayBuffer();
                 return Buffer.from(buffer).toString('base64');
-            } catch (error) {
-                clearTimeout(id);
-                throw error;
-            }
-        },
-        catch: (error) => new Error(`Failed to process image: ${String(error)}`) // Sanitized error
+            },
+            catch: (error) => new Error(`Failed to download image: ${String(error)}`)
+        })
     })
+
 
 export async function addItems(imageUrls: string[]) {
     const { userId, getToken } = await auth();
@@ -61,6 +50,7 @@ export async function addItems(imageUrls: string[]) {
     const program = Effect.gen(function* () {
         const arcjet = yield* ArcjetService
         const gemini = yield* GeminiService
+        const dbService = yield* DatabaseService
         // SupabaseService removed for addItems as we use Drizzle
 
         // 1. Bot Detection
@@ -189,12 +179,7 @@ Return the data strictly complying with the schema, maintaining the order of ima
         }).filter((item): item is NonNullable<typeof item> => item !== null);
 
         if (itemsToInsert.length > 0) {
-            yield* Effect.tryPromise({
-                try: async () => {
-                    await db.insert(wardrobeItems).values(itemsToInsert);
-                },
-                catch: (e) => new Error("Database insert failed: " + String(e))
-            })
+            yield* dbService.addWardrobeItems(itemsToInsert);
         }
 
         yield* Effect.sync(() => revalidatePath('/'))
@@ -236,27 +221,18 @@ export async function deleteItem(itemId: string, reason: string) {
     if (!userId) return { success: false, error: 'Unauthorized' };
 
     const program = Effect.gen(function* () {
-        // 1. Fetch item details for Zep log (Drizzle)
-        const item = yield* Effect.promise(() =>
-            db.select({ description: wardrobeItems.description })
-              .from(wardrobeItems)
-              .where(and(eq(wardrobeItems.id, itemId), eq(wardrobeItems.userId, userId)))
-              .then(res => res[0])
-        )
+        const dbService = yield* DatabaseService
+
+        // 1. Fetch item details for Zep log
+        const item = yield* dbService.getWardrobeItem(itemId, userId);
 
         if (!item) {
-             yield* Effect.logWarning("Item not found or access denied", { itemId, userId })
-             return { success: false, error: "Item not found" }
+            yield* Effect.logWarning("Item not found or access denied", { itemId, userId })
+            return { success: false, error: "Item not found" }
         }
 
-        // 2. Delete from Database (Drizzle)
-        yield* Effect.tryPromise({
-            try: async () => {
-                await db.delete(wardrobeItems)
-                    .where(and(eq(wardrobeItems.id, itemId), eq(wardrobeItems.userId, userId)));
-            },
-            catch: (e) => new Error("Failed to delete item: " + String(e))
-        })
+        // 2. Delete from Database
+        yield* dbService.deleteWardrobeItem(itemId, userId);
 
         // 3. Sync to Zep (Log deletion)
         yield* ZepService.deleteWardrobeItem(userId, item.description || "Unknown item", reason);
@@ -282,28 +258,20 @@ export async function updateBio(bio: string) {
     if (!isPro) return { success: false, error: "Pro feature only" };
 
     const program = Effect.gen(function* () {
-         // Update Profile in Database (Drizzle)
-         yield* Effect.tryPromise({
-            try: async () => {
-                await db.insert(profiles)
-                    .values({ userId, bio, updatedAt: new Date() })
-                    .onConflictDoUpdate({
-                        target: profiles.userId,
-                        set: { bio, updatedAt: new Date() }
-                    });
-            },
-            catch: (e) => new Error("Database update failed: " + String(e))
-         })
+        const dbService = yield* DatabaseService
 
-         // Sync to Zep
-         yield* ZepService.syncUserProfile(userId, { bio });
+        // Update Profile in Database
+        yield* dbService.updateProfile(userId, bio);
 
-         yield* Effect.sync(() => revalidatePath('/profile'))
-         return { success: true }
+        // Sync to Zep
+        yield* ZepService.syncUserProfile(userId, { bio });
+
+        yield* Effect.sync(() => revalidatePath('/profile'))
+        return { success: true }
     }).pipe(
         Effect.catchAll(error => Effect.gen(function* () {
-             yield* Effect.logError("Error updating bio", { userId, error: String(error) });
-             return { success: false, error: "Failed to update bio" };
+            yield* Effect.logError("Error updating bio", { userId, error: String(error) });
+            return { success: false, error: "Failed to update bio" };
         })),
         Effect.provide(AppLive)
     )
@@ -315,20 +283,13 @@ export async function getBio() {
     if (!userId) return { success: false, error: 'Unauthorized' };
 
     const program = Effect.gen(function* () {
-         const result = yield* Effect.tryPromise({
-            try: async () => {
-                return await db.select({ bio: profiles.bio })
-                    .from(profiles)
-                    .where(eq(profiles.userId, userId));
-            },
-            catch: (e) => new Error("Database fetch failed: " + String(e))
-         })
-
-         return { success: true, bio: result[0]?.bio || '' }
+        const dbService = yield* DatabaseService
+        const result = yield* dbService.getProfile(userId);
+        return { success: true, bio: result?.bio || '' }
     }).pipe(
         Effect.catchAll(error => Effect.gen(function* () {
-             yield* Effect.logError("Error fetching bio", { userId, error: String(error) });
-             return { success: false, error: "Failed to fetch bio" };
+            yield* Effect.logError("Error fetching bio", { userId, error: String(error) });
+            return { success: false, error: "Failed to fetch bio" };
         })),
         Effect.provide(AppLive)
     )
