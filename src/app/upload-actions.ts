@@ -12,6 +12,11 @@ export async function getUploadUrl(filename: string, contentType: string) {
     const { userId, has } = await auth();
     if (!userId) return { success: false, error: 'Unauthorized' };
 
+    // Validate that the file is an image
+    if (!contentType.startsWith('image/')) {
+        return { success: false, error: 'Only image files are allowed' };
+    }
+
     const program = Effect.gen(function* () {
         const arcjet = yield* ArcjetService
         const supabaseService = yield* SupabaseService
@@ -26,8 +31,9 @@ export async function getUploadUrl(filename: string, contentType: string) {
         }
 
         const isPro = has({ permission: 'compatibility_check' }) || (yield* Effect.promise(() => SubscriptionService.isProUser(userId)));
+        const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
         // Dynamic path: <users>/<userId>/<random>-<filename>
-        const path = `users/${userId}/${Math.random().toString(36).slice(2)}-${filename}`;
+        const path = `users/${userId}/${Math.random().toString(36).slice(2)}-${sanitizedFilename}`;
 
         const uploadData = yield* supabaseService.createSignedUploadUrl(path);
 
@@ -36,7 +42,7 @@ export async function getUploadUrl(filename: string, contentType: string) {
     }).pipe(
         Effect.catchAll(error => Effect.gen(function* () {
             yield* Effect.logError("Error generating upload URL", { userId, error: String(error) });
-            return { success: false, error: "Failed to generate upload URL" };
+            return { success: false, error: String(error) };
         })),
         Effect.provide(AppLive)
     )

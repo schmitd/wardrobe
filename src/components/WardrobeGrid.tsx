@@ -7,10 +7,10 @@ import { Trash2 } from "lucide-react";
 
 interface WardrobeItem {
     id: string;
-    image_url: string;
-    category: string;
-    description: string;
-    style_tags: string[];
+    imageUrl: string;
+    category: string | null;
+    description: string | null;
+    styleTags: string[] | null;
 }
 
 interface WardrobeGridProps {
@@ -43,8 +43,8 @@ export default function WardrobeGrid({ items }: WardrobeGridProps) {
                 <div key={item.id} className="group relative break-inside-avoid rounded-lg overflow-hidden shadow-md hover:shadow-xl transition-shadow bg-white">
                     <div className="aspect-[3/4] relative">
                         <Image
-                            src={item.image_url}
-                            alt={item.description}
+                            src={item.imageUrl}
+                            alt={item.description || "Wardrobe Item"}
                             fill
                             className="object-cover group-hover:scale-105 transition-transform duration-300"
                         />
@@ -62,7 +62,7 @@ export default function WardrobeGrid({ items }: WardrobeGridProps) {
                     <div className="p-3">
                         <p className="font-bold text-sm text-gray-900">{item.category}</p>
                         <div className="flex flex-wrap gap-1 mt-1">
-                            {item.style_tags.slice(0, 3).map((tag, i) => (
+                            {(item.styleTags || []).slice(0, 3).map((tag, i) => (
                                 <span key={i} className="text-[10px] bg-gray-100 px-2 py-1 rounded-full text-gray-600">
                                     {tag}
                                 </span>

@@ -26,7 +26,11 @@ const make = Effect.gen(function* () {
 
     const getServiceRoleClient = () =>
         Effect.try({
-            try: () => createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY!),
+            try: () => {
+                const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+                if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY is not defined");
+                return createClient(supabaseUrl, key);
+            },
             catch: (error) => new SupabaseError(error),
         })
 

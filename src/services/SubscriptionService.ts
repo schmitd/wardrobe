@@ -4,14 +4,14 @@ import { createClient } from "@supabase/supabase-js";
 // CAUTION: Only use this on the server side
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SECRET_KEY!
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
 export class SubscriptionService {
   static async getSubscription(userId: string) {
-    if (!process.env.SUPABASE_SECRET_KEY) {
-       console.warn("SUPABASE_SECRET_KEY missing, treating as free tier");
-       return null;
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.warn("SUPABASE_SERVICE_ROLE_KEY missing, treating as free tier");
+      return null;
     }
 
     const { data, error } = await supabaseAdmin
@@ -21,11 +21,11 @@ export class SubscriptionService {
       .single();
 
     if (error) {
-        // It's expected to not find a subscription for free users
-        if (error.code !== "PGRST116") {
-            console.error("Error fetching subscription:", error);
-        }
-        return null;
+      // It's expected to not find a subscription for free users
+      if (error.code !== "PGRST116") {
+        console.error("Error fetching subscription:", error);
+      }
+      return null;
     }
     return data;
   }
