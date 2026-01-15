@@ -6,7 +6,6 @@ import { request } from '@arcjet/next';
 import { runServerAction } from '@/lib/run-effect';
 import { ArcjetService, BotDetectionRule } from '@/services/ArcjetService';
 import { SupabaseService } from '@/services/SupabaseService';
-import { SubscriptionService } from '@/services/SubscriptionService';
 import { AppLive } from '@/services';
 export async function getUploadUrl(filename: string, contentType: string) {
     const { userId, has } = await auth();
@@ -30,7 +29,7 @@ export async function getUploadUrl(filename: string, contentType: string) {
             return { success: false, error: 'Access denied' };
         }
 
-        const isPro = has({ permission: 'compatibility_check' }) || (yield* Effect.promise(() => SubscriptionService.isProUser(userId)));
+        const isPro = has({ plan: 'pro' });
         const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, '_');
         // Dynamic path: <users>/<userId>/<random>-<filename>
         const path = `users/${userId}/${Math.random().toString(36).slice(2)}-${sanitizedFilename}`;

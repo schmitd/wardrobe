@@ -7,13 +7,17 @@ import { getUploadUrl } from '@/app/upload-actions';
 interface ImageUploaderProps {
     onUploadComplete: (paths: string[]) => void;
     label?: string;
+    allowMultiple?: boolean;
 }
 
-export default function ImageUploader({ onUploadComplete, label = "Upload Image" }: ImageUploaderProps) {
+export default function ImageUploader({ onUploadComplete, label, allowMultiple = true }: ImageUploaderProps) {
     const [isDragging, setIsDragging] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Determine label based on allowMultiple if not explicitly provided
+    const displayLabel = label || (allowMultiple ? "Upload Images" : "Upload Image");
 
     const handleDragOver = (e: React.DragEvent) => {
         e.preventDefault();
@@ -28,7 +32,13 @@ export default function ImageUploader({ onUploadComplete, label = "Upload Image"
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         setIsDragging(false);
+        setError(null);
+
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            if (!allowMultiple && e.dataTransfer.files.length > 1) {
+                setError("Please upload a single image for this feature.");
+                return;
+            }
             handleFiles(Array.from(e.dataTransfer.files));
         }
     };
@@ -112,7 +122,7 @@ export default function ImageUploader({ onUploadComplete, label = "Upload Image"
                     type="file"
                     ref={fileInputRef}
                     className="hidden"
-                    multiple
+                    multiple={allowMultiple}
                     accept="image/*"
                     onChange={handleFileSelect}
                 />
@@ -128,10 +138,13 @@ export default function ImageUploader({ onUploadComplete, label = "Upload Image"
 
                     <div>
                         <h4 className="text-lg font-medium text-gray-700">
-                            {uploading ? 'Uploading...' : 'Click to upload or drag and drop'}
+                            {uploading ? 'Uploading...' : displayLabel}
                         </h4>
                         <p className="text-sm text-gray-500 mt-1">
-                            {uploading ? 'Please wait while we process your images' : 'SVG, PNG, JPG or GIF (max. 10MB)'}
+                            {uploading
+                                ? 'Please wait while we process your images'
+                                : (allowMultiple ? 'Click or drag images to upload' : 'Click or drag an image to upload')
+                            }
                         </p>
                     </div>
                 </div>

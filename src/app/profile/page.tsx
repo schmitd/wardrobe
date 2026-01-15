@@ -2,29 +2,31 @@
 
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { updateBio, getBio } from '../actions';
+import { updateBio, getBio, analyzeSelfie } from '../actions';
+import ImageUploader from '@/components/ImageUploader';
 
 export default function ProfilePage() {
   const { user, isLoaded } = useUser();
   const [bio, setBio] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'saving' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
+  const [analysisResult, setAnalysisResult] = useState<{ skinTone: string, hairColor: string } | null>(null);
 
   useEffect(() => {
     if (!isLoaded || !user) return;
 
     const fetchBio = async () => {
-        try {
-            const result = await getBio();
-            // result is { success: boolean, bio?: string, error?: string }
-            if (result.success && 'bio' in result && result.bio) {
-                setBio(result.bio);
-            }
-        } catch (e) {
-            console.error("Failed to fetch bio", e);
-        } finally {
-            setStatus('idle');
+      try {
+        const result = await getBio();
+        // result is { success: boolean, bio?: string, error?: string }
+        if (result.success && 'bio' in result && result.bio) {
+          setBio(result.bio);
         }
+      } catch (e) {
+        console.error("Failed to fetch bio", e);
+      } finally {
+        setStatus('idle');
+      }
     };
     fetchBio();
   }, [isLoaded, user]);
@@ -86,11 +88,50 @@ export default function ProfilePage() {
       </div>
 
       <div className="mt-8 p-6 bg-gray-50 rounded-lg border border-gray-200">
-          <h2 className="text-xl font-semibold mb-4">Selfie Analysis (Pro Feature)</h2>
-          <p className="text-gray-600 mb-4">Upload a selfie to analyze your color season and fit.</p>
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center text-gray-500">
-              Upload feature coming soon...
+        <h2 className="text-xl font-semibold mb-4">Selfie Analysis (Pro Feature)</h2>
+        <p className="text-gray-600 mb-4">Upload a selfie to analyze your color season and fit.</p>
+
+        <ImageUploader
+          label="Upload a Selfie"
+          allowMultiple={false}
+          onUploadComplete={async (paths) => {
+            if (paths.length === 0) return;
+            setStatus('loading');
+            try {
+              const res = await analyzeSelfie(paths[0]);
+              if (res.success && 'data' in res) {
+                setBio(res.data.bio); // Pre-fill bio
+                setAnalysisResult({
+                  skinTone: res.data.skin_tone,
+                  hairColor: res.data.hair_color
+                });
+                setStatus('success');
+              } else {
+                setStatus('error');
+                setErrorMessage((res as any).error || "Analysis failed");
+              }
+            } catch (e) {
+              setStatus('error');
+              setErrorMessage("Failed to analyze selfie");
+            }
+          }}
+        />
+
+        {analysisResult && (
+          <div className="mt-6 p-4 bg-white rounded border border-indigo-100 shadow-sm animate-in fade-in">
+            <h3 className="font-semibold text-indigo-900 mb-2">Analysis Results</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Skin Tone</span>
+                <p className="font-medium text-gray-900">{analysisResult.skinTone}</p>
+              </div>
+              <div>
+                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Hair Color</span>
+                <p className="font-medium text-gray-900">{analysisResult.hairColor}</p>
+              </div>
+            </div>
           </div>
+        )}
       </div>
     </div>
   );

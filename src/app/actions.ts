@@ -12,7 +12,6 @@ import { GeminiService } from '@/services/GeminiService';
 import { SupabaseService } from '@/services/SupabaseService';
 import { ArcjetService, BotDetectionRule } from '@/services/ArcjetService';
 import { ZepService, WardrobeItemSync } from '@/services/ZepService';
-import { SubscriptionService } from '@/services/SubscriptionService';
 import { AppLive } from '@/services';
 import { DatabaseService } from '@/services/DatabaseService';
 
@@ -251,10 +250,10 @@ export async function deleteItem(itemId: string, reason: string) {
 }
 
 export async function updateBio(bio: string) {
-    const { userId } = await auth();
+    const { userId, has } = await auth();
     if (!userId) return { success: false, error: 'Unauthorized' };
 
-    const isPro = await SubscriptionService.isProUser(userId);
+    const isPro = has({ plan: 'pro' });
     if (!isPro) return { success: false, error: "Pro feature only" };
 
     const program = Effect.gen(function* () {
@@ -304,38 +303,35 @@ export async function checkCompatibility(candidateUrl: string) {
     const program = Effect.gen(function* () {
         const arcjet = yield* ArcjetService
         const gemini = yield* GeminiService
-        const supabaseService = yield* SupabaseService
 
         // 1. Rate Limiting / Bot Detection
         const req = yield* Effect.promise(() => request())
-
-        // Check bot first
         const botDecision = yield* arcjet.protect(req, { userId }, BotDetectionRule)
         if (botDecision.isDenied()) return { success: false, error: 'Access denied' }
 
-        // Check rate limits
-        const isPro = has({ permission: 'compatibility_check' });
+        // Check rate limits using Clerk Billing
+        const isPro = has({ plan: 'pro' });
         const limit = isPro ? 20 : 3;
+        yield* Effect.logInfo("Rate limit check", { userId, isPro, limit });
 
         const rateLimitRules: (Primitive | Product)[] = [
             fixedWindow({ mode: "LIVE", window: "1d", max: limit }),
             slidingWindow({ mode: "LIVE", interval: "10s", max: 1 })
         ]
-
         const rlDecision = yield* arcjet.protect(req, { userId }, rateLimitRules)
+        yield* Effect.logInfo("Arcjet rate limit decision", { denied: rlDecision.isDenied() });
+
         if (rlDecision.isDenied()) {
             return { success: false, error: 'Rate limit exceeded. Upgrade to Pro for more checks!' };
         }
 
-        const token = yield* Effect.promise(() => getToken())
-        if (!token) return { success: false, error: 'Authorization failed' }
-
-        const supabase = yield* supabaseService.getClient(token)
-
         // 2. Fetch Candidate Image
+        yield* Effect.logInfo("Step: Fetching candidate image", { candidateUrl });
         const imageBase64 = yield* fetchImage(candidateUrl)
+        yield* Effect.logInfo("Step: Image fetched successfully", { length: imageBase64.length });
 
         // 3. Analyze Candidate
+        yield* Effect.logInfo("Step: Analyzing candidate with Gemini");
         const analysisPrompt = "Analyze this clothing item. Extract category, color, material, and 3-5 style tags. Describe it in detail focusing on fashion elements. Return JSON with keys: category, description, style_tags (array of strings).";
 
         const evaluationSchema: Schema = {
@@ -369,41 +365,30 @@ export async function checkCompatibility(candidateUrl: string) {
             try: () => JSON.parse(analysisResult.response.text()),
             catch: (e) => new Error("Failed to parse AI response: " + String(e))
         })
+        yield* Effect.logInfo("Step: Candidate analyzed", { category: candidateMetadata.category });
 
         // 4. Generate Style Query
+        yield* Effect.logInfo("Step: Generating style query");
         const queryPrompt = `Given this clothing item description: "${candidateMetadata.description}" and style tags: "${candidateMetadata.style_tags.join(', ')}", generate a search query to find compatible items in a wardrobe. For example, if the item is a "Red leather jacket", the query might be "Black jeans, white t-shirt, boots, edgy style". Return just the query string.`;
 
         const queryResult = yield* gemini.generateContent('gemini-2.5-flash-lite', queryPrompt)
         const styleQuery = queryResult.response.text().trim()
+        yield* Effect.logInfo("Step: Style query generated", { styleQuery });
 
         // 5. Generate Embedding
+        yield* Effect.logInfo("Step: Generating embedding");
         const embeddingResult = yield* gemini.embedContent(styleQuery)
         const queryEmbedding = embeddingResult.embedding.values
+        yield* Effect.logInfo("Step: Embedding generated", { dimensions: queryEmbedding.length });
 
-        // 6. Search Wardrobe
-        const { data: similarItems, error: similarError } = yield* Effect.promise(() =>
-            supabase.rpc('match_wardrobe_items', {
-                query_embedding: queryEmbedding,
-                match_threshold: 0.3,
-                match_count: 5,
-                p_user_id: userId
-            })
-        )
+        // Search Wardrobe via Drizzle
+        yield* Effect.logInfo("Step: Searching wardrobe via Drizzle");
+        const dbService = yield* DatabaseService;
+        const similarItems = yield* dbService.matchWardrobeItems(userId, queryEmbedding, 0.3, 5);
+        yield* Effect.logInfo("Step: Wardrobe search complete", { matchCount: similarItems.length });
 
-        if (similarError) return yield* Effect.fail(new Error(similarError.message))
-
-        // 7. Get Dissimilar
-        // Using Supabase here for simplicity as we have the client and it works for now.
-        // Could be refactored to Drizzle later.
-        const { data: allItems, error: allError } = yield* Effect.promise(() =>
-            supabase
-                .from('wardrobe_items')
-                .select('id, image_url, category, description, style_tags, embedding')
-                .eq('user_id', userId)
-                .limit(100)
-        )
-
-        if (allError) return yield* Effect.fail(new Error(allError.message))
+        // Get all items for dissimilarity calculation
+        const allItems = yield* dbService.getAllWardrobeItemsWithEmbedding(userId, 100);
 
         const dissimilarItems = allItems
             .map((item: any) => {
@@ -492,11 +477,38 @@ Return JSON with keys:
             catch: (e) => new Error("Failed to parse evaluation response: " + String(e))
         })
 
+        // Generate signed URLs for all items
+        const supabaseService = yield* SupabaseService;
+        const signedSimilarItems = yield* Effect.all(
+            similarItems.map(item =>
+                supabaseService.createSignedUrl(item.image_url, 3600).pipe(
+                    Effect.map(signedUrl => ({ ...item, image_url: signedUrl })),
+                    Effect.catchAll(e => {
+                        Effect.logWarning("Failed to sign URL for similar item", { id: item.id, error: String(e) });
+                        return Effect.succeed(null);
+                    })
+                )
+            ),
+            { concurrency: 5 }
+        ).pipe(Effect.map(items => items.filter((item): item is NonNullable<typeof item> => item !== null)));
+        const signedDissimilarItems = yield* Effect.all(
+            dissimilarItems.map((item: any) =>
+                supabaseService.createSignedUrl(item.image_url, 3600).pipe(
+                    Effect.map(signedUrl => ({ ...item, image_url: signedUrl })),
+                    Effect.catchAll(e => {
+                        Effect.logWarning("Failed to sign URL for dissimilar item", { id: item.id, error: String(e) });
+                        return Effect.succeed(null);
+                    })
+                )
+            ),
+            { concurrency: 5 }
+        ).pipe(Effect.map(items => items.filter((item): item is NonNullable<typeof item> => item !== null)));
+
         return {
             success: true,
             candidate: candidateMetadata,
-            similarItems,
-            dissimilarItems,
+            similarItems: signedSimilarItems,
+            dissimilarItems: signedDissimilarItems,
             evaluation
         };
 

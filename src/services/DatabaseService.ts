@@ -26,6 +26,22 @@ export interface DatabaseService {
     readonly getWardrobeItem: (itemId: string, userId: string) => Effect.Effect<{ description: string | null } | undefined, DatabaseError>
     readonly getProfile: (userId: string) => Effect.Effect<{ bio: string | null } | undefined, DatabaseError>
     readonly updateProfile: (userId: string, bio: string) => Effect.Effect<void, DatabaseError>
+    readonly matchWardrobeItems: (userId: string, queryEmbedding: number[], threshold: number, count: number) => Effect.Effect<{
+        id: string;
+        image_url: string;
+        category: string | null;
+        description: string | null;
+        style_tags: string[] | null;
+        similarity: number;
+    }[], DatabaseError>
+    readonly getAllWardrobeItemsWithEmbedding: (userId: string, limit: number) => Effect.Effect<{
+        id: string;
+        image_url: string;
+        category: string | null;
+        description: string | null;
+        style_tags: string[] | null;
+        embedding: number[];
+    }[], DatabaseError>
 }
 
 export const DatabaseService = Context.GenericTag<DatabaseService>("DatabaseService")
@@ -100,6 +116,57 @@ const make = Effect.gen(function* () {
                             target: profiles.userId,
                             set: { bio, updatedAt: new Date() }
                         });
+                },
+                catch: (error) => new DatabaseError(error),
+            }),
+
+        matchWardrobeItems: (userId: string, queryEmbedding: number[], threshold: number, count: number) =>
+            Effect.tryPromise({
+                try: async () => {
+                    const embeddingStr = `[${queryEmbedding.join(',')}]`;
+                    const result = await db.execute(sql`
+                        SELECT
+                            id,
+                            image_url,
+                            category,
+                            description,
+                            style_tags,
+                            1 - (embedding <=> ${embeddingStr}::vector) AS similarity
+                        FROM wardrobe_items
+                        WHERE user_id = ${userId}
+                          AND 1 - (embedding <=> ${embeddingStr}::vector) > ${threshold}
+                        ORDER BY embedding <=> ${embeddingStr}::vector
+                        LIMIT ${count}
+                    `);
+                    return result as unknown as {
+                        id: string;
+                        image_url: string;
+                        category: string | null;
+                        description: string | null;
+                        style_tags: string[] | null;
+                        similarity: number;
+                    }[];
+                },
+                catch: (error) => new DatabaseError(error),
+            }),
+
+        getAllWardrobeItemsWithEmbedding: (userId: string, limit: number) =>
+            Effect.tryPromise({
+                try: async () => {
+                    const result = await db.execute(sql`
+                        SELECT id, image_url, category, description, style_tags, embedding
+                        FROM wardrobe_items
+                        WHERE user_id = ${userId}
+                        LIMIT ${limit}
+                    `);
+                    return result as unknown as {
+                        id: string;
+                        image_url: string;
+                        category: string | null;
+                        description: string | null;
+                        style_tags: string[] | null;
+                        embedding: number[];
+                    }[];
                 },
                 catch: (error) => new DatabaseError(error),
             })
