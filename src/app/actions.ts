@@ -249,7 +249,7 @@ export async function deleteItem(itemId: string, reason: string) {
     return runServerAction(program);
 }
 
-export async function updateBio(bio: string) {
+export async function updateBio(bio: string, analysis?: { skinTone: string, hairColor: string }) {
     const { userId, has } = await auth();
     if (!userId) return { success: false, error: 'Unauthorized' };
 
@@ -263,7 +263,11 @@ export async function updateBio(bio: string) {
         yield* dbService.updateProfile(userId, bio);
 
         // Sync to Zep
-        yield* ZepService.syncUserProfile(userId, { bio });
+        yield* ZepService.syncUserProfile(userId, {
+            bio,
+            skin_tone: analysis?.skinTone,
+            hair_color: analysis?.hairColor
+        });
 
         yield* Effect.sync(() => revalidatePath('/profile'))
         return { success: true }
@@ -274,6 +278,67 @@ export async function updateBio(bio: string) {
         })),
         Effect.provide(AppLive)
     )
+    return runServerAction(program);
+}
+
+export async function analyzeSelfie(imagePath: string) {
+    const { userId, has } = await auth();
+    if (!userId) return { success: false, error: 'Unauthorized' };
+
+    const isPro = has({ plan: 'pro' });
+    if (!isPro) return { success: false, error: "Pro feature only" };
+
+    const program = Effect.gen(function* () {
+        const gemini = yield* GeminiService
+
+        yield* Effect.logInfo("Analying selfie", { userId });
+
+        const imageBase64 = yield* fetchImage(imagePath);
+
+        const prompt = `Analyze this selfie for fashion profiling. 
+        Determine the user's skin tone (e.g. "Fair", "Olive", "Dark", "Medium") and hair color.
+        Also generate a short "Style Bio" that describes them based on their look (e.g. "Casual chic with a focus on neutrals").
+        Return JSON.`;
+
+        const schema: Schema = {
+            type: SchemaType.OBJECT,
+            properties: {
+                skin_tone: { type: SchemaType.STRING },
+                hair_color: { type: SchemaType.STRING },
+                bio: { type: SchemaType.STRING },
+            },
+            required: ["skin_tone", "hair_color", "bio"]
+        };
+
+        const result = yield* gemini.generateContent('gemini-2.5-flash-lite', {
+            contents: [{
+                role: 'user',
+                parts: [
+                    { text: prompt },
+                    { inlineData: { data: imageBase64, mimeType: "image/jpeg" } }
+                ]
+            }],
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+            }
+        });
+
+        const data = yield* Effect.try({
+            try: () => JSON.parse(result.response.text()),
+            catch: (e) => new Error("Failed to parse AI response: " + String(e))
+        });
+
+        return { success: true, data };
+
+    }).pipe(
+        Effect.catchAll(error => Effect.gen(function* () {
+            yield* Effect.logError("Error analyzing selfie", { userId, error: String(error) });
+            return { success: false, error: "Failed to analyze selfie" };
+        })),
+        Effect.provide(AppLive)
+    )
+
     return runServerAction(program);
 }
 

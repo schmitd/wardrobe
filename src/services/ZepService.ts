@@ -18,15 +18,23 @@ export class ZepService {
         return Effect.tryPromise({
             try: async () => {
                 if (!zepClient) return;
-                await zepClient.user.add({
-                    userId,
-                    email,
-                    firstName: name,
-                });
+                try {
+                    await zepClient.user.add({
+                        userId,
+                        email,
+                        firstName: name,
+                    });
+                } catch (e: any) {
+                    if (e.message?.includes("already exists") || e.response?.status === 409 || e.response?.status === 400) {
+                        // User already exists, this is fine
+                        return;
+                    }
+                    throw e;
+                }
             },
             catch: (e) => new Error("Failed to create Zep user: " + String(e))
         }).pipe(
-            Effect.catchAll(e => Effect.logError(e.message)) // Log but don't fail the flow
+            Effect.catchAll(e => Effect.logError(e.message)) // Log other errors
         );
     }
 
@@ -42,18 +50,54 @@ export class ZepService {
 
             yield* Effect.tryPromise({
                 try: async () => {
-                    // Ensure thread exists or just add messages (some SDKs auto-create, Zep Cloud usually does)
-                    // If not, we might need zepClient!.thread.create(...)
-                    // But addMessages usually works if threadId is provided.
-                    await zepClient!.thread.addMessages(sessionId, {
-                        messages: [
-                            {
-                                role: "user",
-                                content: content,
-                                metadata: metadata,
+                    try {
+                        await zepClient!.thread.addMessages(sessionId, {
+                            messages: [
+                                {
+                                    role: "user",
+                                    content: content,
+                                    metadata: metadata,
+                                }
+                            ]
+                        });
+                    } catch (e: any) {
+                        const isNotFound =
+                            e.message?.includes("thread not found") ||
+                            e.message?.includes("not found") ||
+                            e.message?.includes("404") ||
+                            e.response?.status === 404 ||
+                            e.code === 404 ||
+                            String(e).includes("404") ||
+                            String(e).includes("not found");
+
+                        // If thread not found, create it and retry
+                        if (isNotFound) {
+                            try {
+                                await zepClient!.thread.create({
+                                    threadId: sessionId,
+                                    userId: userId,
+                                });
+                            } catch (createError: any) {
+                                // If create fails because it already exists (race condition), just continue
+                                if (!createError.message?.includes("already exists") && createError.response?.status !== 409) {
+                                    throw createError;
+                                }
                             }
-                        ]
-                    });
+
+                            // Retry addMessages
+                            await zepClient!.thread.addMessages(sessionId, {
+                                messages: [
+                                    {
+                                        role: "user",
+                                        content: content,
+                                        metadata: metadata,
+                                    }
+                                ]
+                            });
+                        } else {
+                            throw e;
+                        }
+                    }
                 },
                 catch: (e) => new Error("Failed to add Zep memory: " + String(e))
             });
@@ -89,13 +133,35 @@ export class ZepService {
 
             yield* Effect.tryPromise({
                 try: async () => {
-                    await zepClient!.user.update(userId, {
-                        metadata: {
-                            bio: profile.bio,
-                            skin_tone: profile.skin_tone,
-                            hair_color: profile.hair_color
+                    try {
+                        await zepClient!.user.update(userId, {
+                            metadata: {
+                                bio: profile.bio,
+                                skin_tone: profile.skin_tone,
+                                hair_color: profile.hair_color
+                            }
+                        });
+                    } catch (e: any) {
+                        // If user not found, create them and retry
+                        if (e.message?.includes("not found") || e.response?.status === 404 || e.code === 404) {
+                            console.log(`Zep user ${userId} not found, creating...`);
+                            await zepClient!.user.add({
+                                userId,
+                                email: undefined, // We don't have email easily accessible here without auth context, but userId is sufficient
+                                firstName: undefined,
+                            });
+                            // Retry update
+                            await zepClient!.user.update(userId, {
+                                metadata: {
+                                    bio: profile.bio,
+                                    skin_tone: profile.skin_tone,
+                                    hair_color: profile.hair_color
+                                }
+                            });
+                        } else {
+                            throw e;
                         }
-                    });
+                    }
                 },
                 catch: (e) => new Error("Failed to update Zep user metadata: " + String(e))
             });

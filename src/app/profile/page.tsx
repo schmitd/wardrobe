@@ -35,7 +35,11 @@ export default function ProfilePage() {
     setStatus('saving');
     setErrorMessage('');
     try {
-      const result = await updateBio(bio);
+      const result = await updateBio(bio, analysisResult ? {
+        skinTone: analysisResult.skinTone,
+        hairColor: analysisResult.hairColor
+      } : undefined);
+
       if (result.success) {
         setStatus('success');
       } else {
