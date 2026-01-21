@@ -13,8 +13,8 @@ A Single Page Application (SPA) that acts as a "Virtual Wardrobe Stylist". The a
 
 - **Framework**: Next.js 14+ (App Router)
 - **Styling**: Tailwind CSS
-- **Database**: Supabase (PostgreSQL + pgvector)
-- **Storage**: UploadThing
+- **Database**: Supabase (PostgreSQL + pgvector), accessed via Drizzle ORM
+- **Storage**: Supabase Storage
 - **AI**: Google Gemini (Vision & Text Embeddings)
 
 ## Setup
@@ -28,9 +28,13 @@ A Single Page Application (SPA) that acts as a "Virtual Wardrobe Stylist". The a
     Copy `.env.local` (or create it) and fill in the following:
     ```env
     GEMINI_API_KEY=your_gemini_key
-    UPLOADTHING_TOKEN=your_uploadthing_token
     NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_key
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+    SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+    CLERK_SECRET_KEY=your_clerk_secret_key
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+    ZEP_KEY=your_zep_key
+    ARCJET_KEY=your_arcjet_key
     ```
 4.  **Supabase Setup**:
     -   Create a new Supabase project.

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import ImageUploader from './ui/ImageUploader';
+import ImageUploader from './ImageUploader';
 import { addItems } from '@/app/actions';
 import { Loader2 } from 'lucide-react';
 
@@ -9,13 +9,13 @@ export default function AddItemSection() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [status, setStatus] = useState<string | null>(null);
 
-    const handleUpload = async (urls: string[]) => {
+    const handleUpload = async (paths: string[]) => {
         setIsProcessing(true);
-        setStatus(`Analyzing ${urls.length} items in batch...`);
-        console.log("Starting batch processing for URLs:", urls);
+        setStatus(`Analyzing ${paths.length} items in batch...`);
+        console.log("Starting batch processing for paths:", paths);
 
         try {
-            const result = await addItems(urls);
+            const result = await addItems(paths);
             console.log("Batch result:", result);
 
             if (result.success) {

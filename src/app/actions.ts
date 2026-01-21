@@ -5,46 +5,39 @@ import { revalidatePath } from 'next/cache';
 import { auth } from '@clerk/nextjs/server';
 import { SchemaType, Schema } from '@google/generative-ai';
 import { fixedWindow, slidingWindow, request, Primitive, Product } from '@arcjet/next';
+import { eq, and } from 'drizzle-orm';
 
 import { runServerAction } from '@/lib/run-effect';
 import { GeminiService } from '@/services/GeminiService';
 import { SupabaseService } from '@/services/SupabaseService';
 import { ArcjetService, BotDetectionRule } from '@/services/ArcjetService';
+import { ZepService, WardrobeItemSync } from '@/services/ZepService';
 import { AppLive } from '@/services';
+import { DatabaseService } from '@/services/DatabaseService';
 
 // Helper to fetch image as base64
-const fetchImage = (url: string) =>
-    Effect.tryPromise({
-        try: async () => {
-            // SSRF Check
-            try {
-                const parsed = new URL(url);
-                if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-                    throw new Error(`Invalid protocol: ${parsed.protocol}`);
-                }
-                const isLocal = ['localhost', '127.0.0.1', '::1', '0.0.0.0'].includes(parsed.hostname);
-                if (isLocal && process.env.NODE_ENV === 'production') {
-                    throw new Error('Localhost access denied entirely in production');
-                }
-            } catch (e) {
-                throw new Error(`Invalid URL: ${url}`);
-            }
+// Helper to fetch image as base64 from Supabase Private Storage using new Service
+const fetchImage = (pathOrUrl: string) =>
+    Effect.gen(function* () {
+        const supabaseService = yield* SupabaseService
+        // If it's a full URL, we might need to download it (e.g. if we still support scraping). 
+        // But for private uploads, we expect a path.
 
-            const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), 10000); // 10s timeout
-            try {
-                const response = await fetch(url, { signal: controller.signal });
-                clearTimeout(id);
-                if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+        // Assuming input is a path for now for the new flow.
+        // We generate a short-lived signed URL to download it for analysis.
+        const signedUrl = yield* supabaseService.createSignedUrl(pathOrUrl, 60);
+
+        return yield* Effect.tryPromise({
+            try: async () => {
+                const response = await fetch(signedUrl);
+                if (!response.ok) throw new Error(`Failed to fetch image from storage: ${response.statusText}`);
                 const buffer = await response.arrayBuffer();
                 return Buffer.from(buffer).toString('base64');
-            } catch (error) {
-                clearTimeout(id);
-                throw error;
-            }
-        },
-        catch: (error) => new Error(`Failed to process image: ${String(error)}`) // Sanitized error
+            },
+            catch: (error) => new Error(`Failed to download image: ${String(error)}`)
+        })
     })
+
 
 export async function addItems(imageUrls: string[]) {
     const { userId, getToken } = await auth();
@@ -56,10 +49,10 @@ export async function addItems(imageUrls: string[]) {
     const program = Effect.gen(function* () {
         const arcjet = yield* ArcjetService
         const gemini = yield* GeminiService
-        const supabaseService = yield* SupabaseService
+        const dbService = yield* DatabaseService
+        // SupabaseService removed for addItems as we use Drizzle
 
         // 1. Bot Detection
-        // We need to construct the request object for Arcjet
         const req = yield* Effect.promise(() => request())
         const botDecision = yield* arcjet.protect(req, { userId }, BotDetectionRule)
 
@@ -68,21 +61,15 @@ export async function addItems(imageUrls: string[]) {
             return { success: false, error: 'Access denied' }
         }
 
-        const token = yield* Effect.promise(() => getToken())
-        if (!token) return { success: false, error: 'Authorization failed' }
-
-        const supabase = yield* supabaseService.getClient(token)
-
         yield* Effect.logInfo("Starting batch item addition", { userId, imageCount: imageUrls.length })
 
         // 2. Fetch all images in parallel
-        // We use Effect.all with concurrency to fetch images
         const images = yield* Effect.all(
             imageUrls.map((url, index) =>
                 fetchImage(url).pipe(
                     Effect.map(base64 => ({ url, base64, index })),
-                    Effect.tapError(e => Effect.logError(e.message)), // Log errors but don't fail all?
-                    Effect.orElseSucceed(() => null) // Return null on failure to keep going
+                    Effect.tapError(e => Effect.logError(e.message)),
+                    Effect.orElseSucceed(() => null)
                 )
             ),
             { concurrency: 5 }
@@ -139,14 +126,11 @@ Return the data strictly complying with the schema, maintaining the order of ima
 
         const text = geminiResult.response.text()
 
-        // Parse JSON safely
-        // Parse JSON safely
         const metadataArrayEntry = yield* Effect.try({
             try: () => JSON.parse(text),
             catch: (e) => new Error("Failed to parse AI response: " + String(e))
         })
 
-        // Ensure it's an array
         const metadataArray = Array.isArray(metadataArrayEntry) ? metadataArrayEntry : [metadataArrayEntry];
 
         if (!Array.isArray(metadataArray)) {
@@ -161,7 +145,6 @@ Return the data strictly complying with the schema, maintaining the order of ima
             })
         }
 
-        // Align data
         const alignedImages = validImages.slice(0, count)
         const alignedMetadata = metadataArray.slice(0, count)
 
@@ -179,35 +162,36 @@ Return the data strictly complying with the schema, maintaining the order of ima
             requests: embeddingRequests
         })
 
-        // 5. Insert into Supabase
+        // 5. Insert into Database (Drizzle)
         const itemsToInsert = metadataArray.map((metadata: any, i: number) => {
             const originalImage = validImages[i];
-            // Check bounds
             if (!originalImage || !batchEmbeddingResult.embeddings[i]) return null;
 
             return {
-                image_url: originalImage.url,
+                userId: userId,
+                imageUrl: originalImage.url,
                 category: metadata.category,
                 description: metadata.description,
-                style_tags: metadata.style_tags,
+                styleTags: metadata.style_tags,
                 embedding: batchEmbeddingResult.embeddings[i].values,
-                user_id: userId,
             }
-        }).filter(item => item !== null)
+        }).filter((item): item is NonNullable<typeof item> => item !== null);
 
         if (itemsToInsert.length > 0) {
-            yield* Effect.tryPromise({
-                try: async () => {
-                    const { error } = await supabase.from('wardrobe_items').insert(itemsToInsert as any)
-                    if (error) throw error
-                },
-                catch: (e) => new Error("Supabase insert failed: " + String(e))
-            })
+            yield* dbService.addWardrobeItems(itemsToInsert);
         }
 
         yield* Effect.sync(() => revalidatePath('/'))
 
         yield* Effect.logInfo("Successfully added items", { userId, successCount: itemsToInsert.length, failedCount })
+
+        // 6. Sync to Zep
+        const zepItems: WardrobeItemSync[] = itemsToInsert.map(item => ({
+            description: item.description,
+            category: item.category,
+            style_tags: item.styleTags
+        }));
+        yield* ZepService.addWardrobeItems(userId, zepItems);
 
         return {
             success: true,
@@ -231,6 +215,87 @@ export async function addItem(imageUrl: string) {
     return addItems([imageUrl])
 }
 
+export async function deleteItem(itemId: string, reason: string) {
+    const { userId } = await auth(); // Removed getToken as we don't need Supabase client
+    if (!userId) return { success: false, error: 'Unauthorized' };
+
+    const program = Effect.gen(function* () {
+        const dbService = yield* DatabaseService
+
+        // 1. Fetch item details for Zep log
+        const item = yield* dbService.getWardrobeItem(itemId, userId);
+
+        if (!item) {
+            yield* Effect.logWarning("Item not found or access denied", { itemId, userId })
+            return { success: false, error: "Item not found" }
+        }
+
+        // 2. Delete from Database
+        yield* dbService.deleteWardrobeItem(itemId, userId);
+
+        // 3. Sync to Zep (Log deletion)
+        yield* ZepService.deleteWardrobeItem(userId, item.description || "Unknown item", reason);
+
+        yield* Effect.sync(() => revalidatePath('/'))
+        return { success: true }
+    }).pipe(
+        Effect.catchAll(error => Effect.gen(function* () {
+            yield* Effect.logError("Error in deleteItem", { userId, error: String(error) })
+            return { success: false, error: 'Failed to delete item.' }
+        })),
+        Effect.provide(AppLive)
+    )
+
+    return runServerAction(program);
+}
+
+export async function updateBio(bio: string) {
+    const { userId, has } = await auth();
+    if (!userId) return { success: false, error: 'Unauthorized' };
+
+    const isPro = has({ plan: 'pro' });
+    if (!isPro) return { success: false, error: "Pro feature only" };
+
+    const program = Effect.gen(function* () {
+        const dbService = yield* DatabaseService
+
+        // Update Profile in Database
+        yield* dbService.updateProfile(userId, bio);
+
+        // Sync to Zep
+        yield* ZepService.syncUserProfile(userId, { bio });
+
+        yield* Effect.sync(() => revalidatePath('/profile'))
+        return { success: true }
+    }).pipe(
+        Effect.catchAll(error => Effect.gen(function* () {
+            yield* Effect.logError("Error updating bio", { userId, error: String(error) });
+            return { success: false, error: "Failed to update bio" };
+        })),
+        Effect.provide(AppLive)
+    )
+    return runServerAction(program);
+}
+
+export async function getBio() {
+    const { userId } = await auth();
+    if (!userId) return { success: false, error: 'Unauthorized' };
+
+    const program = Effect.gen(function* () {
+        const dbService = yield* DatabaseService
+        const result = yield* dbService.getProfile(userId);
+        return { success: true, bio: result?.bio || '' }
+    }).pipe(
+        Effect.catchAll(error => Effect.gen(function* () {
+            yield* Effect.logError("Error fetching bio", { userId, error: String(error) });
+            return { success: false, error: "Failed to fetch bio" };
+        })),
+        Effect.provide(AppLive)
+    )
+    return runServerAction(program);
+}
+
+// checkCompatibility remains largely unchanged but uses SupabaseService for vector search RPC
 export async function checkCompatibility(candidateUrl: string) {
     const { userId, getToken, has } = await auth();
     if (!userId) return { success: false, error: 'Unauthorized' };
@@ -238,38 +303,35 @@ export async function checkCompatibility(candidateUrl: string) {
     const program = Effect.gen(function* () {
         const arcjet = yield* ArcjetService
         const gemini = yield* GeminiService
-        const supabaseService = yield* SupabaseService
 
         // 1. Rate Limiting / Bot Detection
         const req = yield* Effect.promise(() => request())
-
-        // Check bot first
         const botDecision = yield* arcjet.protect(req, { userId }, BotDetectionRule)
         if (botDecision.isDenied()) return { success: false, error: 'Access denied' }
 
-        // Check rate limits
-        const isPro = has({ permission: 'compatibility_check' });
+        // Check rate limits using Clerk Billing
+        const isPro = has({ plan: 'pro' });
         const limit = isPro ? 20 : 3;
+        yield* Effect.logInfo("Rate limit check", { userId, isPro, limit });
 
         const rateLimitRules: (Primitive | Product)[] = [
             fixedWindow({ mode: "LIVE", window: "1d", max: limit }),
             slidingWindow({ mode: "LIVE", interval: "10s", max: 1 })
         ]
-
         const rlDecision = yield* arcjet.protect(req, { userId }, rateLimitRules)
+        yield* Effect.logInfo("Arcjet rate limit decision", { denied: rlDecision.isDenied() });
+
         if (rlDecision.isDenied()) {
             return { success: false, error: 'Rate limit exceeded. Upgrade to Pro for more checks!' };
         }
 
-        const token = yield* Effect.promise(() => getToken())
-        if (!token) return { success: false, error: 'Authorization failed' }
-
-        const supabase = yield* supabaseService.getClient(token)
-
         // 2. Fetch Candidate Image
+        yield* Effect.logInfo("Step: Fetching candidate image", { candidateUrl });
         const imageBase64 = yield* fetchImage(candidateUrl)
+        yield* Effect.logInfo("Step: Image fetched successfully", { length: imageBase64.length });
 
         // 3. Analyze Candidate
+        yield* Effect.logInfo("Step: Analyzing candidate with Gemini");
         const analysisPrompt = "Analyze this clothing item. Extract category, color, material, and 3-5 style tags. Describe it in detail focusing on fashion elements. Return JSON with keys: category, description, style_tags (array of strings).";
 
         const evaluationSchema: Schema = {
@@ -303,40 +365,48 @@ export async function checkCompatibility(candidateUrl: string) {
             try: () => JSON.parse(analysisResult.response.text()),
             catch: (e) => new Error("Failed to parse AI response: " + String(e))
         })
+        yield* Effect.logInfo("Step: Candidate analyzed", { category: candidateMetadata.category });
 
         // 4. Generate Style Query
+        yield* Effect.logInfo("Step: Generating style query");
         const queryPrompt = `Given this clothing item description: "${candidateMetadata.description}" and style tags: "${candidateMetadata.style_tags.join(', ')}", generate a search query to find compatible items in a wardrobe. For example, if the item is a "Red leather jacket", the query might be "Black jeans, white t-shirt, boots, edgy style". Return just the query string.`;
 
         const queryResult = yield* gemini.generateContent('gemini-2.5-flash-lite', queryPrompt)
         const styleQuery = queryResult.response.text().trim()
+        yield* Effect.logInfo("Step: Style query generated", { styleQuery });
 
         // 5. Generate Embedding
+        yield* Effect.logInfo("Step: Generating embedding");
         const embeddingResult = yield* gemini.embedContent(styleQuery)
         const queryEmbedding = embeddingResult.embedding.values
+        yield* Effect.logInfo("Step: Embedding generated", { dimensions: queryEmbedding.length });
 
-        // 6. Search Wardrobe
-        const { data: similarItems, error: similarError } = yield* Effect.promise(() =>
-            supabase.rpc('match_wardrobe_items', {
-                query_embedding: queryEmbedding,
-                match_threshold: 0.3,
-                match_count: 5,
-                p_user_id: userId
+        // Search Wardrobe via Drizzle
+        yield* Effect.logInfo("Step: Searching wardrobe via Drizzle");
+        const dbService = yield* DatabaseService;
+        const similarItems = yield* dbService.matchWardrobeItems(userId, queryEmbedding, 0.3, 5);
+        yield* Effect.logInfo("Step: Wardrobe search complete", { matchCount: similarItems.length });
+
+        // Get all items for dissimilarity calculation
+        const allItems = yield* dbService.getAllWardrobeItemsWithEmbedding(userId, 100);
+
+        const dissimilarItems = allItems
+            .map((item: any) => {
+                const embedding = item.embedding;
+                let dotProduct = 0;
+                let normA = 0;
+                let normB = 0;
+                for (let i = 0; i < queryEmbedding.length; i++) {
+                    dotProduct += queryEmbedding[i] * embedding[i];
+                    normA += queryEmbedding[i] * queryEmbedding[i];
+                    normB += embedding[i] * embedding[i];
+                }
+                const similarity = dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+                return { ...item, similarity };
             })
-        )
-
-        if (similarError) return yield* Effect.fail(new Error(similarError.message))
-
-        // 7. Get Dissimilar
-        const { data: dissimilarItems, error: dissimilarError } = yield* Effect.promise(() =>
-            supabase.rpc('get_dissimilar_items', {
-                query_embedding: queryEmbedding,
-                match_threshold: 0.5,
-                match_count: 3,
-                p_user_id: userId
-            })
-        );
-
-        if (dissimilarError) return yield* Effect.fail(new Error(dissimilarError.message));
+            .sort((a: any, b: any) => a.similarity - b.similarity)
+            .slice(0, 3)
+            .filter((item: any) => item.similarity < 0.5);
 
         if ((similarItems?.length ?? 0) === 0 && dissimilarItems.length === 0) {
             return {
@@ -407,11 +477,38 @@ Return JSON with keys:
             catch: (e) => new Error("Failed to parse evaluation response: " + String(e))
         })
 
+        // Generate signed URLs for all items
+        const supabaseService = yield* SupabaseService;
+        const signedSimilarItems = yield* Effect.all(
+            similarItems.map(item =>
+                supabaseService.createSignedUrl(item.image_url, 3600).pipe(
+                    Effect.map(signedUrl => ({ ...item, image_url: signedUrl })),
+                    Effect.catchAll(e => {
+                        Effect.logWarning("Failed to sign URL for similar item", { id: item.id, error: String(e) });
+                        return Effect.succeed(null);
+                    })
+                )
+            ),
+            { concurrency: 5 }
+        ).pipe(Effect.map(items => items.filter((item): item is NonNullable<typeof item> => item !== null)));
+        const signedDissimilarItems = yield* Effect.all(
+            dissimilarItems.map((item: any) =>
+                supabaseService.createSignedUrl(item.image_url, 3600).pipe(
+                    Effect.map(signedUrl => ({ ...item, image_url: signedUrl })),
+                    Effect.catchAll(e => {
+                        Effect.logWarning("Failed to sign URL for dissimilar item", { id: item.id, error: String(e) });
+                        return Effect.succeed(null);
+                    })
+                )
+            ),
+            { concurrency: 5 }
+        ).pipe(Effect.map(items => items.filter((item): item is NonNullable<typeof item> => item !== null)));
+
         return {
             success: true,
             candidate: candidateMetadata,
-            similarItems,
-            dissimilarItems,
+            similarItems: signedSimilarItems,
+            dissimilarItems: signedDissimilarItems,
             evaluation
         };
 
@@ -421,7 +518,6 @@ Return JSON with keys:
             return { success: false, error: 'Failed to check compatibility. Please try again.' }
         })),
         Effect.withSpan("action.checkCompatibility", { attributes: { userId } }),
-        // Provide all services
         Effect.provide(AppLive)
     )
 

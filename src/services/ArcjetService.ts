@@ -46,8 +46,14 @@ const make = Effect.gen(function* () {
                 try: async () => {
                     let client = aj
                     if (rules) {
-                        const rulesArray = Array.isArray(rules) ? rules : [rules]
-                        client = rulesArray.reduce((acc, rule) => acc.withRule(rule as any), aj)
+
+                        // Arcjet rules can be single objects (Primitive), arrays of objects (Product), 
+                        // or arrays of mixed types. We need to flatten them into a single array of Rule objects
+                        // because `withRule` spreads its input, and the engine expects a flat list of Rule objects.
+                        // If we pass nested arrays (e.g. from multiple Products), the engine will crash.
+                        const rulesToApply = Array.isArray(rules) ? (rules as (Primitive | Product)[]).flat() : [rules]
+
+                        client = client.withRule(rulesToApply)
                     }
                     return client.protect(req, props)
                 },
