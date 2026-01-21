@@ -14,6 +14,7 @@ import { ArcjetService, BotDetectionRule } from '@/services/ArcjetService';
 import { ZepService, WardrobeItemSync } from '@/services/ZepService';
 import { AppLive } from '@/services';
 import { DatabaseService } from '@/services/DatabaseService';
+import { qstashClient, APP_URL } from '@/lib/qstash';
 
 // Helper to fetch image as base64
 // Helper to fetch image as base64 from Supabase Private Storage using new Service
@@ -185,13 +186,31 @@ Return the data strictly complying with the schema, maintaining the order of ima
 
         yield* Effect.logInfo("Successfully added items", { userId, successCount: itemsToInsert.length, failedCount })
 
-        // 6. Sync to Zep
+        // 6. Ingest to Zep (Async via QStash)
         const zepItems: WardrobeItemSync[] = itemsToInsert.map(item => ({
             description: item.description,
             category: item.category,
             style_tags: item.styleTags
         }));
-        yield* ZepService.addWardrobeItems(userId, zepItems);
+
+        if (qstashClient) {
+            yield* Effect.tryPromise({
+                try: () => qstashClient!.publishJSON({
+                    url: `${APP_URL}/api/ingest/zep`,
+                    body: {
+                        userId,
+                        type: 'wardrobe_item',
+                        data: zepItems
+                    }
+                }),
+                catch: (e) => new Error(`Failed to publish to QStash: ${e}`)
+            });
+            yield* Effect.logInfo("Published wardrobe items to QStash");
+        } else {
+            // Fallback for dev/missing env
+            yield* Effect.logWarning("QSTASH_TOKEN missing, falling back to direct Zep ingestion");
+            yield* ZepService.ingestWardrobeItems(userId, zepItems);
+        }
 
         return {
             success: true,
@@ -234,7 +253,21 @@ export async function deleteItem(itemId: string, reason: string) {
         yield* dbService.deleteWardrobeItem(itemId, userId);
 
         // 3. Sync to Zep (Log deletion)
-        yield* ZepService.deleteWardrobeItem(userId, item.description || "Unknown item", reason);
+        if (qstashClient) {
+            yield* Effect.tryPromise({
+                try: () => qstashClient!.publishJSON({
+                    url: `${APP_URL}/api/ingest/zep`,
+                    body: {
+                        userId,
+                        type: 'deletion_record',
+                        data: { item: item.description || "Unknown item", reason }
+                    }
+                }),
+                catch: (e) => new Error(`Failed to publish to QStash: ${e}`)
+            });
+        } else {
+            yield* ZepService.ingestItemDeletion(userId, item.description || "Unknown item", reason);
+        }
 
         yield* Effect.sync(() => revalidatePath('/'))
         return { success: true }
@@ -263,11 +296,27 @@ export async function updateBio(bio: string, analysis?: { skinTone: string, hair
         yield* dbService.updateProfile(userId, bio);
 
         // Sync to Zep
-        yield* ZepService.syncUserProfile(userId, {
+        const profileData = {
             bio,
             skin_tone: analysis?.skinTone,
             hair_color: analysis?.hairColor
-        });
+        };
+
+        if (qstashClient) {
+            yield* Effect.tryPromise({
+                try: () => qstashClient!.publishJSON({
+                    url: `${APP_URL}/api/ingest/zep`,
+                    body: {
+                        userId,
+                        type: 'user_profile',
+                        data: profileData
+                    }
+                }),
+                catch: (e) => new Error(`Failed to publish to QStash: ${e}`)
+            });
+        } else {
+            yield* ZepService.ingestProfile(userId, profileData);
+        }
 
         yield* Effect.sync(() => revalidatePath('/profile'))
         return { success: true }

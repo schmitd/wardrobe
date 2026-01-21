@@ -15,121 +15,92 @@ export interface UserProfileSync {
 
 export class ZepService {
     static createUser(userId: string, email?: string, name?: string) {
-        return Effect.tryPromise({
-            try: async () => {
-                if (!zepClient) return;
-                try {
-                    await zepClient.user.add({
-                        userId,
-                        email,
-                        firstName: name,
-                    });
-                } catch (e: any) {
-                    if (e.message?.includes("already exists") || e.response?.status === 409 || e.response?.status === 400) {
-                        // User already exists, this is fine
-                        return;
-                    }
-                    throw e;
-                }
-            },
-            catch: (e) => new Error("Failed to create Zep user: " + String(e))
-        }).pipe(
-            Effect.catchAll(e => Effect.logError(e.message)) // Log other errors
-        );
-    }
-
-    private static addMemory(userId: string, content: string, metadata?: Record<string, unknown>) {
         return Effect.gen(function* () {
             if (!zepClient) {
-                yield* Effect.logWarning("ZEP_KEY not set, skipping memory addition");
+                yield* Effect.logWarning("ZEP_KEY not set, skipping user creation");
                 return;
             }
-
-            // Use a stable session ID per user to allow Zep to build a persistent graph/memory
-            const sessionId = `session_${userId}_main`;
 
             yield* Effect.tryPromise({
                 try: async () => {
                     try {
-                        await zepClient!.thread.addMessages(sessionId, {
-                            messages: [
-                                {
-                                    role: "user",
-                                    content: content,
-                                    metadata: metadata,
-                                }
-                            ]
+                        await zepClient!.user.add({
+                            userId,
+                            email,
+                            firstName: name,
                         });
+                        console.log(`Successfully created Zep user: ${userId}`);
                     } catch (e: any) {
-                        const isNotFound =
-                            e.message?.includes("thread not found") ||
-                            e.message?.includes("not found") ||
-                            e.message?.includes("404") ||
-                            e.response?.status === 404 ||
-                            e.code === 404 ||
-                            String(e).includes("404") ||
-                            String(e).includes("not found");
+                        const isAlreadyExists =
+                            e.message?.includes("already exists") ||
+                            e.response?.status === 409 ||
+                            e.response?.status === 400 ||
+                            String(e).includes("Conflict");
 
-                        // If thread not found, create it and retry
-                        if (isNotFound) {
-                            try {
-                                await zepClient!.thread.create({
-                                    threadId: sessionId,
-                                    userId: userId,
-                                });
-                            } catch (createError: any) {
-                                // If create fails because it already exists (race condition), just continue
-                                if (!createError.message?.includes("already exists") && createError.response?.status !== 409) {
-                                    throw createError;
-                                }
-                            }
-
-                            // Retry addMessages
-                            await zepClient!.thread.addMessages(sessionId, {
-                                messages: [
-                                    {
-                                        role: "user",
-                                        content: content,
-                                        metadata: metadata,
-                                    }
-                                ]
-                            });
-                        } else {
-                            throw e;
+                        if (isAlreadyExists) {
+                            // User already exists, this is fine
+                            return;
                         }
+                        throw e;
                     }
                 },
-                catch: (e) => new Error("Failed to add Zep memory: " + String(e))
+                catch: (e) => new Error(`Failed to create Zep user ${userId}: ${String(e)}`)
             });
-
-            yield* Effect.logInfo(`Added memory to Zep for user ${userId}`);
         }).pipe(
             Effect.catchAll(e => Effect.logError(e.message))
         );
     }
 
-    // Batch add items
-    static addWardrobeItems(userId: string, items: WardrobeItemSync[]) {
-        const itemDescriptions = items.map(item =>
-            `- ${item.category}: ${item.description} (Style: ${item.style_tags.join(", ")})`
-        ).join("\n");
-
-        const message = `I just added the following items to my wardrobe:\n${itemDescriptions}`;
-
-        return this.addMemory(userId, message, { type: "batch_upload", count: items.length });
-    }
-
-    static deleteWardrobeItem(userId: string, itemDescription: string, reason: string) {
-        const message = `I removed an item from my wardrobe: "${itemDescription}". Reason: ${reason}.`;
-        return this.addMemory(userId, message, { type: "item_deletion", reason });
-    }
-
-    static syncUserProfile(userId: string, profile: UserProfileSync) {
+    private static addEpisode(userId: string, data: string, type: "json" | "text" = "text") {
         return Effect.gen(function* () {
             if (!zepClient) {
-                yield* Effect.logWarning("ZEP_KEY missing or client not initialized. Skipping user profile sync.");
+                yield* Effect.logWarning("ZEP_KEY not set, skipping episode addition");
                 return;
             }
+
+            yield* Effect.tryPromise({
+                try: async () => {
+                    await zepClient!.graph.add({
+                        userId,
+                        data,
+                        type: type as any, // Cast to any if strictly typed enum in SDK, but typically string union works
+                    });
+                },
+                catch: (e) => new Error("Failed to add Zep episode: " + String(e))
+            });
+
+            yield* Effect.logInfo(`Added episode to Zep for user ${userId}`);
+        }).pipe(
+            Effect.catchAll(e => Effect.logError(e.message))
+        );
+    }
+
+    // Ingest items as a JSON episode
+    static ingestWardrobeItems(userId: string, items: WardrobeItemSync[]) {
+        const data = JSON.stringify({
+            type: "wardrobe_item",
+            action: "added",
+            items: items,
+            timestamp: new Date().toISOString()
+        });
+        return this.addEpisode(userId, data, "json");
+    }
+
+    static ingestItemDeletion(userId: string, itemDescription: string, reason: string) {
+        const data = JSON.stringify({
+            type: "deletion_record",
+            action: "deleted",
+            item: itemDescription,
+            reason: reason,
+            timestamp: new Date().toISOString()
+        });
+        return this.addEpisode(userId, data, "json");
+    }
+
+    static ingestProfile(userId: string, profile: UserProfileSync) {
+        // We still update the user metadata in Zep for generic personalization
+        const updateUserMetadata = Effect.gen(function* () {
+            if (!zepClient) return;
 
             yield* Effect.tryPromise({
                 try: async () => {
@@ -142,15 +113,9 @@ export class ZepService {
                             }
                         });
                     } catch (e: any) {
-                        // If user not found, create them and retry
+                        // If user not found, try create and retry (same logic as before)
                         if (e.message?.includes("not found") || e.response?.status === 404 || e.code === 404) {
-                            console.log(`Zep user ${userId} not found, creating...`);
-                            await zepClient!.user.add({
-                                userId,
-                                email: undefined, // We don't have email easily accessible here without auth context, but userId is sufficient
-                                firstName: undefined,
-                            });
-                            // Retry update
+                            await zepClient!.user.add({ userId });
                             await zepClient!.user.update(userId, {
                                 metadata: {
                                     bio: profile.bio,
@@ -165,12 +130,22 @@ export class ZepService {
                 },
                 catch: (e) => new Error("Failed to update Zep user metadata: " + String(e))
             });
+        });
 
-            // Also add a memory so it's part of the narrative context
-            const message = `My profile details:\nBio: ${profile.bio || "N/A"}\nSkin Tone: ${profile.skin_tone || "N/A"}\nHair Color: ${profile.hair_color || "N/A"}`;
-            yield* ZepService.addMemory(userId, message, { type: "profile_update" });
-        }).pipe(
+        // Add an episode for the narrative context
+        const data = JSON.stringify({
+            type: "user_profile",
+            action: "updated",
+            profile: profile,
+            timestamp: new Date().toISOString()
+        });
+
+        return Effect.all([
+            updateUserMetadata,
+            this.addEpisode(userId, data, "json")
+        ], { concurrency: "unbounded" }).pipe(
             Effect.catchAll(e => Effect.logError(e.message))
         );
     }
 }
+

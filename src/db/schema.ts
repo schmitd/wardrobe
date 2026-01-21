@@ -20,5 +20,7 @@ export const stripeCustomers = pgTable("stripe_customers", {
 export const profiles = pgTable("profiles", {
   userId: text("user_id").primaryKey(),
   bio: text("bio"),
+  zepSynced: boolean("zep_synced").default(false).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+

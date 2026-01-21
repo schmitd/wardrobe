@@ -24,8 +24,9 @@ export interface DatabaseService {
     readonly addWardrobeItems: (items: (typeof wardrobeItems.$inferInsert)[]) => Effect.Effect<void, DatabaseError>
     readonly deleteWardrobeItem: (itemId: string, userId: string) => Effect.Effect<void, DatabaseError>
     readonly getWardrobeItem: (itemId: string, userId: string) => Effect.Effect<{ description: string | null } | undefined, DatabaseError>
-    readonly getProfile: (userId: string) => Effect.Effect<{ bio: string | null } | undefined, DatabaseError>
+    readonly getProfile: (userId: string) => Effect.Effect<{ bio: string | null; zepSynced: boolean } | undefined, DatabaseError>
     readonly updateProfile: (userId: string, bio: string) => Effect.Effect<void, DatabaseError>
+    readonly markZepSynced: (userId: string) => Effect.Effect<void, DatabaseError>
     readonly matchWardrobeItems: (userId: string, queryEmbedding: number[], threshold: number, count: number) => Effect.Effect<{
         id: string;
         image_url: string;
@@ -99,7 +100,10 @@ const make = Effect.gen(function* () {
         getProfile: (userId: string) =>
             Effect.tryPromise({
                 try: async () => {
-                    const result = await db.select({ bio: profiles.bio })
+                    const result = await db.select({
+                        bio: profiles.bio,
+                        zepSynced: profiles.zepSynced
+                    })
                         .from(profiles)
                         .where(eq(profiles.userId, userId));
                     return result[0];
@@ -119,6 +123,20 @@ const make = Effect.gen(function* () {
                 },
                 catch: (error) => new DatabaseError(error),
             }),
+
+        markZepSynced: (userId: string) =>
+            Effect.tryPromise({
+                try: async () => {
+                    await db.insert(profiles)
+                        .values({ userId, zepSynced: true, updatedAt: new Date() })
+                        .onConflictDoUpdate({
+                            target: profiles.userId,
+                            set: { zepSynced: true, updatedAt: new Date() }
+                        });
+                },
+                catch: (error) => new DatabaseError(error),
+            }),
+
 
         matchWardrobeItems: (userId: string, queryEmbedding: number[], threshold: number, count: number) =>
             Effect.tryPromise({
