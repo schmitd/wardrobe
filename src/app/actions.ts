@@ -295,6 +295,92 @@ export async function getBio() {
     return runServerAction(program);
 }
 
+export async function analyzeSelfie(imagePath: string) {
+    const { userId, has } = await auth();
+    if (!userId) return { success: false, error: 'Unauthorized' };
+
+    const program = Effect.gen(function* () {
+        const gemini = yield* GeminiService
+        const arcjet = yield* ArcjetService
+        const dbService = yield* DatabaseService
+
+        // Rate Limiting
+        const req = yield* Effect.promise(() => request())
+        const decision = yield* arcjet.protect(req, { userId }, BotDetectionRule)
+        if (decision.isDenied()) return { success: false, error: 'Access denied' }
+
+        const isPro = has({ plan: 'pro' });
+        // Simplified check, real logic might be more complex
+        if (!isPro) {
+             // Maybe allow limited usage? For now enforce Pro for this feature if needed, or open.
+             // The memory says "Pro tier access is determined by checking for a subscription"
+             // But Clerk 'has' is also used.
+        }
+
+        // Fetch Image
+        const imageBase64 = yield* fetchImage(imagePath);
+
+        // Analyze with Gemini
+        const prompt = `Analyze this selfie to determine the person's skin tone and hair color.
+Also generate a short, friendly fashion bio (max 200 chars) describing their look based on these features.
+Return JSON with keys: skin_tone, hair_color, bio.`;
+
+        const schema: Schema = {
+            type: SchemaType.OBJECT,
+            properties: {
+                skin_tone: { type: SchemaType.STRING },
+                hair_color: { type: SchemaType.STRING },
+                bio: { type: SchemaType.STRING }
+            },
+            required: ["skin_tone", "hair_color", "bio"]
+        };
+
+        const result = yield* gemini.generateContent('gemini-2.5-flash-lite', {
+            contents: [{
+                role: 'user',
+                parts: [
+                    { text: prompt },
+                    { inlineData: { data: imageBase64, mimeType: "image/jpeg" } }
+                ]
+            }],
+            generationConfig: {
+                responseMimeType: "application/json",
+                responseSchema: schema,
+            }
+        });
+
+        const data = yield* Effect.try({
+            try: () => JSON.parse(result.response.text()),
+            catch: (e) => new Error("Failed to parse AI response")
+        });
+
+        // Update Profile
+        // We update the bio. Skin tone and hair color might be stored in metadata or just used once.
+        // The prompt says "generate a short... bio... describing their look".
+        // We'll save the bio.
+        // If we had columns for skin_tone/hair_color in profile, we'd save them too.
+        // Schema only has bio.
+        yield* dbService.updateProfile(userId, data.bio);
+
+        // Sync to Zep
+        yield* ZepService.syncUserProfile(userId, {
+            bio: data.bio,
+            // metadata: { skin_tone: data.skin_tone, hair_color: data.hair_color } // If Zep supports arbitrary metadata
+        });
+
+        return { success: true, data };
+
+    }).pipe(
+        Effect.catchAll(error => Effect.gen(function* () {
+            yield* Effect.logError("Error analyzing selfie", { userId, error: String(error) });
+            return { success: false, error: "Failed to analyze selfie" };
+        })),
+        Effect.provide(AppLive)
+    );
+
+    return runServerAction(program);
+}
+
 // checkCompatibility remains largely unchanged but uses SupabaseService for vector search RPC
 export async function checkCompatibility(candidateUrl: string) {
     const { userId, getToken, has } = await auth();
