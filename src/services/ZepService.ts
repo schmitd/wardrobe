@@ -80,7 +80,7 @@ export class ZepService {
         return this.addMemory(userId, message, { type: "item_deletion", reason });
     }
 
-    static syncUserProfile(userId: string, profile: UserProfileSync) {
+    static ingestProfile(userId: string, profile: UserProfileSync) {
         return Effect.gen(function* () {
             if (!zepClient) {
                 yield* Effect.logWarning("ZEP_KEY missing or client not initialized. Skipping user profile sync.");

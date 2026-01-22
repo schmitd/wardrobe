@@ -263,7 +263,7 @@ export async function updateBio(bio: string) {
         yield* dbService.updateProfile(userId, bio);
 
         // Sync to Zep
-        yield* ZepService.syncUserProfile(userId, { bio });
+        yield* ZepService.ingestProfile(userId, { bio });
 
         yield* Effect.sync(() => revalidatePath('/profile'))
         return { success: true }
@@ -522,4 +522,59 @@ Return JSON with keys:
     )
 
     return runServerAction(program)
+}
+
+export async function analyzeSelfie(imagePath: string) {
+    const { userId, has } = await auth();
+    if (!userId) return { success: false, error: 'Unauthorized' };
+
+    const isPro = has({ plan: 'pro' });
+    if (!isPro) return { success: false, error: "Pro feature only" };
+
+    const program = Effect.gen(function* () {
+        const gemini = yield* GeminiService
+        const dbService = yield* DatabaseService
+
+        yield* Effect.logInfo("Analyzing selfie", { userId });
+
+        // Fetch image (auto-handles signed URL)
+        const imageBase64 = yield* fetchImage(imagePath);
+
+        const prompt = `Analyze this selfie for fashion profiling. 
+        Extract approximate skin tone (e.g., 'Fair', 'Medium', 'Deep') and hair color.
+        Also suggest a short, professional style bio based on their appearance (e.g., 'Sophisticated minimalist', 'Vibrant streetwear enthusiast').
+        Return JSON: { skin_tone: string, hair_color: string, bio: string }`;
+
+        const result = yield* gemini.generateContent('gemini-2.5-flash-lite', {
+            contents: [{
+                role: 'user',
+                parts: [
+                    { text: prompt },
+                    { inlineData: { data: imageBase64, mimeType: "image/jpeg" } }
+                ]
+            }],
+            generationConfig: { responseMimeType: "application/json" }
+        });
+
+        const analysis = yield* Effect.try({
+            try: () => JSON.parse(result.response.text()),
+            catch: (e) => new Error("Failed to parse selfie analysis")
+        });
+
+        // Sync to Zep
+        yield* ZepService.ingestProfile(userId, {
+            skin_tone: analysis.skin_tone,
+            hair_color: analysis.hair_color
+        });
+
+        return { success: true, data: analysis };
+
+    }).pipe(
+        Effect.catchAll(error => Effect.gen(function* () {
+            yield* Effect.logError("Error in analyzeSelfie", { userId, error: String(error) });
+            return { success: false, error: "Failed to analyze selfie" };
+        })),
+        Effect.provide(AppLive)
+    )
+    return runServerAction(program);
 }
