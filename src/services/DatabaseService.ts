@@ -1,5 +1,6 @@
 import { Context, Effect, Layer } from "effect"
 import { db } from "../db"
+import { withRLS } from "../db/rls"
 import { wardrobeItems, profiles } from "../db/schema"
 import { eq, desc, sql, and } from "drizzle-orm"
 import { WardrobeItemSync } from "./ZepService"
@@ -51,18 +52,20 @@ const make = Effect.gen(function* () {
         getWardrobeItems: (userId: string) =>
             Effect.tryPromise({
                 try: async () => {
-                    return await db.select({
-                        id: wardrobeItems.id,
-                        userId: wardrobeItems.userId,
-                        imageUrl: wardrobeItems.imageUrl,
-                        category: wardrobeItems.category,
-                        description: wardrobeItems.description,
-                        styleTags: wardrobeItems.styleTags,
-                        createdAt: wardrobeItems.createdAt
-                    })
-                        .from(wardrobeItems)
-                        .where(eq(wardrobeItems.userId, userId))
-                        .orderBy(desc(wardrobeItems.createdAt));
+                    return await withRLS(userId, async (tx) => {
+                        return await tx.select({
+                            id: wardrobeItems.id,
+                            userId: wardrobeItems.userId,
+                            imageUrl: wardrobeItems.imageUrl,
+                            category: wardrobeItems.category,
+                            description: wardrobeItems.description,
+                            styleTags: wardrobeItems.styleTags,
+                            createdAt: wardrobeItems.createdAt
+                        })
+                            .from(wardrobeItems)
+                            .where(eq(wardrobeItems.userId, userId))
+                            .orderBy(desc(wardrobeItems.createdAt));
+                    });
                 },
                 catch: (error) => new DatabaseError(error),
             }),
@@ -71,7 +74,12 @@ const make = Effect.gen(function* () {
             Effect.tryPromise({
                 try: async () => {
                     if (items.length === 0) return;
-                    await db.insert(wardrobeItems).values(items);
+                    const userId = items[0]?.userId;
+                    if (!userId) throw new Error("User ID missing in items");
+
+                    await withRLS(userId, async (tx) => {
+                         await tx.insert(wardrobeItems).values(items);
+                    });
                 },
                 catch: (error) => new DatabaseError(error),
             }),
@@ -79,8 +87,10 @@ const make = Effect.gen(function* () {
         deleteWardrobeItem: (itemId: string, userId: string) =>
             Effect.tryPromise({
                 try: async () => {
-                    await db.delete(wardrobeItems)
-                        .where(and(eq(wardrobeItems.id, itemId), eq(wardrobeItems.userId, userId)));
+                    await withRLS(userId, async (tx) => {
+                        await tx.delete(wardrobeItems)
+                            .where(and(eq(wardrobeItems.id, itemId), eq(wardrobeItems.userId, userId)));
+                    });
                 },
                 catch: (error) => new DatabaseError(error),
             }),
@@ -88,10 +98,12 @@ const make = Effect.gen(function* () {
         getWardrobeItem: (itemId: string, userId: string) =>
             Effect.tryPromise({
                 try: async () => {
-                    const result = await db.select({ description: wardrobeItems.description })
-                        .from(wardrobeItems)
-                        .where(and(eq(wardrobeItems.id, itemId), eq(wardrobeItems.userId, userId)));
-                    return result[0];
+                    return await withRLS(userId, async (tx) => {
+                        const result = await tx.select({ description: wardrobeItems.description })
+                            .from(wardrobeItems)
+                            .where(and(eq(wardrobeItems.id, itemId), eq(wardrobeItems.userId, userId)));
+                        return result[0];
+                    });
                 },
                 catch: (error) => new DatabaseError(error),
             }),
@@ -99,10 +111,12 @@ const make = Effect.gen(function* () {
         getProfile: (userId: string) =>
             Effect.tryPromise({
                 try: async () => {
-                    const result = await db.select({ bio: profiles.bio })
-                        .from(profiles)
-                        .where(eq(profiles.userId, userId));
-                    return result[0];
+                    return await withRLS(userId, async (tx) => {
+                        const result = await tx.select({ bio: profiles.bio })
+                            .from(profiles)
+                            .where(eq(profiles.userId, userId));
+                        return result[0];
+                    });
                 },
                 catch: (error) => new DatabaseError(error),
             }),
@@ -110,12 +124,14 @@ const make = Effect.gen(function* () {
         updateProfile: (userId: string, bio: string) =>
             Effect.tryPromise({
                 try: async () => {
-                    await db.insert(profiles)
-                        .values({ userId, bio, updatedAt: new Date() })
-                        .onConflictDoUpdate({
-                            target: profiles.userId,
-                            set: { bio, updatedAt: new Date() }
-                        });
+                    await withRLS(userId, async (tx) => {
+                        await tx.insert(profiles)
+                            .values({ userId, bio, updatedAt: new Date() })
+                            .onConflictDoUpdate({
+                                target: profiles.userId,
+                                set: { bio, updatedAt: new Date() }
+                            });
+                    });
                 },
                 catch: (error) => new DatabaseError(error),
             }),
@@ -123,29 +139,34 @@ const make = Effect.gen(function* () {
         matchWardrobeItems: (userId: string, queryEmbedding: number[], threshold: number, count: number) =>
             Effect.tryPromise({
                 try: async () => {
-                    const embeddingStr = `[${queryEmbedding.join(',')}]`;
-                    const result = await db.execute(sql`
-                        SELECT
-                            id,
-                            image_url,
-                            category,
-                            description,
-                            style_tags,
-                            1 - (embedding <=> ${embeddingStr}::vector) AS similarity
-                        FROM wardrobe_items
-                        WHERE user_id = ${userId}
-                          AND 1 - (embedding <=> ${embeddingStr}::vector) > ${threshold}
-                        ORDER BY embedding <=> ${embeddingStr}::vector
-                        LIMIT ${count}
-                    `);
-                    return result as unknown as {
-                        id: string;
-                        image_url: string;
-                        category: string | null;
-                        description: string | null;
-                        style_tags: string[] | null;
-                        similarity: number;
-                    }[];
+                    return await withRLS(userId, async (tx) => {
+                        const embeddingStr = `[${queryEmbedding.join(',')}]`;
+                        // Explicit user_id check restored for performance optimization
+
+                        const result = await tx.execute(sql`
+                            SELECT
+                                id,
+                                image_url,
+                                category,
+                                description,
+                                style_tags,
+                                1 - (embedding <=> ${embeddingStr}::vector) AS similarity
+                            FROM wardrobe_items
+                            WHERE user_id = ${userId}
+                              AND 1 - (embedding <=> ${embeddingStr}::vector) > ${threshold}
+                            ORDER BY embedding <=> ${embeddingStr}::vector
+                            LIMIT ${count}
+                        `);
+
+                        return result as unknown as {
+                            id: string;
+                            image_url: string;
+                            category: string | null;
+                            description: string | null;
+                            style_tags: string[] | null;
+                            similarity: number;
+                        }[];
+                    });
                 },
                 catch: (error) => new DatabaseError(error),
             }),
@@ -153,20 +174,24 @@ const make = Effect.gen(function* () {
         getAllWardrobeItemsWithEmbedding: (userId: string, limit: number) =>
             Effect.tryPromise({
                 try: async () => {
-                    const result = await db.execute(sql`
-                        SELECT id, image_url, category, description, style_tags, embedding
-                        FROM wardrobe_items
-                        WHERE user_id = ${userId}
-                        LIMIT ${limit}
-                    `);
-                    return result as unknown as {
-                        id: string;
-                        image_url: string;
-                        category: string | null;
-                        description: string | null;
-                        style_tags: string[] | null;
-                        embedding: number[];
-                    }[];
+                    return await withRLS(userId, async (tx) => {
+                        // Explicit user_id check restored for performance optimization
+                        const result = await tx.execute(sql`
+                            SELECT id, image_url, category, description, style_tags, embedding
+                            FROM wardrobe_items
+                            WHERE user_id = ${userId}
+                            LIMIT ${limit}
+                        `);
+
+                        return result as unknown as {
+                            id: string;
+                            image_url: string;
+                            category: string | null;
+                            description: string | null;
+                            style_tags: string[] | null;
+                            embedding: number[];
+                        }[];
+                    });
                 },
                 catch: (error) => new DatabaseError(error),
             })

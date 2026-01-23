@@ -1,33 +1,22 @@
-import { createClient } from "@supabase/supabase-js";
-
-// Helper to get a supabase client with the service role key for admin tasks
-// CAUTION: Only use this on the server side
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { db } from "../db";
+import { subscriptions } from "../db/schema";
+import { withRLS } from "../db/rls";
+import { eq } from "drizzle-orm";
 
 export class SubscriptionService {
   static async getSubscription(userId: string) {
-    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.warn("SUPABASE_SERVICE_ROLE_KEY missing, treating as free tier");
-      return null;
-    }
+    // We use withRLS to enforce security
+    return await withRLS(userId, async (tx) => {
+        const result = await tx.select({
+            id: subscriptions.id,
+            userId: subscriptions.userId,
+            status: subscriptions.status,
+        })
+        .from(subscriptions)
+        .where(eq(subscriptions.userId, userId)); // Explicit check for performance + RLS for security
 
-    const { data, error } = await supabaseAdmin
-      .from("subscriptions")
-      .select("*")
-      .eq("user_id", userId)
-      .single();
-
-    if (error) {
-      // It's expected to not find a subscription for free users
-      if (error.code !== "PGRST116") {
-        console.error("Error fetching subscription:", error);
-      }
-      return null;
-    }
-    return data;
+        return result[0] || null;
+    });
   }
 
   static async isProUser(userId: string): Promise<boolean> {
