@@ -1,5 +1,3 @@
-"use node";
-
 const traceparentRegex =
   /^[\da-f]{2}-([\da-f]{32})-([\da-f]{16})-[\da-f]{2}$/i;
 
