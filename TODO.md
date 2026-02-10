@@ -35,8 +35,7 @@ Headaches to deal with later:
 - [x] Preview enviroment seems to struggle with either botID or clerk cookies because of the dynamic urls of the preview
 - [ ] Use the async batch api for the analysis of closet uploads cheaply (bypass with premium feature)
 - [x] Integrate Axiom for logging (verify this is complete)
-- [x] Private uploads (Supabase Storage)
-- [x] Migrate away from Supabase JS Client to Drizzle ORM (typesafe)
-    - note: we still use supabase client for storage interaction only
-- [ ] Look into referer policies for our file storage (may that be supabase or R2)
+- [x] Private uploads (Convex File Storage)
+- [x] Migrate data + sync to Convex
+- [ ] Look into referer policies for our file storage (Convex or R2)
     - note: this adresses my file hotlinking fears regardless of public/private urls

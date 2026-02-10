@@ -20,14 +20,13 @@ declare module "bun:test" {
 // extend expect
 expect.extend(matchers);
 
-// Mock the server action
-mock.module('@/app/upload-actions', () => ({
-    getUploadUrl: async () => ({
-        success: true,
-        url: 'https://fake-upload-url.com',
-        token: 'fake-token',
-        path: 'users/123/fake-image.jpg'
-    })
+// Mock Convex hooks + api
+mock.module('convex/react', () => ({
+    useMutation: () => async () => 'https://fake-upload-url.com'
+}));
+
+mock.module('@convex/_generated/api', () => ({
+    api: { wardrobe: { getUploadUrl: {} } }
 }));
 
 // Mock fetch
@@ -35,8 +34,10 @@ global.fetch = mock(() => Promise.resolve({
     ok: true,
     statusText: 'OK',
     arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
-    json: () => Promise.resolve({})
+    json: () => Promise.resolve({ storageId: 'storage_123' })
 } as Response));
+
+global.URL.createObjectURL = mock(() => 'blob:preview');
 
 // Import component AFTER mocks (using dynamic import to ensure mock applies)
 const { default: ImageUploader } = await import('./ImageUploader');

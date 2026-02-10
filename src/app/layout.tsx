@@ -3,6 +3,7 @@ import {
   ClerkProvider,
 } from '@clerk/nextjs'
 import Navbar from '@/components/Navbar';
+import Providers from '@/components/Providers';
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -31,8 +32,10 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en">
         <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`}>
-          <Navbar />
-          {children}
+          <Providers>
+            <Navbar />
+            {children}
+          </Providers>
         </body>
       </html>
     </ClerkProvider>

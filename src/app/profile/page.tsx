@@ -2,46 +2,42 @@
 
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
-import { updateBio, getBio, analyzeSelfie } from '../actions';
-import ImageUploader from '@/components/ImageUploader';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import ImageUploader, { type UploadedFile } from '@/components/ImageUploader';
+import { analyzeSelfieAction, updateProfileBioAction } from '@/app/actions/wardrobe';
+import { createTraceContext } from '@/lib/trace';
 
 export default function ProfilePage() {
-  const { user, isLoaded } = useUser();
+  const { isLoaded } = useUser();
+  const profile = useQuery(api.profile.getProfile, isLoaded ? {} : 'skip');
+
   const [bio, setBio] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'saving' | 'success' | 'error'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [analysisResult, setAnalysisResult] = useState<{ skinTone: string, hairColor: string } | null>(null);
 
   useEffect(() => {
-    if (!isLoaded || !user) return;
-
-    const fetchBio = async () => {
-      try {
-        const result = await getBio();
-        // result is { success: boolean, bio?: string, error?: string }
-        if (result.success && 'bio' in result && result.bio) {
-          setBio(result.bio);
-        }
-      } catch (e) {
-        console.error("Failed to fetch bio", e);
-      } finally {
-        setStatus('idle');
-      }
-    };
-    fetchBio();
-  }, [isLoaded, user]);
+    if (profile === undefined) return;
+    setBio(profile?.bio ?? '');
+    if (profile?.skinTone || profile?.hairColor) {
+      setAnalysisResult({
+        skinTone: profile.skinTone ?? 'Unknown',
+        hairColor: profile.hairColor ?? 'Unknown',
+      });
+    } else {
+      setAnalysisResult(null);
+    }
+    setStatus('idle');
+  }, [profile]);
 
   const handleSave = async () => {
     setStatus('saving');
     setErrorMessage('');
     try {
-      const result = await updateBio(bio);
-      if (result.success) {
-        setStatus('success');
-      } else {
-        setStatus('error');
-        setErrorMessage('error' in result ? result.error : 'Failed to save');
-      }
+      const trace = createTraceContext();
+      await updateProfileBioAction({ bio, ...trace });
+      setStatus('success');
     } catch (e) {
       setStatus('error');
       setErrorMessage(String(e));
@@ -94,22 +90,18 @@ export default function ProfilePage() {
         <ImageUploader
           label="Upload a Selfie"
           allowMultiple={false}
-          onUploadComplete={async (paths) => {
-            if (paths.length === 0) return;
+          onUploadComplete={async (uploads: UploadedFile[]) => {
+            if (uploads.length === 0) return;
             setStatus('loading');
             try {
-              const res = await analyzeSelfie(paths[0]);
-              if (res.success && 'data' in res) {
-                setBio(res.data.bio); // Pre-fill bio
-                setAnalysisResult({
-                  skinTone: res.data.skin_tone,
-                  hairColor: res.data.hair_color
-                });
-                setStatus('success');
-              } else {
-                setStatus('error');
-                setErrorMessage((res as any).error || "Analysis failed");
-              }
+              const trace = createTraceContext();
+              const res = await analyzeSelfieAction({ storageId: uploads[0].storageId, ...trace });
+              setBio(res.bio);
+              setAnalysisResult({
+                skinTone: res.skin_tone,
+                hairColor: res.hair_color
+              });
+              setStatus('success');
             } catch (e) {
               setStatus('error');
               setErrorMessage("Failed to analyze selfie");

@@ -1,39 +1,72 @@
 'use client';
 
 import { useState } from 'react';
-import ImageUploader from './ImageUploader';
-import { addItems } from '@/app/actions';
+import ImageUploader, { type UploadedFile } from './ImageUploader';
 import { Loader2 } from 'lucide-react';
+import type { OptimisticWardrobeItem } from '@/types/wardrobe';
+import { createTraceContext } from '@/lib/trace';
+import { createWardrobeItemAction, processWardrobeItemAction } from '@/app/actions/wardrobe';
 
-export default function AddItemSection() {
+interface AddItemSectionProps {
+    onOptimisticAdd: (items: OptimisticWardrobeItem[]) => void;
+    onOptimisticUpdate: (tempId: string, patch: Partial<OptimisticWardrobeItem>) => void;
+}
+
+export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate }: AddItemSectionProps) {
     const [isProcessing, setIsProcessing] = useState(false);
     const [status, setStatus] = useState<string | null>(null);
+    const handleUpload = async (uploads: UploadedFile[]) => {
+        if (uploads.length === 0) return;
 
-    const handleUpload = async (paths: string[]) => {
         setIsProcessing(true);
-        setStatus(`Analyzing ${paths.length} items in batch...`);
-        console.log("Starting batch processing for paths:", paths);
+        setStatus(`Preparing ${uploads.length} item${uploads.length === 1 ? '' : 's'}...`);
+
+        const queue = uploads.map((upload) => ({
+            upload,
+            tempId: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+            ...createTraceContext(),
+        }));
+
+        onOptimisticAdd(
+            queue.map(({ upload, tempId }) => ({
+                tempId,
+                imageUrl: upload.previewUrl || '',
+                status: 'uploading',
+                createdAt: Date.now(),
+            }))
+        );
 
         try {
-            const result = await addItems(paths);
-            console.log("Batch result:", result);
+            for (const { upload, tempId, traceId, traceparent } of queue) {
+                try {
+                    const result = await createWardrobeItemAction({
+                        storageId: upload.storageId,
+                        clientFileName: upload.file.name,
+                        contentType: upload.file.type,
+                        traceId,
+                        traceparent,
+                    });
 
-            if (result.success) {
-                const count = (result as any).count || 0;
-                const failed = (result as any).failed || 0;
+                    onOptimisticUpdate(tempId, {
+                        status: 'processing',
+                        serverId: result.id,
+                    });
 
-                if (failed === 0) {
-                    setStatus(`Successfully added ${count} items!`);
-                    setTimeout(() => setStatus(null), 3000);
-                } else {
-                    setStatus(`Added ${count} items. Failed to fetch/process ${failed} images.`);
+                    await processWardrobeItemAction({ itemId: result.id, traceId, traceparent });
+                } catch (error) {
+                    console.error('Failed to create wardrobe item', error);
+                    onOptimisticUpdate(tempId, {
+                        status: 'error',
+                        error: error instanceof Error ? error.message : 'Failed to add item',
+                    });
                 }
-            } else {
-                setStatus(`Batch processing failed: ${result.error}`);
             }
+
+            setStatus(`Processed ${uploads.length} item${uploads.length === 1 ? '' : 's'}.`);
+            setTimeout(() => setStatus(null), 3000);
         } catch (e) {
             console.error("Exception in batch processing:", e);
-            setStatus("An unexpected error occurred.");
+            setStatus("Error: An unexpected error occurred.");
         }
         setIsProcessing(false);
     };
@@ -46,7 +79,7 @@ export default function AddItemSection() {
 
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
                 <h3 className="text-lg font-medium mb-4">Add New Item</h3>
-                <ImageUploader onUploadComplete={handleUpload} label="Upload Clothing Items" />
+                <ImageUploader onUploadComplete={handleUpload} label="Upload Clothing Items" enablePreview />
 
                 {isProcessing && (
                     <div className="mt-4 flex items-center justify-center gap-2 text-blue-600">

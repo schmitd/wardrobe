@@ -1,32 +1,29 @@
 'use client';
 
 import { useState } from 'react';
-import ImageUploader from './ImageUploader';
-import { checkCompatibility } from '@/app/actions';
+import ImageUploader, { type UploadedFile } from './ImageUploader';
 import { Loader2 } from 'lucide-react';
-import Image from 'next/image';
+import { checkCompatibilityAction } from '@/app/actions/wardrobe';
+import { createTraceContext } from '@/lib/trace';
 
 export default function CompatibilityChecker() {
     const [result, setResult] = useState<any>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [status, setStatus] = useState<string | null>(null);
 
-    const handleCheck = async (paths: string[]) => {
-        if (paths.length === 0) return;
+    const handleCheck = async (uploads: UploadedFile[]) => {
+        if (uploads.length === 0) return;
 
-        const path = paths[0]; // Take the first one since we restrict to single file
+        const upload = uploads[0];
         setIsProcessing(true);
         setStatus("Analyzing candidate item...");
         setResult(null);
 
         try {
-            const res = await checkCompatibility(path);
-            if (res.success) {
-                setResult(res);
-                setStatus(null);
-            } else {
-                setStatus(res.error || "Error checking compatibility.");
-            }
+            const trace = createTraceContext();
+            const res = await checkCompatibilityAction({ storageId: upload.storageId, ...trace });
+            setResult(res);
+            setStatus(null);
         } catch (e) {
             setStatus("Error checking compatibility.");
         } finally {
@@ -100,12 +97,12 @@ export default function CompatibilityChecker() {
                                     {result.similarItems.map((item: any) => (
                                         <div key={item.id} className="bg-white rounded-lg overflow-hidden shadow-sm border border-gray-100">
                                             <div className="aspect-[3/4] relative">
-                                                <Image
-                                                    src={item.image_url}
-                                                    alt={item.description}
-                                                    fill
-                                                    className="object-cover"
-                                                />
+                                        <img
+                                            src={item.imageUrl}
+                                            alt={item.description}
+                                            className="h-full w-full object-cover"
+                                            loading="lazy"
+                                        />
                                             </div>
                                             <div className="p-3">
                                                 <p className="font-medium text-sm truncate">{item.category}</p>
@@ -127,12 +124,12 @@ export default function CompatibilityChecker() {
                                     {result.dissimilarItems.map((item: any) => (
                                         <div key={item.id} className="bg-white rounded-lg overflow-hidden shadow-sm border border-red-100">
                                             <div className="aspect-[3/4] relative">
-                                                <Image
-                                                    src={item.image_url}
-                                                    alt={item.description}
-                                                    fill
-                                                    className="object-cover"
-                                                />
+                                        <img
+                                            src={item.imageUrl}
+                                            alt={item.description}
+                                            className="h-full w-full object-cover"
+                                            loading="lazy"
+                                        />
                                             </div>
                                             <div className="p-3">
                                                 <p className="font-medium text-sm truncate">{item.category}</p>

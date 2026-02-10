@@ -1,0 +1,11 @@
+{
+  "functions": "convex/",
+  "node": {
+    "externalPackages": [
+      "@google/generative-ai",
+      "@getzep/zep-cloud",
+      "@upstash/qstash",
+      "effect"
+    ]
+  }
+}

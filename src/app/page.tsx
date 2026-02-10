@@ -1,62 +1,51 @@
-import WardrobeGrid from '@/components/WardrobeGrid';
-import { Effect } from 'effect';
-import { runtime } from '@/lib/run-effect';
-import { DatabaseService } from '@/services/DatabaseService';
-import { SupabaseService } from '@/services/SupabaseService';
-import { AppLive } from '@/services';
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { useAuth, SignInButton, SignedOut } from '@clerk/nextjs';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import AddItemSection from '@/components/AddItemSection';
-import { SignInButton, SignedOut } from '@clerk/nextjs';
-import { auth } from '@clerk/nextjs/server';
+import WardrobeGrid from '@/components/WardrobeGrid';
+import type { OptimisticWardrobeItem } from '@/types/wardrobe';
 
-export const dynamic = 'force-dynamic';
+export default function Home() {
+    const { isSignedIn } = useAuth();
+    const items = useQuery(api.wardrobe.listWardrobeItems, isSignedIn ? {} : 'skip');
+    const [optimisticItems, setOptimisticItems] = useState<OptimisticWardrobeItem[]>([]);
 
-export default async function Home() {
-    const { userId } = await auth();
+    useEffect(() => {
+        if (!items?.length) return;
+        setOptimisticItems((prev) => {
+            const existingIds = new Set(items.map((item) => item.id));
+            const remaining = prev.filter((item) => !item.serverId || !existingIds.has(item.serverId));
+            const removed = prev.filter((item) => item.serverId && existingIds.has(item.serverId));
+            removed.forEach((item) => URL.revokeObjectURL(item.imageUrl));
+            return remaining;
+        });
+    }, [items]);
 
-    let items: any[] = [];
+    const handleOptimisticAdd = (newItems: OptimisticWardrobeItem[]) => {
+        setOptimisticItems((prev) => [...newItems, ...prev]);
+    };
 
-    if (userId) {
-        items = await runtime.runPromise(
-            Effect.gen(function* () {
-                const databaseService = yield* DatabaseService
-                const supabaseService = yield* SupabaseService
+    const handleOptimisticUpdate = (tempId: string, patch: Partial<OptimisticWardrobeItem>) => {
+        setOptimisticItems((prev) =>
+            prev.map((item) => (item.tempId === tempId ? { ...item, ...patch } : item))
+        );
+    };
 
-                const dbItems = yield* databaseService.getWardrobeItems(userId)
-
-                // Sign URLs for display
-                const signedItems = yield* Effect.all(
-                    dbItems.map(item =>
-                        Effect.gen(function* () {
-                            // If imageUrl is already a full URL (e.g. external), leave it. 
-                            // But we assume it's a path "users/..."
-                            const signedUrl = yield* supabaseService.createSignedUrl(item.imageUrl, 3600)
-                            return { ...item, imageUrl: signedUrl }
-                        }).pipe(
-                            // If signing fails, return null so we can filter it out
-                            Effect.catchAll(e => Effect.succeed(null))
-                        )
-                    ),
-                    { concurrency: 5 }
-                )
-
-                return signedItems.filter((item): item is NonNullable<typeof item> => item !== null)
-            }).pipe(
-                Effect.catchAll(error => Effect.gen(function* () {
-                    yield* Effect.logError("Error fetching wardrobe items", { userId, error })
-                    return []
-                })),
-                Effect.provide(AppLive)
-            )
-        )
-    }
+    const displayItems = useMemo(() => items ?? [], [items]);
 
     return (
         <main className="flex-1 bg-gray-50">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {userId ? (
+                {isSignedIn ? (
                     <>
-                        <AddItemSection />
-                        <WardrobeGrid items={items || []} />
+                        <AddItemSection
+                            onOptimisticAdd={handleOptimisticAdd}
+                            onOptimisticUpdate={handleOptimisticUpdate}
+                        />
+                        <WardrobeGrid items={displayItems} optimisticItems={optimisticItems} />
                     </>
                 ) : (
                     <div className="text-center py-20">

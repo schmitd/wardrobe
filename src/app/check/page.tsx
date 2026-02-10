@@ -1,5 +1,4 @@
 import CompatibilityChecker from '@/components/CompatibilityChecker';
-import SubscriptionGate from '@/components/SubscriptionGate';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
