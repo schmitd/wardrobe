@@ -27,15 +27,24 @@ export const addWardrobeItemsMemory = async (
   const message = `I just added the following items to my wardrobe:\n${itemDescriptions}`;
   const client = ensureClient();
 
-  await client.thread.addMessages(`session_${userId}_main`, {
-    messages: [
-      {
-        role: "user",
-        content: message,
-        metadata: { type: "batch_upload", count: items.length },
-      },
-    ],
-  });
+  try {
+    await client.thread.addMessages(`session_${userId}_main`, {
+      messages: [
+        {
+          role: "user",
+          content: message,
+          metadata: { type: "batch_upload", count: items.length },
+        },
+      ],
+    });
+  } catch (error) {
+    console.error("zep.addWardrobeItemsMemory.failed", {
+      userId,
+      count: items.length,
+      message,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 };
 
 export const deleteWardrobeItemMemory = async (
@@ -67,23 +76,36 @@ export const updateProfileMemory = async (
 
   const client = ensureClient();
 
+  const metadata = {
+    bio: profile.bio ?? undefined,
+    skin_tone: profile.skinTone ?? undefined,
+    hair_color: profile.hairColor ?? undefined,
+  };
+
   await client.user.update(userId, {
     metadata: {
-      bio: profile.bio ?? undefined,
-      skin_tone: profile.skinTone ?? undefined,
-      hair_color: profile.hairColor ?? undefined,
+      ...metadata,
     },
   });
 
   const message = `My profile details:\nBio: ${profile.bio ?? "N/A"}\nSkin Tone: ${profile.skinTone ?? "N/A"}\nHair Color: ${profile.hairColor ?? "N/A"}`;
 
-  await client.thread.addMessages(`session_${userId}_main`, {
-    messages: [
-      {
-        role: "user",
-        content: message,
-        metadata: { type: "profile_update" },
-      },
-    ],
-  });
+  try {
+    await client.thread.addMessages(`session_${userId}_main`, {
+      messages: [
+        {
+          role: "user",
+          content: message,
+          metadata: { type: "profile_update" },
+        },
+      ],
+    });
+  } catch (error) {
+    console.error("zep.updateProfileMemory.failed", {
+      userId,
+      metadata,
+      message,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 };

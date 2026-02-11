@@ -3,6 +3,7 @@ import {
   GoogleGenerativeAI,
   GenerateContentRequest,
   GenerateContentResult,
+  Part,
   BatchEmbedContentsRequest,
   BatchEmbedContentsResponse,
   EmbedContentResponse,
@@ -22,7 +23,7 @@ export class GeminiError extends Error {
 export interface GeminiService {
   readonly generateContent: (
     modelName: "gemini-2.5-flash-lite",
-    request: GenerateContentRequest | string | Array<string | any>
+    request: GenerateContentRequest | string | Array<string | Part>
   ) => Effect.Effect<GenerateContentResult, GeminiError>;
 
   readonly embedContent: (text: string) => Effect.Effect<EmbedContentResponse, GeminiError>;

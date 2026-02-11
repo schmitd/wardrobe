@@ -24,4 +24,15 @@ describe("convex trace context", () => {
     expect(traceparentRegex.test(result.traceparent)).toBe(true);
     expect(result.traceId).toHaveLength(32);
   });
+
+  it("rejects all-zero trace IDs from traceparent", () => {
+    const traceparent = `00-${"0".repeat(32)}-${"e".repeat(16)}-01`;
+    const result = ensureTraceContext({ traceparent });
+    expect(result.traceId).not.toBe("0".repeat(32));
+  });
+
+  it("rejects all-zero traceId input", () => {
+    const result = ensureTraceContext({ traceId: "0".repeat(32) });
+    expect(result.traceId).not.toBe("0".repeat(32));
+  });
 });

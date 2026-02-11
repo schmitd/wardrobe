@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
@@ -12,34 +12,33 @@ export default function ProfilePage() {
   const { isLoaded } = useUser();
   const profile = useQuery(api.profile.getProfile, isLoaded ? {} : 'skip');
 
-  const [bio, setBio] = useState('');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'saving' | 'success' | 'error'>('loading');
+  const [bioDraft, setBioDraft] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState('');
-  const [analysisResult, setAnalysisResult] = useState<{ skinTone: string, hairColor: string } | null>(null);
+  const [analysisOverride, setAnalysisOverride] = useState<{ skinTone: string; hairColor: string } | null>(null);
 
-  useEffect(() => {
-    if (profile === undefined) return;
-    setBio(profile?.bio ?? '');
+  const bio = useMemo(() => bioDraft ?? profile?.bio ?? '', [bioDraft, profile]);
+  const analysisResult = useMemo(() => {
+    if (analysisOverride) return analysisOverride;
     if (profile?.skinTone || profile?.hairColor) {
-      setAnalysisResult({
+      return {
         skinTone: profile.skinTone ?? 'Unknown',
         hairColor: profile.hairColor ?? 'Unknown',
-      });
-    } else {
-      setAnalysisResult(null);
+      };
     }
-    setStatus('idle');
-  }, [profile]);
+    return null;
+  }, [analysisOverride, profile]);
+  const status = profile === undefined ? 'loading' : saveStatus;
 
   const handleSave = async () => {
-    setStatus('saving');
+    setSaveStatus('saving');
     setErrorMessage('');
     try {
       const trace = createTraceContext();
       await updateProfileBioAction({ bio, ...trace });
-      setStatus('success');
+      setSaveStatus('success');
     } catch (e) {
-      setStatus('error');
+      setSaveStatus('error');
       setErrorMessage(String(e));
     }
   };
@@ -62,7 +61,7 @@ export default function ProfilePage() {
             className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[150px]"
             placeholder="I love vintage aesthetic mixed with modern streetwear..."
             value={bio}
-            onChange={(e) => setBio(e.target.value)}
+            onChange={(e) => setBioDraft(e.target.value)}
           />
         </div>
 
@@ -92,18 +91,19 @@ export default function ProfilePage() {
           allowMultiple={false}
           onUploadComplete={async (uploads: UploadedFile[]) => {
             if (uploads.length === 0) return;
-            setStatus('loading');
+            setSaveStatus('saving');
             try {
               const trace = createTraceContext();
               const res = await analyzeSelfieAction({ storageId: uploads[0].storageId, ...trace });
-              setBio(res.bio);
-              setAnalysisResult({
+              setBioDraft(res.bio);
+              setAnalysisOverride({
                 skinTone: res.skin_tone,
                 hairColor: res.hair_color
               });
-              setStatus('success');
-            } catch (e) {
-              setStatus('error');
+              setSaveStatus('success');
+            } catch (error) {
+              console.error('selfie.analyze.failed', error);
+              setSaveStatus('error');
               setErrorMessage("Failed to analyze selfie");
             }
           }}

@@ -11,11 +11,7 @@ const randomBytes = (length: number) => {
     return buffer;
   }
 
-  const buffer = new Uint8Array(length);
-  for (let index = 0; index < length; index += 1) {
-    buffer[index] = Math.floor(Math.random() * 256);
-  }
-  return buffer;
+  throw new Error("Secure random source unavailable");
 };
 
 const randomHex = (size: number) => toHex(randomBytes(size));
@@ -25,17 +21,22 @@ const buildTraceparent = (traceId: string) => {
   return `00-${traceId}-${spanId}-01`;
 };
 
+const isAllZeros = (value: string) => /^0+$/i.test(value);
+
 export const ensureTraceContext = (input?: {
   traceId?: string | null;
   traceparent?: string | null;
 }) => {
   const traceparent = input?.traceparent?.trim();
   if (traceparent && traceparentRegex.test(traceparent)) {
-    return { traceId: traceparent.split("-")[1], traceparent };
+    const [, traceId, spanId] = traceparent.split("-");
+    if (!isAllZeros(traceId) && !isAllZeros(spanId)) {
+      return { traceId, traceparent };
+    }
   }
 
   const traceId = input?.traceId?.trim();
-  if (traceId && /^[\da-f]{32}$/i.test(traceId)) {
+  if (traceId && /^[\da-f]{32}$/i.test(traceId) && !isAllZeros(traceId)) {
     return { traceId, traceparent: buildTraceparent(traceId) };
   }
 

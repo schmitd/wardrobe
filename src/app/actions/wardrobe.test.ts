@@ -23,7 +23,7 @@ const apiMock = {
   },
   profile: {
     updateBio: {},
-    internalProfileUpdate: {},
+    updateProfileAttributes: {},
   },
 };
 
@@ -257,6 +257,13 @@ describe("wardrobe server actions", () => {
     const result = await actions.analyzeSelfieAction({ storageId: "storage_1" });
 
     expect(result.bio).toBe("Minimalist profile");
+    expect(fetchMutationMock).toHaveBeenCalledWith(
+      api.profile.updateProfileAttributes,
+      expect.objectContaining({
+        bio: "Minimalist profile",
+      }),
+      expect.objectContaining({ token: "token_123" })
+    );
     expect(publishJsonMock).toHaveBeenCalled();
   });
 });

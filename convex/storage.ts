@@ -14,6 +14,15 @@ export const getStorageUrl = query({
     const userId = await getUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
+    const item = await ctx.db
+      .query("wardrobeItems")
+      .filter((q) => q.eq(q.field("storageId"), storageId))
+      .first();
+
+    if (!item || item.userId !== userId) {
+      throw new Error("Not found");
+    }
+
     return ctx.storage.getUrl(storageId);
   },
 });

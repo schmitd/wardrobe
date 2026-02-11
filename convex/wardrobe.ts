@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { ensureTraceContext } from "./trace";
 
 const now = () => Date.now();
@@ -7,6 +8,22 @@ const now = () => Date.now();
 const getUserId = async (ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) => {
   const identity = await ctx.auth.getUserIdentity();
   return identity?.subject ?? null;
+};
+
+const getOwnedItem = async (
+  ctx: {
+    db: { get: (id: Id<"wardrobeItems">) => Promise<{ userId: string } | null> };
+    auth: { getUserIdentity: () => Promise<{ subject: string } | null> };
+  },
+  itemId: Id<"wardrobeItems">
+) => {
+  const userId = await getUserId(ctx);
+  if (!userId) throw new Error("Unauthorized");
+
+  const item = await ctx.db.get(itemId);
+  if (!item || item.userId !== userId) throw new Error("Not found");
+
+  return { userId, item };
 };
 
 export const listWardrobeItems = query({
@@ -96,12 +113,23 @@ export const deleteWardrobeItem = mutation({
     if (!item || item.userId !== userId) throw new Error("Not found");
 
     await ctx.db.delete(itemId);
+    console.info("wardrobe.delete", { itemId, userId, reason });
 
     return { success: true };
   },
 });
 
 export const getWardrobeItem = query({
+  args: {
+    itemId: v.id("wardrobeItems"),
+  },
+  handler: async (ctx, { itemId }) => {
+    const { item } = await getOwnedItem(ctx, itemId);
+    return item;
+  },
+});
+
+export const getWardrobeItemInternal = internalQuery({
   args: {
     itemId: v.id("wardrobeItems"),
   },
@@ -137,10 +165,12 @@ export const getWardrobeItemWithUrl = query({
 
 export const listItemsForSimilarity = query({
   args: {
-    userId: v.string(),
     limit: v.optional(v.number()),
   },
-  handler: async (ctx, { userId, limit }) => {
+  handler: async (ctx, { limit }) => {
+    const userId = await getUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
     const items = await ctx.db
       .query("wardrobeItems")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -165,6 +195,8 @@ export const setAnalysisStatus = mutation({
     ),
   },
   handler: async (ctx, { itemId, status }) => {
+    await getOwnedItem(ctx, itemId);
+
     await ctx.db.patch(itemId, {
       analysisStatus: status,
       updatedAt: now(),
@@ -179,6 +211,8 @@ export const applyTags = mutation({
     styleTags: v.array(v.string()),
   },
   handler: async (ctx, { itemId, category, styleTags }) => {
+    await getOwnedItem(ctx, itemId);
+
     await ctx.db.patch(itemId, {
       category: category ?? undefined,
       styleTags,
@@ -194,6 +228,8 @@ export const applyDescription = mutation({
     description: v.string(),
   },
   handler: async (ctx, { itemId, category, description }) => {
+    await getOwnedItem(ctx, itemId);
+
     await ctx.db.patch(itemId, {
       category: category ?? undefined,
       description,
@@ -208,6 +244,8 @@ export const applyEmbedding = mutation({
     embedding: v.array(v.number()),
   },
   handler: async (ctx, { itemId, embedding }) => {
+    await getOwnedItem(ctx, itemId);
+
     await ctx.db.patch(itemId, {
       embedding,
       updatedAt: now(),
@@ -221,6 +259,8 @@ export const setAnalysisError = mutation({
     error: v.string(),
   },
   handler: async (ctx, { itemId, error }) => {
+    await getOwnedItem(ctx, itemId);
+
     await ctx.db.patch(itemId, {
       analysisStatus: "error",
       analysisError: error,

@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api } from "./_generated/api";
+import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { Receiver } from "@upstash/qstash";
 import {
   addWardrobeItemsMemory,
@@ -32,6 +33,9 @@ const verifyQStash = async (req: Request, body: string) => {
   }
 };
 
+const redactUserId = (userId: string) =>
+  userId.length <= 8 ? "[redacted]" : `${userId.slice(0, 4)}...${userId.slice(-4)}`;
+
 http.route({
   path: "/zep/sync",
   method: "POST",
@@ -43,7 +47,14 @@ http.route({
       return new Response("Invalid signature", { status: 401 });
     }
 
-    const payload = JSON.parse(body) as
+    let payload: unknown;
+    try {
+      payload = JSON.parse(body);
+    } catch {
+      return new Response("Invalid JSON payload", { status: 400 });
+    }
+
+    const typedPayload = payload as
       | {
           type: "wardrobe_add";
           userId: string;
@@ -71,23 +82,23 @@ http.route({
 
     const headerTraceparent = req.headers.get("traceparent");
     const { traceId, traceparent } = ensureTraceContext({
-      traceId: payload.traceId,
-      traceparent: payload.traceparent ?? headerTraceparent,
+      traceId: typedPayload.traceId,
+      traceparent: typedPayload.traceparent ?? headerTraceparent,
     });
     console.info("qstash.zep.sync", {
       traceId,
       traceparent,
-      type: payload.type,
-      userId: payload.userId,
+      type: typedPayload.type,
+      userId: redactUserId(typedPayload.userId),
     });
 
-    if (payload.type === "wardrobe_add") {
-      const item = await ctx.runQuery(api.wardrobe.getWardrobeItem, {
-        itemId: payload.itemId,
+    if (typedPayload.type === "wardrobe_add") {
+      const item = await ctx.runQuery(internal.wardrobe.getWardrobeItemInternal, {
+        itemId: typedPayload.itemId as Id<"wardrobeItems">,
       });
 
       if (item) {
-        await addWardrobeItemsMemory(payload.userId, [
+        await addWardrobeItemsMemory(typedPayload.userId, [
           {
             category: item.category ?? null,
             description: item.description ?? null,
@@ -97,19 +108,19 @@ http.route({
       }
     }
 
-    if (payload.type === "wardrobe_delete") {
+    if (typedPayload.type === "wardrobe_delete") {
       await deleteWardrobeItemMemory(
-        payload.userId,
-        payload.description,
-        payload.reason
+        typedPayload.userId,
+        typedPayload.description,
+        typedPayload.reason
       );
     }
 
-    if (payload.type === "profile_update") {
-      await updateProfileMemory(payload.userId, {
-        bio: payload.bio ?? null,
-        skinTone: payload.skinTone ?? null,
-        hairColor: payload.hairColor ?? null,
+    if (typedPayload.type === "profile_update") {
+      await updateProfileMemory(typedPayload.userId, {
+        bio: typedPayload.bio ?? null,
+        skinTone: typedPayload.skinTone ?? null,
+        hairColor: typedPayload.hairColor ?? null,
       });
     }
 

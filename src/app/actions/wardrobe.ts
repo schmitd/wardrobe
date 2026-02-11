@@ -43,6 +43,12 @@ const parseJson = <T>(text: string, label: string) =>
 const withRetries = <A, E>(effect: Effect.Effect<A, E>, attempts = 3) =>
   effect.pipe(Effect.retry(Schedule.recurs(attempts - 1)));
 
+const toErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
+const USER_SAFE_INFERENCE_ERROR =
+  "Failed to process this item right now. Please try again.";
+
 const analyzeImageTags = (base64: string) =>
   Effect.gen(function* () {
     const gemini = yield* GeminiService;
@@ -391,7 +397,7 @@ export const deleteWardrobeItemAction = async (input: {
       traceId,
       traceparent,
       itemId: input.itemId,
-      error,
+      message: toErrorMessage(error),
     });
   }
 
@@ -422,7 +428,11 @@ export const updateProfileBioAction = async (input: {
       traceparent ? { headers: { traceparent } } : undefined
     );
   } catch (error) {
-    console.warn("profile.zep.sync.failed", { traceId, traceparent, error });
+    console.warn("profile.zep.sync.failed", {
+      traceId,
+      traceparent,
+      message: toErrorMessage(error),
+    });
   }
 
   console.info("profile.update.request", { traceId, traceparent, userId });
@@ -541,20 +551,26 @@ export const processWardrobeItemAction = async (input: {
         traceId,
         traceparent,
         itemId: input.itemId,
-        error,
+        message: toErrorMessage(error),
       });
     }
 
     console.info("inference.complete", { traceId, traceparent, itemId: input.itemId, userId });
     return { success: true };
   } catch (error) {
+    const errorMessage = toErrorMessage(error);
     await fetchMutation(
       api.wardrobe.setAnalysisError,
-      { itemId: input.itemId as Id<"wardrobeItems">, error: String(error) },
+      { itemId: input.itemId as Id<"wardrobeItems">, error: errorMessage },
       { token }
     );
-    console.error("inference.error", { traceId, traceparent, itemId: input.itemId, error });
-    return { success: false, error: String(error) };
+    console.error("inference.error", {
+      traceId,
+      traceparent,
+      itemId: input.itemId,
+      message: errorMessage,
+    });
+    return { success: false, error: USER_SAFE_INFERENCE_ERROR };
   }
 };
 
@@ -596,7 +612,7 @@ export const checkCompatibilityAction = async (input: {
 
   const items = await fetchQuery(
     api.wardrobe.listItemsForSimilarity,
-    { userId, limit: 200 },
+    { limit: 200 },
     { token }
   );
 
@@ -701,9 +717,8 @@ export const analyzeSelfieAction = async (input: {
   );
 
   await fetchMutation(
-    api.profile.internalProfileUpdate,
+    api.profile.updateProfileAttributes,
     {
-      userId,
       bio: analysis.bio,
       skinTone: analysis.skin_tone,
       hairColor: analysis.hair_color,
@@ -726,7 +741,11 @@ export const analyzeSelfieAction = async (input: {
       traceparent ? { headers: { traceparent } } : undefined
     );
   } catch (error) {
-    console.warn("profile.zep.sync.failed", { traceId, traceparent, error });
+    console.warn("profile.zep.sync.failed", {
+      traceId,
+      traceparent,
+      message: toErrorMessage(error),
+    });
   }
 
   console.info("selfie.analyze.complete", { traceId, traceparent, userId });

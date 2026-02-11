@@ -52,7 +52,23 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate }: 
                         serverId: result.id,
                     });
 
-                    await processWardrobeItemAction({ itemId: result.id, traceId, traceparent });
+                    const processed = await processWardrobeItemAction({
+                        itemId: result.id,
+                        traceId,
+                        traceparent,
+                    });
+
+                    if (!processed.success) {
+                        console.error('Failed to process wardrobe item', {
+                            itemId: result.id,
+                            error: processed.error,
+                        });
+                        onOptimisticUpdate(tempId, {
+                            status: 'error',
+                            error: processed.error ?? 'Processing failed',
+                        });
+                        continue;
+                    }
                 } catch (error) {
                     console.error('Failed to create wardrobe item', error);
                     onOptimisticUpdate(tempId, {

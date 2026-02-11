@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 
 const now = () => Date.now();
 
@@ -53,7 +53,42 @@ export const updateBio = mutation({
   },
 });
 
-export const internalProfileUpdate = mutation({
+export const updateProfileAttributes = mutation({
+  args: {
+    bio: v.optional(v.string()),
+    skinTone: v.optional(v.string()),
+    hairColor: v.optional(v.string()),
+  },
+  handler: async (ctx, { bio, skinTone, hairColor }) => {
+    const userId = await getUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const existing = await ctx.db
+      .query("profiles")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .first();
+
+    const payload = {
+      bio,
+      skinTone,
+      hairColor,
+      updatedAt: now(),
+    };
+
+    if (existing) {
+      await ctx.db.patch(existing._id, payload);
+    } else {
+      await ctx.db.insert("profiles", {
+        userId,
+        ...payload,
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+export const internalProfileUpdate = internalMutation({
   args: {
     userId: v.string(),
     bio: v.optional(v.string()),

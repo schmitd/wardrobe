@@ -6,8 +6,10 @@ import { Loader2 } from 'lucide-react';
 import { checkCompatibilityAction } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
 
+type CompatibilityResult = Awaited<ReturnType<typeof checkCompatibilityAction>>;
+
 export default function CompatibilityChecker() {
-    const [result, setResult] = useState<any>(null);
+    const [result, setResult] = useState<CompatibilityResult | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [status, setStatus] = useState<string | null>(null);
 
@@ -24,7 +26,8 @@ export default function CompatibilityChecker() {
             const res = await checkCompatibilityAction({ storageId: upload.storageId, ...trace });
             setResult(res);
             setStatus(null);
-        } catch (e) {
+        } catch (error) {
+            console.error('compatibility.check.failed', error);
             setStatus("Error checking compatibility.");
         } finally {
             setIsProcessing(false);
@@ -79,7 +82,7 @@ export default function CompatibilityChecker() {
                                     <h4 className="font-semibold mb-2 text-sm text-gray-500 uppercase tracking-wider">Candidate Item</h4>
                                     <p className="font-medium text-gray-900">{result.candidate.description}</p>
                                     <div className="flex flex-wrap gap-1 mt-2">
-                                        {result.candidate.style_tags.map((tag: string, i: number) => (
+                                        {result.candidate.style_tags.map((tag, i) => (
                                             <span key={i} className="text-xs bg-white border border-gray-200 px-2 py-1 rounded-full text-gray-600">
                                                 {tag}
                                             </span>
@@ -94,7 +97,7 @@ export default function CompatibilityChecker() {
                             <h3 className="text-xl font-bold mb-4 text-gray-900">Best Pairings from Wardrobe</h3>
                             {result.similarItems.length > 0 ? (
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    {result.similarItems.map((item: any) => (
+                                    {result.similarItems.map((item) => (
                                         <div key={item.id} className="bg-white rounded-lg overflow-hidden shadow-sm border border-gray-100">
                                             <div className="aspect-[3/4] relative">
                                         <img
@@ -121,7 +124,7 @@ export default function CompatibilityChecker() {
                             <div>
                                 <h3 className="text-xl font-bold mb-4 text-gray-900">Potential Clashes</h3>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                    {result.dissimilarItems.map((item: any) => (
+                                    {result.dissimilarItems.map((item) => (
                                         <div key={item.id} className="bg-white rounded-lg overflow-hidden shadow-sm border border-red-100">
                                             <div className="aspect-[3/4] relative">
                                         <img

@@ -20,10 +20,19 @@ export default function WardrobeGrid({ items, optimisticItems = [] }: WardrobeGr
 
     const handleDelete = async (id: string) => {
         setDeletingId(id);
-        const trace = createTraceContext();
-        await deleteWardrobeItemAction({ itemId: id, reason, ...trace });
-        setDeletingId(null);
-        setShowConfirm(null);
+        try {
+            const trace = createTraceContext();
+            await deleteWardrobeItemAction({ itemId: id, reason, ...trace });
+            setShowConfirm(null);
+        } catch (error) {
+            console.error('wardrobe.delete.failed', {
+                itemId: id,
+                message: error instanceof Error ? error.message : 'Unknown error',
+            });
+            setShowConfirm(null);
+        } finally {
+            setDeletingId(null);
+        }
     };
 
     const mergedItems: RenderItem[] = [

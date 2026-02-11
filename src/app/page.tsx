@@ -13,16 +13,25 @@ export default function Home() {
     const items = useQuery(api.wardrobe.listWardrobeItems, isSignedIn ? {} : 'skip');
     const [optimisticItems, setOptimisticItems] = useState<OptimisticWardrobeItem[]>([]);
 
+    const { filteredOptimisticItems, removedOptimisticItems } = useMemo(() => {
+        if (!items) {
+            return { filteredOptimisticItems: optimisticItems, removedOptimisticItems: [] };
+        }
+        const existingIds = new Set(items.map((item) => item.id));
+        const removedOptimisticItems = optimisticItems.filter(
+            (item) => item.serverId && existingIds.has(item.serverId)
+        );
+        const filteredOptimisticItems = optimisticItems.filter(
+            (item) => !item.serverId || !existingIds.has(item.serverId)
+        );
+        return { filteredOptimisticItems, removedOptimisticItems };
+    }, [items, optimisticItems]);
+
     useEffect(() => {
-        if (!items?.length) return;
-        setOptimisticItems((prev) => {
-            const existingIds = new Set(items.map((item) => item.id));
-            const remaining = prev.filter((item) => !item.serverId || !existingIds.has(item.serverId));
-            const removed = prev.filter((item) => item.serverId && existingIds.has(item.serverId));
-            removed.forEach((item) => URL.revokeObjectURL(item.imageUrl));
-            return remaining;
-        });
-    }, [items]);
+        for (const item of removedOptimisticItems) {
+            URL.revokeObjectURL(item.imageUrl);
+        }
+    }, [removedOptimisticItems]);
 
     const handleOptimisticAdd = (newItems: OptimisticWardrobeItem[]) => {
         setOptimisticItems((prev) => [...newItems, ...prev]);
@@ -45,7 +54,7 @@ export default function Home() {
                             onOptimisticAdd={handleOptimisticAdd}
                             onOptimisticUpdate={handleOptimisticUpdate}
                         />
-                        <WardrobeGrid items={displayItems} optimisticItems={optimisticItems} />
+                        <WardrobeGrid items={displayItems} optimisticItems={filteredOptimisticItems} />
                     </>
                 ) : (
                     <div className="text-center py-20">
