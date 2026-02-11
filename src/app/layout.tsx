@@ -4,23 +4,23 @@ import {
 } from '@clerk/nextjs'
 import Navbar from '@/components/Navbar';
 import Providers from '@/components/Providers';
-import { Geist, Geist_Mono } from "next/font/google";
+import { Oswald, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const heading = Oswald({
+  variable: "--font-heading",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const body = Space_Grotesk({
+  variable: "--font-body",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Virtual Wardrobe Stylist",
-  description: "Wardrobe stylist and compatibility checker.",
+  title: "Wardrobe",
+  description: "Closet manager and shopping companion.",
 };
 
 export default function RootLayout({
@@ -31,7 +31,7 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en">
-        <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`}>
+        <body className={`${heading.variable} ${body.variable} min-h-screen flex flex-col`}>
           <Providers>
             <Navbar />
             {children}

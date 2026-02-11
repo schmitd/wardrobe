@@ -4,17 +4,17 @@ import { PricingTable } from '@clerk/nextjs';
 
 export default function PricingPage() {
     return (
-        <div className="min-h-screen bg-orange-50 py-12 px-4 sm:px-6 lg:px-8 flex flex-col items-center">
+        <div className="min-h-screen px-4 py-12 sm:px-6 lg:px-8">
             <div className="text-center mb-12">
-                <h1 className="text-4xl font-extrabold text-gray-900 sm:text-5xl sm:tracking-tight lg:text-6xl">
-                    Upgrade your Wardrobe
+                <h1 className="text-4xl font-black uppercase tracking-tight text-[#310A31] sm:text-5xl lg:text-6xl">
+                    Upgrade your closet companion
                 </h1>
-                <p className="mt-5 max-w-xl mx-auto text-xl text-gray-500">
-                    Get unlimited AI styling advice and compatibility checks.
+                <p className="mx-auto mt-5 max-w-xl text-base font-medium text-slate-700 sm:text-lg">
+                    Unlock unlimited compatibility checks, saved profiles, and deeper personalization.
                 </p>
             </div>
 
-            <div className="w-full max-w-4xl">
+            <div className="mx-auto w-full max-w-4xl border-4 border-black bg-white p-2 shadow-[8px_8px_0_#000]">
                 <PricingTable />
             </div>
         </div>

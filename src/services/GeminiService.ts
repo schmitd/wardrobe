@@ -46,12 +46,15 @@ const make = Effect.gen(function* () {
   const visionModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
   const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
 
-  const getModel = (_name: string) => visionModel;
+  const getModel = () => visionModel;
 
   return {
-    generateContent: (modelName, request) =>
+    generateContent: (
+      modelName: "gemini-2.5-flash-lite",
+      request: GenerateContentRequest | string | Array<string | Part>
+    ) =>
       Effect.tryPromise({
-        try: () => getModel(modelName).generateContent(request),
+        try: () => getModel().generateContent(request),
         catch: (error) => new GeminiError(error),
       }).pipe(Effect.withSpan("gemini.generateContent", { attributes: { model: modelName } })),
 

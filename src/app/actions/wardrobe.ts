@@ -2,7 +2,7 @@
 
 import { Effect, Schedule } from "effect";
 import { SchemaType, type Schema } from "@google/generative-ai";
-import type { Id } from "convex/values";
+import type { Id } from "@convex/_generated/dataModel";
 import { auth } from "@clerk/nextjs/server";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
 import { api } from "@convex/_generated/api";
@@ -13,7 +13,7 @@ import { ensureTraceContext } from "@/lib/trace";
 import { GeminiLive, GeminiService } from "@/services/GeminiService";
 
 const getConvexAuth = async () => {
-  const { userId, getToken } = auth();
+  const { userId, getToken } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
   const token = await getToken({
@@ -40,7 +40,7 @@ const parseJson = <T>(text: string, label: string) =>
     catch: (error) => new Error(`${label} JSON parse failed: ${String(error)}`),
   });
 
-const withRetries = <A, E>(effect: Effect.Effect<A, E>, attempts = 3) =>
+const withRetries = <A, E, R>(effect: Effect.Effect<A, E, R>, attempts = 3) =>
   effect.pipe(Effect.retry(Schedule.recurs(attempts - 1)));
 
 const toErrorMessage = (error: unknown) =>
@@ -314,6 +314,39 @@ const analyzeSelfie = (base64: string) =>
       result.response.text(),
       "analyzeSelfie"
     );
+  }).pipe(withRetries);
+
+const generateClosetBio = (items: { category: string; description: string; style_tags: string[] }[]) =>
+  Effect.gen(function* () {
+    const gemini = yield* GeminiService;
+    const schema: Schema = {
+      type: SchemaType.OBJECT,
+      properties: {
+        bio: { type: SchemaType.STRING },
+      },
+      required: ["bio"],
+    };
+    const prompt = `You are a style editor. Given the analyzed closet items below, write a concise first-person style bio in under 60 words.
+Use practical fashion language and focus on taste, silhouettes, color preferences, and wardrobe gaps.
+Do not mention AI or technology.
+
+Items:
+${items
+  .map(
+    (item, index) =>
+      `${index + 1}. ${item.category}: ${item.description}. Tags: ${item.style_tags.join(", ")}`
+  )
+  .join("\n")}`;
+
+    const result = yield* gemini.generateContent("gemini-2.5-flash-lite", {
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: schema,
+      },
+    });
+
+    return yield* parseJson<{ bio: string }>(result.response.text(), "generateClosetBio");
   }).pipe(withRetries);
 
 const cosineSimilarity = (a: number[], b: number[]) => {
@@ -750,4 +783,57 @@ export const analyzeSelfieAction = async (input: {
 
   console.info("selfie.analyze.complete", { traceId, traceparent, userId });
   return analysis;
+};
+
+const GUEST_DEMO_ITEM_LIMIT = 4;
+
+export const analyzeGuestBatchAction = async (input: {
+  items: { fileName: string; mimeType: string; base64: string }[];
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { traceId, traceparent } = ensureTraceContext(input);
+  const cappedItems = input.items.slice(0, GUEST_DEMO_ITEM_LIMIT);
+
+  if (cappedItems.length === 0) {
+    throw new Error("No images provided");
+  }
+
+  const analyzed = [];
+  for (const item of cappedItems) {
+    const normalizedBase64 = item.base64.replace(/^data:.*;base64,/, "");
+    const analysis = await runServerAction(
+      analyzeImageFull(normalizedBase64).pipe(Effect.provide(GeminiLive))
+    );
+    analyzed.push({
+      fileName: item.fileName,
+      category: analysis.category,
+      description: analysis.description,
+      styleTags: analysis.style_tags,
+    });
+  }
+
+  const summary = await runServerAction(
+    generateClosetBio(
+      analyzed.map((item) => ({
+        category: item.category,
+        description: item.description,
+        style_tags: item.styleTags,
+      }))
+    ).pipe(Effect.provide(GeminiLive))
+  );
+
+  console.info("guest.demo.complete", {
+    traceId,
+    traceparent,
+    itemCount: cappedItems.length,
+    capped: input.items.length > GUEST_DEMO_ITEM_LIMIT,
+  });
+
+  return {
+    items: analyzed,
+    suggestedBio: summary.bio,
+    capped: input.items.length > GUEST_DEMO_ITEM_LIMIT,
+    limit: GUEST_DEMO_ITEM_LIMIT,
+  };
 };

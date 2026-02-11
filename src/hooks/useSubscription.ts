@@ -3,7 +3,7 @@
 import { useAuth } from '@clerk/nextjs';
 
 export function useSubscription() {
-    const { isLoaded, has, userId } = useAuth();
+    const { isLoaded, has } = useAuth();
 
     // Check if the user has the 'compatibility_check' permission
     // This permission must be configured in the Clerk Dashboard under the Plan

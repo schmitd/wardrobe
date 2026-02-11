@@ -10,14 +10,14 @@ export default function SubscriptionGate({ children }: { children: React.ReactNo
 
     if (!isSubscribed) {
         return (
-            <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl shadow-sm border border-orange-100 max-w-2xl mx-auto mt-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Premium Feature</h2>
-                <p className="text-gray-600 mb-8 text-center max-w-md">
-                    The Compatibility Checker is a premium feature. Please upgrade to access AI styling advice.
+            <div className="rack-panel mx-auto mt-8 flex max-w-2xl flex-col items-center justify-center p-12">
+                <h2 className="mb-4 text-2xl font-black uppercase tracking-tight text-[#310A31]">Premium Feature</h2>
+                <p className="mb-8 max-w-md text-center text-sm font-medium text-slate-700">
+                    Compatibility checks are available on paid plans. Upgrade to continue and unlock full personalization.
                 </p>
                 <a
                     href="/pricing"
-                    className="mt-4 px-6 py-3 bg-orange-600 text-white font-semibold rounded-lg hover:bg-orange-700 transition-colors"
+                    className="mt-4 border-4 border-black bg-[#310A31] px-6 py-3 text-xs font-black uppercase tracking-[0.14em] text-white shadow-[6px_6px_0_#000]"
                 >
                     View Plans
                 </a>

@@ -6,13 +6,15 @@ import { Loader2 } from 'lucide-react';
 import type { OptimisticWardrobeItem } from '@/types/wardrobe';
 import { createTraceContext } from '@/lib/trace';
 import { createWardrobeItemAction, processWardrobeItemAction } from '@/app/actions/wardrobe';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface AddItemSectionProps {
     onOptimisticAdd: (items: OptimisticWardrobeItem[]) => void;
     onOptimisticUpdate: (tempId: string, patch: Partial<OptimisticWardrobeItem>) => void;
+    uploaderInputId?: string;
 }
 
-export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate }: AddItemSectionProps) {
+export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, uploaderInputId }: AddItemSectionProps) {
     const [isProcessing, setIsProcessing] = useState(false);
     const [status, setStatus] = useState<string | null>(null);
     const handleUpload = async (uploads: UploadedFile[]) => {
@@ -88,27 +90,37 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate }: 
     };
 
     return (
-        <div className="mb-8">
-            <div className="flex justify-between items-center mb-4">
-                <h2 className="text-2xl font-bold text-gray-800">My Wardrobe</h2>
+        <div className="mb-8" id="rack-uploader">
+            <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-2xl font-black uppercase tracking-tight text-[#310A31]">Closet Rack</h2>
             </div>
 
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
-                <h3 className="text-lg font-medium mb-4">Add New Item</h3>
-                <ImageUploader onUploadComplete={handleUpload} label="Upload Clothing Items" enablePreview />
+            <Card className="rack-panel mb-6 rounded-none py-0">
+                <CardHeader className="px-0">
+                    <CardTitle className="mb-0 text-lg font-black uppercase tracking-wide text-[#310A31]">Add pieces</CardTitle>
+                </CardHeader>
+                <CardContent className="px-0">
+                <ImageUploader
+                    onUploadComplete={handleUpload}
+                    label="Upload Closet Photos"
+                    enablePreview
+                    inputId={uploaderInputId}
+                    capture="environment"
+                />
 
                 {isProcessing && (
-                    <div className="mt-4 flex items-center justify-center gap-2 text-blue-600">
+                    <div className="mt-4 flex items-center justify-center gap-2 text-[#310A31]">
                         <Loader2 className="animate-spin" />
                         <span>{status}</span>
                     </div>
                 )}
                 {!isProcessing && status && (
-                    <div className={`mt-4 text-center font-medium ${status.startsWith('Error') ? 'text-red-600' : 'text-green-600'}`}>
+                    <div className={`mt-4 border-2 border-black p-3 text-center font-semibold ${status.startsWith('Error') ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'}`}>
                         {status}
                     </div>
                 )}
-            </div>
+                </CardContent>
+            </Card>
         </div>
     );
 }
