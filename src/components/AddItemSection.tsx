@@ -61,7 +61,9 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                     });
 
                     if (!processed.success) {
-                        console.error('Failed to process wardrobe item', {
+                        // In Next dev, console.error triggers the red overlay. This is an expected
+                        // failure mode (inference, transient storage URL), so log as warn instead.
+                        console.warn('wardrobe.process.failed', {
                             itemId: result.id,
                             error: processed.error,
                         });
@@ -72,7 +74,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                         continue;
                     }
                 } catch (error) {
-                    console.error('Failed to create wardrobe item', error);
+                    console.error('wardrobe.create.failed', error);
                     onOptimisticUpdate(tempId, {
                         status: 'error',
                         error: error instanceof Error ? error.message : 'Failed to add item',
@@ -83,7 +85,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
             setStatus(`Processed ${uploads.length} item${uploads.length === 1 ? '' : 's'}.`);
             setTimeout(() => setStatus(null), 3000);
         } catch (e) {
-            console.error("Exception in batch processing:", e);
+            console.error("wardrobe.batch.failed", e);
             setStatus("Error: An unexpected error occurred.");
         }
         setIsProcessing(false);

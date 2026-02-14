@@ -38,6 +38,17 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
 
+  // Tracks uploads that are valid for a user but aren't yet attached to a wardrobe item
+  // (e.g. quick-compare candidate uploads, selfies, etc).
+  uploads: defineTable({
+    userId: v.string(),
+    storageId: v.id("_storage"),
+    purpose: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_user_storage", ["userId", "storageId"])
+    .index("by_storage", ["storageId"]),
+
   subscriptions: defineTable({
     userId: v.string(),
     status: v.optional(v.string()),

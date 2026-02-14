@@ -46,6 +46,25 @@ const withRetries = <A, E, R>(effect: Effect.Effect<A, E, R>, attempts = 3) =>
 const toErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const fetchWithRetry = async <T>(
+  fn: () => Promise<T>,
+  opts: { attempts: number; delayMs: number; shouldRetry: (error: unknown) => boolean }
+) => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < opts.attempts; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt === opts.attempts - 1 || !opts.shouldRetry(error)) break;
+      await sleep(opts.delayMs * (attempt + 1));
+    }
+  }
+  throw lastError;
+};
+
 const USER_SAFE_INFERENCE_ERROR =
   "Failed to process this item right now. Please try again.";
 
@@ -480,10 +499,20 @@ export const processWardrobeItemAction = async (input: {
   const { userId, token } = await getConvexAuth();
   const { traceId, traceparent } = ensureTraceContext(input);
 
-  const item = await fetchQuery(
-    api.wardrobe.getWardrobeItemWithUrl,
-    { itemId: input.itemId as Id<"wardrobeItems"> },
-    { token }
+  // Convex storage URLs can be briefly unavailable right after upload. Retry a few times
+  // to avoid marking an item as failed due to this transient condition.
+  const item = await fetchWithRetry(
+    () =>
+      fetchQuery(
+        api.wardrobe.getWardrobeItemWithUrl,
+        { itemId: input.itemId as Id<"wardrobeItems"> },
+        { token }
+      ),
+    {
+      attempts: 5,
+      delayMs: 250,
+      shouldRetry: (error) => toErrorMessage(error).toLowerCase().includes("image not available"),
+    }
   );
 
   if (!item || item.userId !== userId) {
@@ -499,7 +528,14 @@ export const processWardrobeItemAction = async (input: {
       { token }
     );
 
-    const base64 = await fetchImageBase64(item.imageUrl);
+    const base64 = await fetchWithRetry(() => fetchImageBase64(item.imageUrl), {
+      attempts: 3,
+      delayMs: 300,
+      shouldRetry: (error) => {
+        const msg = toErrorMessage(error).toLowerCase();
+        return msg.includes("image fetch failed") || msg.includes("fetch failed") || msg.includes("timeout");
+      },
+    });
 
     const tagResult = await runServerAction(
       analyzeImageTags(base64).pipe(
@@ -617,6 +653,14 @@ export const checkCompatibilityAction = async (input: {
 
   console.info("compatibility.start", { traceId, traceparent, userId });
 
+  // Quick-compare uploads aren't attached to a wardrobe item, so we explicitly
+  // register them to authorize retrieval via `storage.getStorageUrl`.
+  await fetchMutation(
+    api.storage.registerUpload,
+    { storageId: input.storageId as Id<"_storage">, purpose: "quick_compare" },
+    { token }
+  );
+
   const imageUrl = await fetchQuery(
     api.storage.getStorageUrl,
     { storageId: input.storageId as Id<"_storage"> },
@@ -732,6 +776,12 @@ export const analyzeSelfieAction = async (input: {
   const { traceId, traceparent } = ensureTraceContext(input);
 
   console.info("selfie.analyze.start", { traceId, traceparent, userId });
+
+  await fetchMutation(
+    api.storage.registerUpload,
+    { storageId: input.storageId as Id<"_storage">, purpose: "selfie" },
+    { token }
+  );
 
   const imageUrl = await fetchQuery(
     api.storage.getStorageUrl,
