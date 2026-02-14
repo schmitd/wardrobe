@@ -82,9 +82,6 @@ export default function ImageUploader({
                 const uploadUrl = await getUploadUrl();
                 const uploadResponse = await fetch(uploadUrl, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': file.type || 'application/octet-stream',
-                    },
                     body: file,
                 });
 
