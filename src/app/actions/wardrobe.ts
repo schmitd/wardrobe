@@ -653,6 +653,14 @@ export const checkCompatibilityAction = async (input: {
 
   console.info("compatibility.start", { traceId, traceparent, userId });
 
+  // Quick-compare uploads aren't attached to a wardrobe item, so we explicitly
+  // register them to authorize retrieval via `storage.getStorageUrl`.
+  await fetchMutation(
+    api.storage.registerUpload,
+    { storageId: input.storageId as Id<"_storage">, purpose: "quick_compare" },
+    { token }
+  );
+
   const imageUrl = await fetchQuery(
     api.storage.getStorageUrl,
     { storageId: input.storageId as Id<"_storage"> },
@@ -768,6 +776,12 @@ export const analyzeSelfieAction = async (input: {
   const { traceId, traceparent } = ensureTraceContext(input);
 
   console.info("selfie.analyze.start", { traceId, traceparent, userId });
+
+  await fetchMutation(
+    api.storage.registerUpload,
+    { storageId: input.storageId as Id<"_storage">, purpose: "selfie" },
+    { token }
+  );
 
   const imageUrl = await fetchQuery(
     api.storage.getStorageUrl,
