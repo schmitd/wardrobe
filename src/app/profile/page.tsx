@@ -10,6 +10,14 @@ import { analyzeSelfieAction, updateProfileBioAction } from '@/app/actions/wardr
 import { createTraceContext } from '@/lib/trace';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 
 export default function ProfilePage() {
@@ -165,44 +173,73 @@ export default function ProfilePage() {
         </Card>
       </section>
 
-      <Card className="rack-panel overflow-hidden rounded-none py-0">
+      <Card className="rack-panel rounded-none py-0">
         <CardContent className="px-0">
-        <h2 className="text-lg font-black uppercase tracking-wide text-[#310A31]">Account settings</h2>
-        <p className="mt-2 text-sm font-medium text-slate-700">
-          Manage account details, authentication methods, and security settings.
-        </p>
-        <div className="mt-4 border-2 border-black bg-white p-2">
-          <UserProfile
-            routing="hash"
-            appearance={{
-              variables: {
-                colorPrimary: '#310A31',
-                colorBackground: '#f6f1f8',
-                colorInputBackground: '#ffffff',
-                colorText: '#1e293b',
-                colorNeutral: '#9C92A3',
-                borderRadius: '0px',
-                fontFamily: 'var(--font-body)',
-              },
-              elements: {
-                rootBox: 'w-full',
-                cardBox: 'w-full shadow-none',
-                card: 'w-full rounded-none border-2 border-black shadow-none',
-                navbar: 'border-r-2 border-black bg-[#f4eef7]',
-                navbarButton:
-                  'rounded-none text-[11px] font-black uppercase tracking-[0.12em] text-[#310A31]',
-                navbarButtonIcon: 'text-[#310A31]',
-                pageScrollBox: 'bg-white',
-                formFieldInput: 'rounded-none border-2 border-black shadow-none',
-                profileSectionPrimaryButton:
-                  'rounded-none border-2 border-black bg-[#310A31] text-white shadow-[3px_3px_0_#000]',
-                formButtonPrimary:
-                  'rounded-none border-2 border-black bg-[#310A31] text-white shadow-[3px_3px_0_#000]',
-                footer: 'hidden',
-              },
-            }}
-          />
-        </div>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-lg font-black uppercase tracking-wide text-[#310A31]">
+                Account settings
+              </h2>
+              <p className="mt-2 text-sm font-medium text-slate-700">
+                Manage account details, authentication methods, and security settings.
+              </p>
+            </div>
+
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button
+                  type="button"
+                  className="h-auto rounded-none border-4 border-black bg-[#310A31] px-5 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[6px_6px_0_#000]"
+                >
+                  Manage account
+                </Button>
+              </DialogTrigger>
+
+              <DialogContent className="rack-panel max-w-[min(1100px,calc(100vw-2rem))] gap-0 rounded-none border-4 border-black p-0 shadow-[10px_10px_0_#000]">
+                <DialogHeader className="border-b-4 border-black bg-[#f3eef6] p-5 text-left">
+                  <DialogTitle className="text-xl font-black uppercase tracking-wide text-[#310A31]">
+                    Account settings
+                  </DialogTitle>
+                  <DialogDescription className="text-sm font-medium text-slate-700">
+                    Update your profile details, sign-in methods, and billing.
+                  </DialogDescription>
+                </DialogHeader>
+
+                <div className="max-h-[min(78vh,760px)] overflow-auto border-t-0 bg-white p-2">
+                  <UserProfile
+                    routing="hash"
+                    appearance={{
+                      variables: {
+                        colorPrimary: '#310A31',
+                        colorBackground: '#ffffff',
+                        colorInputBackground: '#ffffff',
+                        colorText: '#1e293b',
+                        colorNeutral: '#9C92A3',
+                        borderRadius: '0px',
+                        fontFamily: 'var(--font-body)',
+                      },
+                      elements: {
+                        rootBox: 'w-full',
+                        cardBox: 'w-full shadow-none',
+                        card: 'w-full rounded-none border-2 border-black shadow-none',
+                        navbar: 'border-r-2 border-black bg-[#f4eef7]',
+                        navbarButton:
+                          'rounded-none text-[11px] font-black uppercase tracking-[0.12em] text-[#310A31]',
+                        navbarButtonIcon: 'text-[#310A31]',
+                        pageScrollBox: 'bg-white',
+                        formFieldInput: 'rounded-none border-2 border-black shadow-none',
+                        profileSectionPrimaryButton:
+                          'rounded-none border-2 border-black bg-[#310A31] text-white shadow-[3px_3px_0_#000]',
+                        formButtonPrimary:
+                          'rounded-none border-2 border-black bg-[#310A31] text-white shadow-[3px_3px_0_#000]',
+                        footer: 'hidden',
+                      },
+                    }}
+                  />
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
         </CardContent>
       </Card>
     </main>
