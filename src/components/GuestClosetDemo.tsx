@@ -1,10 +1,12 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SignUpButton } from '@clerk/nextjs';
 import { Loader2, Sparkles } from 'lucide-react';
 import { analyzeGuestBatchAction } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
+import { saveGuestSnapshot } from '@/lib/guestSnapshot';
+import { downscaleToJpegDataUrl } from '@/lib/imageClient';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,18 +16,11 @@ import RackItemCard from './RackItemCard';
 type GuestDemoItem = {
   fileName: string;
   previewUrl: string;
+  dataUrl: string;
   category: string;
   description: string;
   styleTags: string[];
 };
-
-const fileToDataUrl = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ''));
-    reader.onerror = () => reject(reader.error ?? new Error('Failed to read file'));
-    reader.readAsDataURL(file);
-  });
 
 interface GuestClosetDemoProps {
   uploaderInputId?: string;
@@ -40,6 +35,25 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
   const [showSignupPrompt, setShowSignupPrompt] = useState(false);
   const [items, setItems] = useState<GuestDemoItem[]>([]);
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!demoComplete) return;
+    // Persist the demo so that completing signup (which flips isSignedIn and unmounts this
+    // component) can be imported into the real closet.
+    saveGuestSnapshot({
+      version: 1,
+      createdAt: Date.now(),
+      bio,
+      items: items.map((item) => ({
+        fileName: item.fileName,
+        mimeType: "image/jpeg",
+        dataUrl: item.dataUrl,
+        category: item.category,
+        description: item.description,
+        styleTags: item.styleTags,
+      })),
+    });
+  }, [bio, demoComplete, items]);
 
   const handleFiles = async (files: File[]) => {
     if (files.length === 0) return;
@@ -57,9 +71,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       const payload = await Promise.all(
         imageFiles.map(async (file) => ({
           fileName: file.name,
-          mimeType: file.type,
-          base64: await fileToDataUrl(file),
-          previewUrl: URL.createObjectURL(file),
+          ...(await downscaleToJpegDataUrl(file, { maxSize: 1024, quality: 0.82 })),
         }))
       );
 
@@ -68,7 +80,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         items: payload.map((entry) => ({
           fileName: entry.fileName,
           mimeType: entry.mimeType,
-          base64: entry.base64,
+          base64: entry.dataUrl,
         })),
         ...trace,
       });
@@ -76,7 +88,8 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       setItems(
         result.items.map((entry, index) => ({
           fileName: entry.fileName,
-          previewUrl: payload[index]?.previewUrl ?? '',
+          previewUrl: payload[index]?.dataUrl ?? '',
+          dataUrl: payload[index]?.dataUrl ?? '',
           category: entry.category,
           description: entry.description,
           styleTags: entry.styleTags,

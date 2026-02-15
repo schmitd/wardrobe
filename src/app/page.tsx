@@ -4,11 +4,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { SignInButton, SignedOut, useAuth } from '@clerk/nextjs';
 import { Plus, Sparkles } from 'lucide-react';
 import { useQuery } from 'convex/react';
+import { useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import AddItemSection from '@/components/AddItemSection';
 import GuestClosetDemo from '@/components/GuestClosetDemo';
 import QuickCompareAction from '@/components/QuickCompareAction';
 import WardrobeGrid from '@/components/WardrobeGrid';
+import { createWardrobeItemAction, processWardrobeItemAction, updateProfileBioAction } from '@/app/actions/wardrobe';
+import { createTraceContext } from '@/lib/trace';
+import { clearGuestSnapshot, loadGuestSnapshot } from '@/lib/guestSnapshot';
+import { dataUrlToFile } from '@/lib/imageClient';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +24,9 @@ export default function Home() {
   const uploadInputId = 'rack-upload-input';
   const compareInputId = 'rack-compare-input';
   const items = useQuery(api.wardrobe.listWardrobeItems, isSignedIn ? {} : 'skip');
+  const getUploadUrl = useMutation(api.wardrobe.getUploadUrl);
   const [optimisticItems, setOptimisticItems] = useState<OptimisticWardrobeItem[]>([]);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
 
   const { filteredOptimisticItems, removedOptimisticItems } = useMemo(() => {
     if (!items) {
@@ -40,6 +47,110 @@ export default function Home() {
       URL.revokeObjectURL(item.imageUrl);
     }
   }, [removedOptimisticItems]);
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+
+    const snapshot = loadGuestSnapshot();
+    if (!snapshot || snapshot.items.length === 0) return;
+
+    // Clear immediately to avoid duplicate imports if the page re-renders during signup.
+    clearGuestSnapshot();
+
+    const queue = snapshot.items.map((item) => ({
+      item,
+      tempId: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+      ...createTraceContext(),
+    }));
+
+    setOptimisticItems((prev) => [
+      ...queue.map(({ item, tempId }) => ({
+        tempId,
+        imageUrl: item.dataUrl,
+        status: 'uploading' as const,
+        createdAt: Date.now(),
+        category: item.category,
+        description: item.description,
+        styleTags: item.styleTags,
+      })),
+      ...prev,
+    ]);
+
+    const run = async () => {
+      setImportStatus(`Importing ${queue.length} item${queue.length === 1 ? '' : 's'} from guest demo...`);
+
+      // Preserve the guest bio as the signed-in profile draft.
+      try {
+        const trace = createTraceContext();
+        await updateProfileBioAction({ bio: snapshot.bio, ...trace });
+      } catch {
+        // Non-blocking; the user can still edit/save on Profile.
+      }
+
+      for (const { item, tempId, traceId, traceparent } of queue) {
+        try {
+          setImportStatus(`Uploading ${item.fileName}...`);
+          const file = dataUrlToFile(item.dataUrl, item.fileName);
+          const uploadUrl = await getUploadUrl();
+          const uploadResponse = await fetch(uploadUrl, { method: 'POST', body: file });
+          if (!uploadResponse.ok) throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+          const { storageId } = await uploadResponse.json();
+          if (!storageId) throw new Error('Upload response missing storageId');
+
+          setOptimisticItems((prev) =>
+            prev.map((entry) => (entry.tempId === tempId ? { ...entry, status: 'processing' } : entry))
+          );
+
+          const created = await createWardrobeItemAction({
+            storageId,
+            clientFileName: file.name,
+            contentType: file.type,
+            traceId,
+            traceparent,
+          });
+
+          setOptimisticItems((prev) =>
+            prev.map((entry) =>
+              entry.tempId === tempId ? { ...entry, status: 'processing', serverId: created.id } : entry
+            )
+          );
+
+          const processed = await processWardrobeItemAction({
+            itemId: created.id,
+            traceId,
+            traceparent,
+          });
+
+          if (!processed.success) {
+            setOptimisticItems((prev) =>
+              prev.map((entry) =>
+                entry.tempId === tempId
+                  ? { ...entry, status: 'error', error: processed.error ?? 'Processing failed' }
+                  : entry
+              )
+            );
+          }
+        } catch (error) {
+          setOptimisticItems((prev) =>
+            prev.map((entry) =>
+              entry.tempId === tempId
+                ? {
+                    ...entry,
+                    status: 'error',
+                    error: error instanceof Error ? error.message : 'Import failed',
+                  }
+                : entry
+            )
+          );
+        }
+      }
+
+      setImportStatus(null);
+    };
+
+    void run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn]);
 
   const handleOptimisticAdd = (newItems: OptimisticWardrobeItem[]) => {
     setOptimisticItems((prev) => [...newItems, ...prev]);
@@ -104,6 +215,12 @@ export default function Home() {
               </p>
             </CardHeader>
           </Card>
+
+          {importStatus && (
+            <div className="rack-panel rounded-none border-4 border-black bg-white px-5 py-4 text-sm font-semibold uppercase tracking-wide text-[#310A31]">
+              {importStatus}
+            </div>
+          )}
 
           {isSignedIn ? (
             <>
