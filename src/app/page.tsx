@@ -81,7 +81,7 @@ export default function Home() {
 
   return (
     <main className="relative min-h-screen pb-32">
-      <div className="mx-auto w-full max-w-[1320px] space-y-6 px-4 pb-16 pt-6 lg:px-8">
+      <div className="mx-auto w-full max-w-[1320px] space-y-6 px-6 pb-16 pt-10 sm:px-8 lg:px-10">
         <section className="space-y-6">
           <Card className="rack-panel rounded-none py-0">
             <CardHeader className="px-0">
