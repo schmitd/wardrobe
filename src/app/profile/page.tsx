@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { UserProfile, useUser } from '@clerk/nextjs';
+import { useClerk, useUser } from '@clerk/nextjs';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Sparkles } from 'lucide-react';
@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 
 export default function ProfilePage() {
   const { isLoaded } = useUser();
+  const clerk = useClerk();
   const profile = useQuery(api.profile.getProfile, isLoaded ? {} : 'skip');
 
   const [bioDraft, setBioDraft] = useState<string | null>(null);
@@ -165,44 +166,30 @@ export default function ProfilePage() {
         </Card>
       </section>
 
-      <Card className="rack-panel overflow-hidden rounded-none py-0">
+      <Card className="rack-panel rounded-none py-0">
         <CardContent className="px-0">
-        <h2 className="text-lg font-black uppercase tracking-wide text-[#310A31]">Account settings</h2>
-        <p className="mt-2 text-sm font-medium text-slate-700">
-          Manage account details, authentication methods, and security settings.
-        </p>
-        <div className="mt-4 border-2 border-black bg-white p-2">
-          <UserProfile
-            routing="hash"
-            appearance={{
-              variables: {
-                colorPrimary: '#310A31',
-                colorBackground: '#f6f1f8',
-                colorInputBackground: '#ffffff',
-                colorText: '#1e293b',
-                colorNeutral: '#9C92A3',
-                borderRadius: '0px',
-                fontFamily: 'var(--font-body)',
-              },
-              elements: {
-                rootBox: 'w-full',
-                cardBox: 'w-full shadow-none',
-                card: 'w-full rounded-none border-2 border-black shadow-none',
-                navbar: 'border-r-2 border-black bg-[#f4eef7]',
-                navbarButton:
-                  'rounded-none text-[11px] font-black uppercase tracking-[0.12em] text-[#310A31]',
-                navbarButtonIcon: 'text-[#310A31]',
-                pageScrollBox: 'bg-white',
-                formFieldInput: 'rounded-none border-2 border-black shadow-none',
-                profileSectionPrimaryButton:
-                  'rounded-none border-2 border-black bg-[#310A31] text-white shadow-[3px_3px_0_#000]',
-                formButtonPrimary:
-                  'rounded-none border-2 border-black bg-[#310A31] text-white shadow-[3px_3px_0_#000]',
-                footer: 'hidden',
-              },
-            }}
-          />
-        </div>
+          <h2 className="text-lg font-black uppercase tracking-wide text-[#310A31]">Account settings</h2>
+          <p className="mt-2 text-sm font-medium text-slate-700">
+            Manage account details, authentication methods, and security settings.
+          </p>
+
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button
+              type="button"
+              onClick={() => clerk.openUserProfile()}
+              className="h-auto rounded-none border-4 border-black bg-[#310A31] px-5 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[6px_6px_0_#000]"
+            >
+              Manage account
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => clerk.signOut({ redirectUrl: '/' })}
+              className="h-auto rounded-none border-4 border-black bg-white px-5 py-3 text-xs font-black uppercase tracking-wide text-[#310A31] shadow-[6px_6px_0_#000]"
+            >
+              Sign out
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </main>
