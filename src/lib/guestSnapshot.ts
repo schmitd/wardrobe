@@ -1,4 +1,5 @@
 export type GuestSnapshotItem = {
+  id: string;
   fileName: string;
   mimeType: string;
   // Data URL (base64). Keep it small (downscaled) so sessionStorage can hold it.
@@ -6,6 +7,7 @@ export type GuestSnapshotItem = {
   category: string;
   description: string;
   styleTags: string[];
+  createdItemId?: string;
 };
 
 export type GuestSnapshot = {
@@ -46,3 +48,27 @@ export const clearGuestSnapshot = () => {
   }
 };
 
+export const updateGuestSnapshotItem = (id: string, patch: Partial<GuestSnapshotItem>) => {
+  const snapshot = loadGuestSnapshot();
+  if (!snapshot) return;
+  saveGuestSnapshot({
+    ...snapshot,
+    items: snapshot.items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+  });
+};
+
+export const removeGuestSnapshotItem = (id: string) => {
+  const snapshot = loadGuestSnapshot();
+  if (!snapshot) return;
+  const next = {
+    ...snapshot,
+    items: snapshot.items.filter((item) => item.id !== id),
+  } satisfies GuestSnapshot;
+
+  if (next.items.length === 0) {
+    clearGuestSnapshot();
+    return;
+  }
+
+  saveGuestSnapshot(next);
+};

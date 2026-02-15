@@ -5,7 +5,7 @@ import { SignUpButton } from '@clerk/nextjs';
 import { Loader2, Sparkles } from 'lucide-react';
 import { analyzeGuestBatchAction } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
-import { saveGuestSnapshot } from '@/lib/guestSnapshot';
+import { loadGuestSnapshot, saveGuestSnapshot } from '@/lib/guestSnapshot';
 import { downscaleToJpegDataUrl } from '@/lib/imageClient';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import RackItemCard from './RackItemCard';
 
 type GuestDemoItem = {
+  id: string;
   fileName: string;
   previewUrl: string;
   dataUrl: string;
@@ -37,6 +38,25 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
 
   useEffect(() => {
+    const snapshot = loadGuestSnapshot();
+    if (!snapshot || snapshot.items.length === 0) return;
+
+    setItems(
+      snapshot.items.map((item) => ({
+        id: item.id,
+        fileName: item.fileName,
+        previewUrl: item.dataUrl,
+        dataUrl: item.dataUrl,
+        category: item.category,
+        description: item.description,
+        styleTags: item.styleTags,
+      }))
+    );
+    setBio(snapshot.bio);
+    setDemoComplete(true);
+  }, []);
+
+  useEffect(() => {
     if (!demoComplete) return;
     // Persist the demo so that completing signup (which flips isSignedIn and unmounts this
     // component) can be imported into the real closet.
@@ -45,6 +65,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       createdAt: Date.now(),
       bio,
       items: items.map((item) => ({
+        id: item.id,
         fileName: item.fileName,
         mimeType: "image/jpeg",
         dataUrl: item.dataUrl,
@@ -70,6 +91,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       const imageFiles = files.filter((file) => file.type.startsWith('image/'));
       const payload = await Promise.all(
         imageFiles.map(async (file) => ({
+          id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
           fileName: file.name,
           ...(await downscaleToJpegDataUrl(file, { maxSize: 1024, quality: 0.82 })),
         }))
@@ -87,6 +109,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
 
       setItems(
         result.items.map((entry, index) => ({
+          id: payload[index]?.id ?? `${entry.fileName}-${index}`,
           fileName: entry.fileName,
           previewUrl: payload[index]?.dataUrl ?? '',
           dataUrl: payload[index]?.dataUrl ?? '',

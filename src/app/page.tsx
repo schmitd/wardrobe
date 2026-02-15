@@ -10,9 +10,13 @@ import AddItemSection from '@/components/AddItemSection';
 import GuestClosetDemo from '@/components/GuestClosetDemo';
 import QuickCompareAction from '@/components/QuickCompareAction';
 import WardrobeGrid from '@/components/WardrobeGrid';
-import { createWardrobeItemAction, processWardrobeItemAction, updateProfileBioAction } from '@/app/actions/wardrobe';
+import {
+  createWardrobeItemAction,
+  seedWardrobeItemFromGuestAction,
+  updateProfileBioAction,
+} from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
-import { clearGuestSnapshot, loadGuestSnapshot } from '@/lib/guestSnapshot';
+import { loadGuestSnapshot, removeGuestSnapshotItem, updateGuestSnapshotItem } from '@/lib/guestSnapshot';
 import { dataUrlToFile } from '@/lib/imageClient';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -54,9 +58,6 @@ export default function Home() {
     const snapshot = loadGuestSnapshot();
     if (!snapshot || snapshot.items.length === 0) return;
 
-    // Clear immediately to avoid duplicate imports if the page re-renders during signup.
-    clearGuestSnapshot();
-
     const queue = snapshot.items.map((item) => ({
       item,
       tempId: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
@@ -67,11 +68,12 @@ export default function Home() {
       ...queue.map(({ item, tempId }) => ({
         tempId,
         imageUrl: item.dataUrl,
-        status: 'uploading' as const,
+        status: (item.createdItemId ? 'processing' : 'uploading') as OptimisticWardrobeItem['status'],
         createdAt: Date.now(),
         category: item.category,
         description: item.description,
         styleTags: item.styleTags,
+        serverId: item.createdItemId,
       })),
       ...prev,
     ]);
@@ -89,47 +91,68 @@ export default function Home() {
 
       for (const { item, tempId, traceId, traceparent } of queue) {
         try {
-          setImportStatus(`Uploading ${item.fileName}...`);
-          const file = dataUrlToFile(item.dataUrl, item.fileName);
-          const uploadUrl = await getUploadUrl();
-          const uploadResponse = await fetch(uploadUrl, { method: 'POST', body: file });
-          if (!uploadResponse.ok) throw new Error(`Upload failed: ${uploadResponse.statusText}`);
-          const { storageId } = await uploadResponse.json();
-          if (!storageId) throw new Error('Upload response missing storageId');
-
           setOptimisticItems((prev) =>
             prev.map((entry) => (entry.tempId === tempId ? { ...entry, status: 'processing' } : entry))
           );
 
-          const created = await createWardrobeItemAction({
-            storageId,
-            clientFileName: file.name,
-            contentType: file.type,
-            traceId,
-            traceparent,
-          });
+          let createdItemId = item.createdItemId;
 
-          setOptimisticItems((prev) =>
-            prev.map((entry) =>
-              entry.tempId === tempId ? { ...entry, status: 'processing', serverId: created.id } : entry
-            )
-          );
+          if (!createdItemId) {
+            setImportStatus(`Uploading ${item.fileName}...`);
+            const file = dataUrlToFile(item.dataUrl, item.fileName);
+            const uploadUrl = await getUploadUrl();
+            const uploadResponse = await fetch(uploadUrl, { method: 'POST', body: file });
+            if (!uploadResponse.ok) throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+            const { storageId } = await uploadResponse.json();
+            if (!storageId) throw new Error('Upload response missing storageId');
 
-          const processed = await processWardrobeItemAction({
-            itemId: created.id,
-            traceId,
-            traceparent,
-          });
+            const created = await createWardrobeItemAction({
+              storageId,
+              clientFileName: file.name,
+              contentType: file.type,
+              traceId,
+              traceparent,
+            });
 
-          if (!processed.success) {
+            createdItemId = created.id;
+            updateGuestSnapshotItem(item.id, { createdItemId });
+
             setOptimisticItems((prev) =>
               prev.map((entry) =>
                 entry.tempId === tempId
-                  ? { ...entry, status: 'error', error: processed.error ?? 'Processing failed' }
+                  ? { ...entry, status: 'processing', serverId: createdItemId }
                   : entry
               )
             );
           }
+
+          if (!createdItemId) {
+            throw new Error('Import failed to create wardrobe item');
+          }
+
+          const seeded = await seedWardrobeItemFromGuestAction({
+            itemId: createdItemId,
+            category: item.category,
+            description: item.description,
+            styleTags: item.styleTags,
+            traceId,
+            traceparent,
+          });
+
+          if (!seeded.success) {
+            setOptimisticItems((prev) =>
+              prev.map((entry) =>
+                entry.tempId === tempId
+                  ? { ...entry, status: 'error', error: seeded.error ?? 'Processing failed' }
+                  : entry
+              )
+            );
+            continue;
+          }
+
+          // Remove imported items from the guest snapshot so backing out of auth or refreshing
+          // doesn't re-import duplicates.
+          removeGuestSnapshotItem(item.id);
         } catch (error) {
           setOptimisticItems((prev) =>
             prev.map((entry) =>

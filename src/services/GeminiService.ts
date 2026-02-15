@@ -20,9 +20,14 @@ export class GeminiError extends Error {
   }
 }
 
+export type GeminiModelName =
+  | "gemini-2.5-pro"
+  | "gemini-2.5-flash"
+  | "gemini-2.5-flash-lite";
+
 export interface GeminiService {
   readonly generateContent: (
-    modelName: "gemini-2.5-flash-lite",
+    modelName: GeminiModelName,
     request: GenerateContentRequest | string | Array<string | Part>
   ) => Effect.Effect<GenerateContentResult, GeminiError>;
 
@@ -43,18 +48,30 @@ const make = Effect.gen(function* () {
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
-  const visionModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
+  const proModel = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
+  const flashModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  const flashLiteModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
   const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
 
-  const getModel = () => visionModel;
+  const getModel = (name: GeminiModelName) => {
+    switch (name) {
+      case "gemini-2.5-pro":
+        return proModel;
+      case "gemini-2.5-flash":
+        return flashModel;
+      case "gemini-2.5-flash-lite":
+      default:
+        return flashLiteModel;
+    }
+  };
 
   return {
     generateContent: (
-      modelName: "gemini-2.5-flash-lite",
+      modelName: GeminiModelName,
       request: GenerateContentRequest | string | Array<string | Part>
     ) =>
       Effect.tryPromise({
-        try: () => getModel().generateContent(request),
+        try: () => getModel(modelName).generateContent(request),
         catch: (error) => new GeminiError(error),
       }).pipe(Effect.withSpan("gemini.generateContent", { attributes: { model: modelName } })),
 
