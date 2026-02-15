@@ -11,6 +11,10 @@ import { runServerAction } from "@/lib/run-effect";
 import { publishJson } from "@/lib/qstash";
 import { ensureTraceContext } from "@/lib/trace";
 import { GeminiLive, GeminiService } from "@/services/GeminiService";
+import {
+  processWardrobeInference,
+  USER_SAFE_INFERENCE_ERROR,
+} from "@/server/wardrobeInference";
 
 const getConvexAuth = async () => {
   const { userId, getToken } = await auth();
@@ -46,134 +50,26 @@ const withRetries = <A, E, R>(effect: Effect.Effect<A, E, R>, attempts = 3) =>
 const toErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-const fetchWithRetry = async <T>(
-  fn: () => Promise<T>,
-  opts: { attempts: number; delayMs: number; shouldRetry: (error: unknown) => boolean }
-) => {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < opts.attempts; attempt += 1) {
-    try {
-      return await fn();
-    } catch (error) {
-      lastError = error;
-      if (attempt === opts.attempts - 1 || !opts.shouldRetry(error)) break;
-      await sleep(opts.delayMs * (attempt + 1));
-    }
-  }
-  throw lastError;
-};
-
-const USER_SAFE_INFERENCE_ERROR =
-  "Failed to process this item right now. Please try again.";
-
-const analyzeImageTags = (base64: string) =>
-  Effect.gen(function* () {
-    const gemini = yield* GeminiService;
-    const schema: Schema = {
-      type: SchemaType.OBJECT,
-      properties: {
-        category: { type: SchemaType.STRING },
-        style_tags: {
-          type: SchemaType.ARRAY,
-          items: { type: SchemaType.STRING },
-        },
-      },
-      required: ["style_tags"],
-    };
-
-    const prompt =
-      "Analyze this clothing item. Return JSON with category and 3-5 style_tags (array of strings).";
-
-    const result = yield* gemini.generateContent("gemini-2.5-flash-lite", {
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: prompt },
-            { inlineData: { data: base64, mimeType: "image/jpeg" } },
-          ],
-        },
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: schema,
-      },
-    });
-
-    return yield* parseJson<{ category?: string; style_tags: string[] }>(
-      result.response.text(),
-      "analyzeImageTags"
-    );
-  }).pipe(withRetries);
-
-const analyzeImageDescription = (
-  base64: string,
-  context?: { category?: string | null; styleTags?: string[] | null }
-) =>
-  Effect.gen(function* () {
-    const gemini = yield* GeminiService;
-    const schema: Schema = {
-      type: SchemaType.OBJECT,
-      properties: {
-        category: { type: SchemaType.STRING },
-        description: { type: SchemaType.STRING },
-      },
-      required: ["description"],
-    };
-
-    const contextTags = context?.styleTags?.length
-      ? `Style tags so far: ${context.styleTags.join(", ")}.`
-      : "";
-    const contextCategory = context?.category
-      ? `Category so far: ${context.category}.`
-      : "";
-
-    const prompt = `Analyze this clothing item and return JSON with category and description. ${contextTags} ${contextCategory}`.trim();
-
-    const result = yield* gemini.generateContent("gemini-2.5-flash-lite", {
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: prompt },
-            { inlineData: { data: base64, mimeType: "image/jpeg" } },
-          ],
-        },
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: schema,
-      },
-    });
-
-    return yield* parseJson<{ category?: string; description: string }>(
-      result.response.text(),
-      "analyzeImageDescription"
-    );
-  }).pipe(withRetries);
-
 const analyzeImageFull = (base64: string) =>
   Effect.gen(function* () {
     const gemini = yield* GeminiService;
     const schema: Schema = {
       type: SchemaType.OBJECT,
       properties: {
-        category: { type: SchemaType.STRING },
-        description: { type: SchemaType.STRING },
         style_tags: {
           type: SchemaType.ARRAY,
           items: { type: SchemaType.STRING },
         },
+        category: { type: SchemaType.STRING },
+        description: { type: SchemaType.STRING },
       },
       required: ["category", "description", "style_tags"],
     };
 
     const prompt =
-      "Analyze this clothing item. Extract category, description, and 3-5 style tags. Return JSON with keys: category, description, style_tags.";
+      "Analyze this clothing item. Extract 3-5 style tags, category, and description. Return JSON with keys in this order: style_tags, category, description.";
 
-    const result = yield* gemini.generateContent("gemini-2.5-flash-lite", {
+    const result = yield* gemini.generateContent("gemini-2.0-flash-lite", {
       contents: [
         {
           role: "user",
@@ -202,7 +98,7 @@ const generateStyleQuery = (description: string, styleTags: string[]) =>
       ", "
     )}", generate a search query to find compatible items in a wardrobe. Return just the query string.`;
 
-    const result = yield* gemini.generateContent("gemini-2.5-flash-lite", prompt);
+    const result = yield* gemini.generateContent("gemini-2.0-flash-lite", prompt);
     return result.response.text().trim();
   }).pipe(withRetries);
 
@@ -281,7 +177,7 @@ Return JSON with keys:
 - best_pairings (array of indices): Which wardrobe items it pairs best with
 - worst_clashes (array of indices): Which wardrobe items it clashes with most (if any)`;
 
-    const result = yield* gemini.generateContent("gemini-2.5-flash-lite", {
+    const result = yield* gemini.generateContent("gemini-2.0-flash-lite", {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",
@@ -313,7 +209,7 @@ const analyzeSelfie = (base64: string) =>
     const prompt =
       "Analyze this selfie for fashion profiling. Extract approximate skin tone (e.g., Fair, Medium, Deep) and hair color. Also suggest a short professional style bio. Return JSON: { skin_tone, hair_color, bio }.";
 
-    const result = yield* gemini.generateContent("gemini-2.5-flash-lite", {
+    const result = yield* gemini.generateContent("gemini-2.0-flash-lite", {
       contents: [
         {
           role: "user",
@@ -357,7 +253,7 @@ ${items
   )
   .join("\n")}`;
 
-    const result = yield* gemini.generateContent("gemini-2.5-flash-lite", {
+    const result = yield* gemini.generateContent("gemini-2.0-flash-lite", {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",
@@ -408,6 +304,108 @@ export const createWardrobeItemAction = async (input: {
 
   console.info("wardrobe.create.request", { traceId, traceparent, itemId: result.id, userId });
   return result;
+};
+
+export const seedWardrobeItemFromGuestAction = async (input: {
+  itemId: string;
+  category?: string | null;
+  description: string;
+  styleTags: string[];
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { userId, token } = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+
+  try {
+    await fetchMutation(
+      api.wardrobe.setAnalysisStatus,
+      { itemId: input.itemId as Id<"wardrobeItems">, status: "processing_embedding" },
+      { token }
+    );
+
+    await fetchMutation(
+      api.wardrobe.applyTags,
+      {
+        itemId: input.itemId as Id<"wardrobeItems">,
+        category: input.category ?? null,
+        styleTags: input.styleTags,
+      },
+      { token }
+    );
+
+    await fetchMutation(
+      api.wardrobe.applyDescription,
+      {
+        itemId: input.itemId as Id<"wardrobeItems">,
+        category: input.category ?? null,
+        description: input.description,
+      },
+      { token }
+    );
+
+    const embedding = await runServerAction(
+      embedText(`${input.description} ${input.styleTags.join(" ")}`.trim()).pipe(
+        Effect.withSpan("action.seedWardrobeItemFromGuest", {
+          attributes: { userId, itemId: input.itemId },
+        }),
+        Effect.provide(GeminiLive)
+      )
+    );
+
+    await fetchMutation(
+      api.wardrobe.applyEmbedding,
+      { itemId: input.itemId as Id<"wardrobeItems">, embedding },
+      { token }
+    );
+
+    await fetchMutation(
+      api.wardrobe.setAnalysisStatus,
+      { itemId: input.itemId as Id<"wardrobeItems">, status: "ready" },
+      { token }
+    );
+
+    try {
+      await publishJson(
+        "/zep/sync",
+        {
+          type: "wardrobe_add",
+          userId,
+          itemId: input.itemId,
+          traceId,
+          traceparent,
+        },
+        traceparent ? { headers: { traceparent } } : undefined
+      );
+    } catch (error) {
+      console.warn("zep.sync.enqueue.failed", {
+        traceId,
+        traceparent,
+        itemId: input.itemId,
+        message: toErrorMessage(error),
+      });
+    }
+
+    return { success: true as const };
+  } catch (error) {
+    const errorMessage = toErrorMessage(error);
+    try {
+      await fetchMutation(
+        api.wardrobe.setAnalysisError,
+        { itemId: input.itemId as Id<"wardrobeItems">, error: errorMessage },
+        { token }
+      );
+    } catch {
+      // ignore
+    }
+    console.error("guest.import.seed.failed", {
+      traceId,
+      traceparent,
+      itemId: input.itemId,
+      message: errorMessage,
+    });
+    return { success: false as const, error: USER_SAFE_INFERENCE_ERROR };
+  }
 };
 
 export const deleteWardrobeItemAction = async (input: {
@@ -499,148 +497,28 @@ export const processWardrobeItemAction = async (input: {
   const { userId, token } = await getConvexAuth();
   const { traceId, traceparent } = ensureTraceContext(input);
 
-  // Convex storage URLs can be briefly unavailable right after upload. Retry a few times
-  // to avoid marking an item as failed due to this transient condition.
-  const item = await fetchWithRetry(
-    () =>
-      fetchQuery(
-        api.wardrobe.getWardrobeItemWithUrl,
-        { itemId: input.itemId as Id<"wardrobeItems"> },
-        { token }
-      ),
-    {
-      attempts: 5,
-      delayMs: 250,
-      shouldRetry: (error) => toErrorMessage(error).toLowerCase().includes("image not available"),
-    }
-  );
-
-  if (!item || item.userId !== userId) {
-    throw new Error("Not found");
-  }
-
   console.info("inference.start", { traceId, traceparent, itemId: input.itemId, userId });
 
-  try {
-    await fetchMutation(
-      api.wardrobe.setAnalysisStatus,
-      { itemId: input.itemId as Id<"wardrobeItems">, status: "processing_tags" },
-      { token }
-    );
+  const result = await processWardrobeInference({
+    itemId: input.itemId,
+    userId,
+    token,
+    traceId,
+    traceparent,
+  });
 
-    const base64 = await fetchWithRetry(() => fetchImageBase64(item.imageUrl), {
-      attempts: 3,
-      delayMs: 300,
-      shouldRetry: (error) => {
-        const msg = toErrorMessage(error).toLowerCase();
-        return msg.includes("image fetch failed") || msg.includes("fetch failed") || msg.includes("timeout");
-      },
-    });
-
-    const tagResult = await runServerAction(
-      analyzeImageTags(base64).pipe(
-        Effect.withSpan("action.processWardrobeItem", {
-          attributes: { userId, itemId: input.itemId },
-        }),
-        Effect.provide(GeminiLive)
-      )
-    );
-
-    await fetchMutation(
-      api.wardrobe.applyTags,
-      {
-        itemId: input.itemId as Id<"wardrobeItems">,
-        category: tagResult.category ?? null,
-        styleTags: tagResult.style_tags,
-      },
-      { token }
-    );
-
-    await fetchMutation(
-      api.wardrobe.setAnalysisStatus,
-      { itemId: input.itemId as Id<"wardrobeItems">, status: "processing_description" },
-      { token }
-    );
-
-    const detailResult = await runServerAction(
-      analyzeImageDescription(base64, {
-        category: tagResult.category ?? null,
-        styleTags: tagResult.style_tags,
-      }).pipe(Effect.provide(GeminiLive))
-    );
-
-    await fetchMutation(
-      api.wardrobe.applyDescription,
-      {
-        itemId: input.itemId as Id<"wardrobeItems">,
-        category: detailResult.category ?? tagResult.category ?? null,
-        description: detailResult.description,
-      },
-      { token }
-    );
-
-    await fetchMutation(
-      api.wardrobe.setAnalysisStatus,
-      { itemId: input.itemId as Id<"wardrobeItems">, status: "processing_embedding" },
-      { token }
-    );
-
-    const embedding = await runServerAction(
-      embedText(
-        `${detailResult.description} ${(tagResult.style_tags ?? []).join(" ")}`.trim()
-      ).pipe(Effect.provide(GeminiLive))
-    );
-
-    await fetchMutation(
-      api.wardrobe.applyEmbedding,
-      { itemId: input.itemId as Id<"wardrobeItems">, embedding },
-      { token }
-    );
-
-    await fetchMutation(
-      api.wardrobe.setAnalysisStatus,
-      { itemId: input.itemId as Id<"wardrobeItems">, status: "ready" },
-      { token }
-    );
-
-    try {
-      await publishJson(
-        "/zep/sync",
-        {
-          type: "wardrobe_add",
-          userId,
-          itemId: input.itemId,
-          traceId,
-          traceparent,
-        },
-        traceparent ? { headers: { traceparent } } : undefined
-      );
-    } catch (error) {
-      console.warn("zep.sync.enqueue.failed", {
-        traceId,
-        traceparent,
-        itemId: input.itemId,
-        message: toErrorMessage(error),
-      });
-    }
-
-    console.info("inference.complete", { traceId, traceparent, itemId: input.itemId, userId });
-    return { success: true };
-  } catch (error) {
-    const errorMessage = toErrorMessage(error);
-    await fetchMutation(
-      api.wardrobe.setAnalysisError,
-      { itemId: input.itemId as Id<"wardrobeItems">, error: errorMessage },
-      { token }
-    );
+  if (!result.success) {
     console.error("inference.error", {
       traceId,
       traceparent,
       itemId: input.itemId,
-      message: errorMessage,
+      message: result.error,
     });
-    return { success: false, error: USER_SAFE_INFERENCE_ERROR };
+    return result;
   }
+
+  console.info("inference.complete", { traceId, traceparent, itemId: input.itemId, userId });
+  return result;
 };
 
 export const checkCompatibilityAction = async (input: {

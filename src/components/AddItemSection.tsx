@@ -5,7 +5,7 @@ import ImageUploader, { type UploadedFile } from './ImageUploader';
 import { Loader2 } from 'lucide-react';
 import type { OptimisticWardrobeItem } from '@/types/wardrobe';
 import { createTraceContext } from '@/lib/trace';
-import { createWardrobeItemAction, processWardrobeItemAction } from '@/app/actions/wardrobe';
+import { createWardrobeItemAction } from '@/app/actions/wardrobe';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface AddItemSectionProps {
@@ -13,6 +13,39 @@ interface AddItemSectionProps {
     onOptimisticUpdate: (tempId: string, patch: Partial<OptimisticWardrobeItem>) => void;
     uploaderInputId?: string;
 }
+
+type StreamEvent =
+    | { type: 'status'; stage: string }
+    | { type: 'tags'; category: string | null; styleTags: string[] }
+    | { type: 'description'; category: string | null; description: string }
+    | { type: 'complete' }
+    | { type: 'error'; error?: string };
+
+const parseEventLine = (line: string): StreamEvent | null => {
+    if (!line.trim()) return null;
+    try {
+        return JSON.parse(line) as StreamEvent;
+    } catch {
+        return null;
+    }
+};
+
+const stageLabel = (stage: string) => {
+    switch (stage) {
+        case 'fetching_image':
+            return 'Preparing image...';
+        case 'analyzing_tags':
+            return 'Reading styles and tags...';
+        case 'analyzing_description':
+            return 'Drafting item description...';
+        case 'embedding':
+            return 'Building compatibility vector...';
+        case 'persisting':
+            return 'Saving final analysis...';
+        default:
+            return 'Processing...';
+    }
+};
 
 export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, uploaderInputId }: AddItemSectionProps) {
     const [isProcessing, setIsProcessing] = useState(false);
@@ -54,23 +87,84 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                         serverId: result.id,
                     });
 
-                    const processed = await processWardrobeItemAction({
-                        itemId: result.id,
-                        traceId,
-                        traceparent,
+                    const streamResponse = await fetch('/api/wardrobe/process-stream', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            itemId: result.id,
+                            traceId,
+                            traceparent,
+                        }),
                     });
 
-                    if (!processed.success) {
-                        // In Next dev, console.error triggers the red overlay. This is an expected
-                        // failure mode (inference, transient storage URL), so log as warn instead.
-                        console.warn('wardrobe.process.failed', {
-                            itemId: result.id,
-                            error: processed.error,
-                        });
-                        onOptimisticUpdate(tempId, {
-                            status: 'error',
-                            error: processed.error ?? 'Processing failed',
-                        });
+                    if (!streamResponse.ok || !streamResponse.body) {
+                        throw new Error(`Processing failed: ${streamResponse.status}`);
+                    }
+
+                    const reader = streamResponse.body.getReader();
+                    const decoder = new TextDecoder();
+                    let pending = '';
+                    let streamFailed = false;
+                    let streamCompleted = false;
+
+                    while (true) {
+                        const { value, done } = await reader.read();
+                        if (done) break;
+                        pending += decoder.decode(value, { stream: true });
+
+                        let nl = pending.indexOf('\n');
+                        while (nl >= 0) {
+                            const line = pending.slice(0, nl);
+                            pending = pending.slice(nl + 1);
+                            nl = pending.indexOf('\n');
+
+                            const event = parseEventLine(line);
+                            if (!event) continue;
+
+                            if (event.type === 'status') {
+                                setStatus(`${stageLabel(event.stage)} (${upload.file.name})`);
+                            } else if (event.type === 'tags') {
+                                onOptimisticUpdate(tempId, {
+                                    category: event.category,
+                                    styleTags: event.styleTags,
+                                });
+                            } else if (event.type === 'description') {
+                                onOptimisticUpdate(tempId, {
+                                    category: event.category,
+                                    description: event.description,
+                                });
+                            } else if (event.type === 'error') {
+                                streamFailed = true;
+                                onOptimisticUpdate(tempId, {
+                                    status: 'error',
+                                    error: event.error ?? 'Processing failed',
+                                });
+                            } else if (event.type === 'complete') {
+                                streamCompleted = true;
+                            }
+                        }
+                    }
+
+                    if (pending.trim()) {
+                        const event = parseEventLine(pending.trim());
+                        if (event?.type === 'error') {
+                            streamFailed = true;
+                            onOptimisticUpdate(tempId, {
+                                status: 'error',
+                                error: event.error ?? 'Processing failed',
+                            });
+                        } else if (event?.type === 'complete') {
+                            streamCompleted = true;
+                        }
+                    }
+
+                    if (streamFailed || !streamCompleted) {
+                        if (!streamFailed) {
+                            onOptimisticUpdate(tempId, {
+                                status: 'error',
+                                error: 'Processing stream ended before completion',
+                            });
+                        }
                         continue;
                     }
                 } catch (error) {
