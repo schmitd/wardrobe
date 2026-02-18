@@ -253,6 +253,29 @@ export const applyEmbedding = mutation({
   },
 });
 
+export const applyFullAnalysis = mutation({
+  args: {
+    itemId: v.id("wardrobeItems"),
+    category: v.optional(v.union(v.string(), v.null())),
+    description: v.string(),
+    styleTags: v.array(v.string()),
+    embedding: v.array(v.number()),
+  },
+  handler: async (ctx, { itemId, category, description, styleTags, embedding }) => {
+    await getOwnedItem(ctx, itemId);
+
+    await ctx.db.patch(itemId, {
+      category: category ?? undefined,
+      description,
+      styleTags,
+      embedding,
+      analysisStatus: "ready",
+      analysisError: undefined,
+      updatedAt: now(),
+    });
+  },
+});
+
 export const setAnalysisError = mutation({
   args: {
     itemId: v.id("wardrobeItems"),

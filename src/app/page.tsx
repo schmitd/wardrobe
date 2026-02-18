@@ -32,18 +32,33 @@ export default function Home() {
   const [optimisticItems, setOptimisticItems] = useState<OptimisticWardrobeItem[]>([]);
   const [importStatus, setImportStatus] = useState<string | null>(null);
 
-  const { filteredOptimisticItems, removedOptimisticItems } = useMemo(() => {
+  const { filteredOptimisticItems, hiddenServerIds, removedOptimisticItems } = useMemo(() => {
     if (!items) {
-      return { filteredOptimisticItems: optimisticItems, removedOptimisticItems: [] };
+      return { filteredOptimisticItems: optimisticItems, hiddenServerIds: new Set<string>(), removedOptimisticItems: [] };
     }
-    const existingIds = new Set(items.map((item) => String(item.id)));
-    const removed = optimisticItems.filter(
-      (item) => item.serverId && existingIds.has(String(item.serverId))
+    const byId = new Map(items.map((item) => [String(item.id), item]));
+    const isTerminal = (status: string) => status === 'ready' || status === 'error';
+
+    const removed = optimisticItems.filter((item) => {
+      if (!item.serverId) return false;
+      const serverItem = byId.get(String(item.serverId));
+      return Boolean(serverItem && isTerminal(serverItem.analysisStatus));
+    });
+
+    const filtered = optimisticItems.filter((item) => {
+      if (!item.serverId) return true;
+      const serverItem = byId.get(String(item.serverId));
+      if (!serverItem) return true;
+      return !isTerminal(serverItem.analysisStatus);
+    });
+
+    const hiddenIds = new Set(
+      filtered
+        .map((item) => item.serverId)
+        .filter((id): id is string => Boolean(id))
+        .map(String)
     );
-    const filtered = optimisticItems.filter(
-      (item) => !item.serverId || !existingIds.has(String(item.serverId))
-    );
-    return { filteredOptimisticItems: filtered, removedOptimisticItems: removed };
+    return { filteredOptimisticItems: filtered, hiddenServerIds: hiddenIds, removedOptimisticItems: removed };
   }, [items, optimisticItems]);
 
   useEffect(() => {
@@ -188,6 +203,7 @@ export default function Home() {
   const displayItems = useMemo<WardrobeItem[]>(
     () =>
       (items ?? [])
+        .filter((item) => !hiddenServerIds.has(String(item.id)))
         .filter((item): item is typeof item & { imageUrl: string } => item.imageUrl !== null)
         .map((item) => ({
           id: String(item.id),
@@ -199,7 +215,7 @@ export default function Home() {
           analysisError: item.analysisError ?? null,
           createdAt: item.createdAt,
         })),
-    [items]
+    [hiddenServerIds, items]
   );
 
   const triggerInput = (inputId: string, fallback?: string) => {

@@ -14,6 +14,7 @@ const apiMock = {
     applyTags: {},
     applyDescription: {},
     applyEmbedding: {},
+    applyFullAnalysis: {},
     setAnalysisError: {},
     listItemsForSimilarity: {},
     listWardrobeItems: {},

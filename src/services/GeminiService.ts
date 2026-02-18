@@ -21,6 +21,8 @@ export class GeminiError extends Error {
 }
 
 export type GeminiModelName =
+  | "gemma-3-27b-it"
+  | "gemini-2.0-flash-lite"
   | "gemini-2.5-pro"
   | "gemini-2.5-flash"
   | "gemini-2.5-flash-lite";
@@ -48,6 +50,8 @@ const make = Effect.gen(function* () {
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
+  const gemma27bModel = genAI.getGenerativeModel({ model: "gemma-3-27b-it" });
+  const flashLite20Model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-lite" });
   const proModel = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
   const flashModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
   const flashLiteModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
@@ -55,6 +59,10 @@ const make = Effect.gen(function* () {
 
   const getModel = (name: GeminiModelName) => {
     switch (name) {
+      case "gemma-3-27b-it":
+        return gemma27bModel;
+      case "gemini-2.0-flash-lite":
+        return flashLite20Model;
       case "gemini-2.5-pro":
         return proModel;
       case "gemini-2.5-flash":
