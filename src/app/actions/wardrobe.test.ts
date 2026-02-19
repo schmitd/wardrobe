@@ -81,7 +81,7 @@ describe("wardrobe server actions", () => {
       contentType: "image/jpeg",
     });
 
-    expect(result.id).toBe("item_1");
+    expect(String(result.id)).toBe("item_1");
     expect(fetchMutationMock).toHaveBeenCalledTimes(1);
     const [mutation, args, options] = fetchMutationMock.mock.calls[0];
     expect(mutation).toBe(api.wardrobe.createWardrobeItem);

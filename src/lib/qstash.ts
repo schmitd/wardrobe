@@ -7,11 +7,13 @@ const normalizeBaseUrl = (baseUrl: string) => baseUrl.replace(/\/+$/, "");
 
 export const getCallbackUrl = (path: string) => {
   const baseUrl =
-    process.env.QSTASH_CALLBACK_BASE_URL || process.env.CONVEX_SITE_URL;
+    process.env.QSTASH_CALLBACK_BASE_URL ||
+    process.env.CONVEX_SITE_URL ||
+    process.env.NEXT_PUBLIC_CONVEX_URL;
 
   if (!baseUrl) {
     throw new Error(
-      "Missing QSTASH_CALLBACK_BASE_URL or CONVEX_SITE_URL for QStash callbacks"
+      "Missing QSTASH_CALLBACK_BASE_URL, CONVEX_SITE_URL, or NEXT_PUBLIC_CONVEX_URL for QStash callbacks"
     );
   }
 

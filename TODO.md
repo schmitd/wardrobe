@@ -37,6 +37,6 @@ Headaches to deal with later:
 - [x] Integrate Axiom for logging (verify this is complete)
 - [x] Private uploads (Convex File Storage)
 - [x] Migrate data + sync to Convex
-- [ ] Look into referrer policies for our file storage (Convex or R2)
+- [ ] Look into referer policies for our file storage (Convex or R2)
     - note: this adresses my file hotlinking fears regardless of public/private urls
 - [ ] Release gate: rotate all production secrets (Clerk, Stripe, Supabase, Axiom, QStash, Gemini) before public launch

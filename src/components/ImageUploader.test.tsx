@@ -18,7 +18,7 @@ declare module "bun:test" {
 }
 
 // extend expect
-expect.extend(matchers);
+expect.extend(matchers as any);
 
 // Mock Convex hooks + api
 mock.module('convex/react', () => ({
@@ -35,7 +35,7 @@ global.fetch = mock(() => Promise.resolve({
     statusText: 'OK',
     arrayBuffer: () => Promise.resolve(new ArrayBuffer(0)),
     json: () => Promise.resolve({ storageId: 'storage_123' })
-} as Response));
+} as Response)) as unknown as typeof fetch;
 
 global.URL.createObjectURL = mock(() => 'blob:preview');
 
