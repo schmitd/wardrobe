@@ -4,6 +4,9 @@ const fetchMutationMock = mock();
 const fetchQueryMock = mock();
 const runServerActionMock = mock();
 const publishJsonMock = mock();
+const arcjetProtectMock = mock(async () => ({
+  isDenied: () => false,
+}));
 
 const apiMock = {
   wardrobe: {
@@ -52,6 +55,17 @@ mock.module("@/lib/qstash", () => ({
   publishJson: publishJsonMock,
 }));
 
+mock.module("@arcjet/next", () => ({
+  default: () => ({ protect: arcjetProtectMock }),
+  detectBot: () => [],
+  fixedWindow: () => [],
+  request: async () => ({
+    method: "POST",
+    url: "https://example.com/action",
+    headers: new Headers(),
+  }),
+}));
+
 const { api } = await import("@convex/_generated/api");
 const actions = await import("./wardrobe");
 
@@ -68,6 +82,7 @@ beforeEach(() => {
   fetchQueryMock.mockClear();
   runServerActionMock.mockClear();
   publishJsonMock.mockClear();
+  arcjetProtectMock.mockClear();
   setupFetch();
 });
 

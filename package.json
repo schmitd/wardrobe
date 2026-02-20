@@ -10,6 +10,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@arcjet/next": "^1.1.0",
     "@clerk/nextjs": "^6.36.1",
     "@effect/opentelemetry": "^0.60.0",
     "@getzep/zep-cloud": "^3.14.0",

@@ -4,9 +4,17 @@ import { Effect, Schedule } from "effect";
 import { SchemaType, type Schema } from "@google/generative-ai";
 import type { Id } from "@convex/_generated/dataModel";
 import { auth } from "@clerk/nextjs/server";
+import arcjet, { detectBot, fixedWindow, request } from "@arcjet/next";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
 import { api } from "@convex/_generated/api";
 
+import {
+  DESCRIPTION_MAX_OUTPUT_TOKENS,
+  ITEM_DESCRIPTION_WORD_LIMIT,
+  STYLE_LABEL_MAX_OUTPUT_TOKENS,
+  sanitizeStyleTags,
+  truncateWords,
+} from "@/lib/inferenceOutputGuards";
 import { runServerAction } from "@/lib/run-effect";
 import { publishJson } from "@/lib/qstash";
 import { ensureTraceContext } from "@/lib/trace";
@@ -50,6 +58,38 @@ const withRetries = <A, E, R>(effect: Effect.Effect<A, E, R>, attempts = 3) =>
 const toErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
+const GUEST_BATCH_UPLOAD_LIMIT = 2;
+const GUEST_BATCH_LIMIT_WINDOW = "7d";
+const GUEST_AUTH_PROMPT_MESSAGE =
+  "You have reached the guest upload limit (2 batches per week). Please sign in or create an account to continue.";
+const GUEST_BOT_BLOCK_MESSAGE =
+  "Upload blocked because automated traffic was detected. Please sign in or create an account to continue.";
+
+const guestBatchProtection = (() => {
+  const arcjetKey = process.env.ARCJET_KEY;
+  if (!arcjetKey) return null;
+
+  return arcjet({
+    key: arcjetKey,
+    rules: [
+      detectBot({
+        mode: "LIVE",
+        allow: [],
+      }),
+      fixedWindow({
+        mode: "LIVE",
+        max: GUEST_BATCH_UPLOAD_LIMIT,
+        window: GUEST_BATCH_LIMIT_WINDOW,
+        characteristics: [
+          "ip.src",
+          'http.request.headers["user-agent"]',
+          'http.request.headers["accept-language"]',
+        ],
+      }),
+    ],
+  });
+})();
+
 const analyzeImageFull = (base64: string) =>
   Effect.gen(function* () {
     const gemini = yield* GeminiService;
@@ -66,8 +106,11 @@ const analyzeImageFull = (base64: string) =>
       required: ["category", "description", "style_tags"],
     };
 
-    const prompt =
-      "Analyze this clothing item. Extract 3-5 style tags, category, and description. Return JSON with keys in this order: style_tags, category, description.";
+    const prompt = `Analyze this clothing item.
+- Return JSON with keys in this exact order: style_tags, category, description.
+- style_tags: provide 3-5 concise labels, each at most 3 words.
+- category: short noun phrase.
+- description: at most ${ITEM_DESCRIPTION_WORD_LIMIT} words.`;
 
     const result = yield* gemini.generateContent("gemini-2.0-flash-lite", {
       contents: [
@@ -82,13 +125,20 @@ const analyzeImageFull = (base64: string) =>
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: schema,
+        maxOutputTokens: DESCRIPTION_MAX_OUTPUT_TOKENS + STYLE_LABEL_MAX_OUTPUT_TOKENS,
       },
     });
 
-    return yield* parseJson<{ category: string; description: string; style_tags: string[] }>(
+    const parsed = yield* parseJson<{ category: string; description: string; style_tags: string[] }>(
       result.response.text(),
       "analyzeImageFull"
     );
+
+    return {
+      category: truncateWords(parsed.category, 6),
+      description: truncateWords(parsed.description, ITEM_DESCRIPTION_WORD_LIMIT),
+      style_tags: sanitizeStyleTags(parsed.style_tags),
+    };
   }).pipe(withRetries);
 
 const generateStyleQuery = (description: string, styleTags: string[]) =>
@@ -725,6 +775,26 @@ export const analyzeGuestBatchAction = async (input: {
 
   if (cappedItems.length === 0) {
     throw new Error("No images provided");
+  }
+
+  if (!guestBatchProtection) {
+    console.error("guest.demo.arcjet.missing_key", { traceId, traceparent });
+    throw new Error("Guest uploads are unavailable right now. Please sign in or create an account.");
+  }
+
+  const req = await request();
+  const decision = await guestBatchProtection.protect(req);
+
+  if (decision.isDenied()) {
+    if (decision.reason.isBot()) {
+      throw new Error(GUEST_BOT_BLOCK_MESSAGE);
+    }
+
+    if (decision.reason.isRateLimit()) {
+      throw new Error(GUEST_AUTH_PROMPT_MESSAGE);
+    }
+
+    throw new Error("Guest upload request blocked. Please sign in or create an account.");
   }
 
   const analyzed = [];
