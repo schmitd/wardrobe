@@ -24,6 +24,7 @@ const apiMock = {
   },
   storage: {
     getStorageUrl: {},
+    getStorageMetadata: {},
   },
   profile: {
     updateBio: {},
@@ -59,12 +60,15 @@ mock.module("@arcjet/next", () => ({
   default: () => ({ protect: arcjetProtectMock }),
   detectBot: () => [],
   fixedWindow: () => [],
+  slidingWindow: () => [],
   request: async () => ({
     method: "POST",
     url: "https://example.com/action",
     headers: new Headers(),
   }),
 }));
+
+process.env.ARCJET_KEY = process.env.ARCJET_KEY ?? "test_arcjet_key";
 
 const { api } = await import("@convex/_generated/api");
 const actions = await import("./wardrobe");
@@ -189,6 +193,9 @@ describe("wardrobe server actions", () => {
 
   it("checks compatibility using generated embeddings", async () => {
     fetchQueryMock.mockImplementation(async (query) => {
+      if (query === api.storage.getStorageMetadata) {
+        return { contentType: "image/jpeg", size: 1024, sha256: "abc" };
+      }
       if (query === api.storage.getStorageUrl) {
         return "https://example.com/candidate.jpg";
       }
@@ -256,6 +263,9 @@ describe("wardrobe server actions", () => {
 
   it("analyzes selfie and syncs profile", async () => {
     fetchQueryMock.mockImplementation(async (query) => {
+      if (query === api.storage.getStorageMetadata) {
+        return { contentType: "image/jpeg", size: 1024, sha256: "abc" };
+      }
       if (query === api.storage.getStorageUrl) {
         return "https://example.com/selfie.jpg";
       }

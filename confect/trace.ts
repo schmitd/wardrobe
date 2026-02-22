@@ -41,5 +41,8 @@ export const ensureTraceContext = (input?: {
   }
 
   const generatedTraceId = randomHex(16);
-  return { traceId: generatedTraceId, traceparent: buildTraceparent(generatedTraceId) };
+  return {
+    traceId: generatedTraceId,
+    traceparent: buildTraceparent(generatedTraceId),
+  };
 };

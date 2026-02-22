@@ -14,13 +14,18 @@ const ensureClient = () => {
 
 export const addWardrobeItemsMemory = async (
   userId: string,
-  items: { category?: string | null; description?: string | null; styleTags?: string[] | null }[]
+  items: {
+    category?: string | null;
+    description?: string | null;
+    styleTags?: readonly string[] | null;
+  }[]
 ) => {
   if (!apiKey) return;
 
   const itemDescriptions = items
-    .map((item) =>
-      `- ${item.category ?? "Item"}: ${item.description ?? ""} (Style: ${(item.styleTags ?? []).join(", ")})`
+    .map(
+      (item) =>
+        `- ${item.category ?? "Item"}: ${item.description ?? ""} (Style: ${(item.styleTags ?? []).join(", ")})`
     )
     .join("\n");
 

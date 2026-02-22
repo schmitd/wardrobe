@@ -4,7 +4,7 @@ import { Effect, Schedule } from "effect";
 import { SchemaType, type Schema } from "@google/generative-ai";
 import type { Id } from "@convex/_generated/dataModel";
 import { auth } from "@clerk/nextjs/server";
-import arcjet, { detectBot, fixedWindow, request } from "@arcjet/next";
+import arcjet, { detectBot, fixedWindow, request, slidingWindow } from "@arcjet/next";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
 import { api } from "@convex/_generated/api";
 
@@ -24,8 +24,128 @@ import {
   USER_SAFE_INFERENCE_ERROR,
 } from "@/server/wardrobeInference";
 
+type UserTier = "free" | "pro";
+type AuthenticatedScope = "upload" | "check";
+
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+const ALLOWED_UPLOAD_CONTENT_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/heic",
+  "image/heif",
+]);
+const UPLOAD_DAILY_LIMIT: Record<UserTier, number> = { free: 5, pro: 20 };
+const CHECK_DAILY_LIMIT: Record<UserTier, number> = { free: 3, pro: 20 };
+const RATE_LIMIT_WINDOW = "1d";
+const RATE_LIMIT_BURST_INTERVAL = "10s";
+const RATE_LIMIT_BURST_MAX = 1;
+const BOT_BLOCK_MESSAGE = "Request blocked because automated traffic was detected.";
+const UPLOAD_RATE_LIMIT_MESSAGE =
+  "Upload limit reached for your plan. Please try again later or upgrade to continue.";
+const CHECK_RATE_LIMIT_MESSAGE =
+  "Compatibility check limit reached for your plan. Please try again later or upgrade to continue.";
+
+const normalizeContentType = (value?: string | null) => value?.split(";")[0]?.trim().toLowerCase() ?? null;
+
+const validateImageUploadInput = (input: {
+  fileName?: string;
+  contentType?: string;
+  fileSizeBytes?: number;
+}) => {
+  if (input.fileName !== undefined && input.fileName.trim().length === 0) {
+    throw new Error("Missing file name.");
+  }
+
+  const normalizedContentType = normalizeContentType(input.contentType);
+  if (!normalizedContentType) {
+    throw new Error("Missing file content type.");
+  }
+
+  if (!ALLOWED_UPLOAD_CONTENT_TYPES.has(normalizedContentType)) {
+    throw new Error("Only JPEG, PNG, WEBP, GIF, HEIC, and HEIF images are allowed.");
+  }
+
+  if (typeof input.fileSizeBytes === "number") {
+    if (!Number.isFinite(input.fileSizeBytes) || input.fileSizeBytes <= 0) {
+      throw new Error("Invalid file size.");
+    }
+    if (input.fileSizeBytes > MAX_UPLOAD_BYTES) {
+      throw new Error("Image is too large. Maximum upload size is 4 MB.");
+    }
+  }
+};
+
+const resolveUserTier = (has: Awaited<ReturnType<typeof auth>>["has"]): UserTier =>
+  has?.({ permission: "compatibility_check" }) || has?.({ plan: "pro" }) ? "pro" : "free";
+
+const createAuthenticatedProtection = (dailyLimit: number) => {
+  const arcjetKey = process.env.ARCJET_KEY;
+  if (!arcjetKey) return null;
+
+  return arcjet({
+    key: arcjetKey,
+    characteristics: ["userId"],
+    rules: [
+      detectBot({
+        mode: "LIVE",
+        allow: [],
+      }),
+      fixedWindow({
+        mode: "LIVE",
+        max: dailyLimit,
+        window: RATE_LIMIT_WINDOW,
+        characteristics: ["userId"],
+      }),
+      slidingWindow({
+        mode: "LIVE",
+        max: RATE_LIMIT_BURST_MAX,
+        interval: RATE_LIMIT_BURST_INTERVAL,
+        characteristics: ["userId"],
+      }),
+    ],
+  });
+};
+
+const authenticatedProtection: Record<
+  AuthenticatedScope,
+  Record<UserTier, ReturnType<typeof createAuthenticatedProtection>>
+> = {
+  upload: {
+    free: createAuthenticatedProtection(UPLOAD_DAILY_LIMIT.free),
+    pro: createAuthenticatedProtection(UPLOAD_DAILY_LIMIT.pro),
+  },
+  check: {
+    free: createAuthenticatedProtection(CHECK_DAILY_LIMIT.free),
+    pro: createAuthenticatedProtection(CHECK_DAILY_LIMIT.pro),
+  },
+};
+
+const enforceAuthenticatedProtection = async (input: {
+  scope: AuthenticatedScope;
+  tier: UserTier;
+  userId: string;
+}) => {
+  const protection = authenticatedProtection[input.scope][input.tier];
+  if (!protection) {
+    throw new Error("Security checks are unavailable right now. Please try again.");
+  }
+
+  const req = await request();
+  const decision = await protection.protect(req, { userId: input.userId });
+
+  if (!decision.isDenied()) return;
+  if (decision.reason.isBot()) throw new Error(BOT_BLOCK_MESSAGE);
+  if (decision.reason.isRateLimit()) {
+    throw new Error(input.scope === "upload" ? UPLOAD_RATE_LIMIT_MESSAGE : CHECK_RATE_LIMIT_MESSAGE);
+  }
+
+  throw new Error("Request denied. Please try again.");
+};
+
 const getConvexAuth = async () => {
-  const { userId, getToken } = await auth();
+  const { userId, getToken, has } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
   const token = await getToken({
@@ -33,7 +153,7 @@ const getConvexAuth = async () => {
   });
   if (!token) throw new Error("Missing Convex token");
 
-  return { userId, token };
+  return { userId, token, tier: resolveUserTier(has) };
 };
 
 const fetchImageBase64 = async (imageUrl: string) => {
@@ -314,7 +434,7 @@ ${items
     return yield* parseJson<{ bio: string }>(result.response.text(), "generateClosetBio");
   }).pipe(withRetries);
 
-const cosineSimilarity = (a: number[], b: number[]) => {
+const cosineSimilarity = (a: readonly number[], b: readonly number[]) => {
   let dot = 0;
   let normA = 0;
   let normB = 0;
@@ -334,11 +454,17 @@ export const createWardrobeItemAction = async (input: {
   storageId: string;
   clientFileName?: string;
   contentType?: string;
+  fileSizeBytes?: number;
   traceId?: string;
   traceparent?: string;
 }) => {
   const { userId, token } = await getConvexAuth();
   const { traceId, traceparent } = ensureTraceContext(input);
+  validateImageUploadInput({
+    fileName: input.clientFileName,
+    contentType: input.contentType,
+    fileSizeBytes: input.fileSizeBytes,
+  });
 
   const result = await fetchMutation(
     api.wardrobe.createWardrobeItem,
@@ -354,6 +480,21 @@ export const createWardrobeItemAction = async (input: {
 
   console.info("wardrobe.create.request", { traceId, traceparent, itemId: result.id, userId });
   return result;
+};
+
+export const getUploadUrlAction = async (input: {
+  fileName: string;
+  contentType: string;
+  fileSizeBytes: number;
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { userId, token, tier } = await getConvexAuth();
+  validateImageUploadInput(input);
+  await enforceAuthenticatedProtection({ scope: "upload", tier, userId });
+
+  const uploadUrl = await fetchMutation(api.wardrobe.getUploadUrl, {}, { token });
+  return { uploadUrl };
 };
 
 export const seedWardrobeItemFromGuestAction = async (input: {
@@ -576,10 +717,11 @@ export const checkCompatibilityAction = async (input: {
   traceId?: string;
   traceparent?: string;
 }) => {
-  const { userId, token } = await getConvexAuth();
+  const { userId, token, tier } = await getConvexAuth();
   const { traceId, traceparent } = ensureTraceContext(input);
 
   console.info("compatibility.start", { traceId, traceparent, userId });
+  await enforceAuthenticatedProtection({ scope: "check", tier, userId });
 
   // Quick-compare uploads aren't attached to a wardrobe item, so we explicitly
   // register them to authorize retrieval via `storage.getStorageUrl`.
@@ -588,6 +730,17 @@ export const checkCompatibilityAction = async (input: {
     { storageId: input.storageId as Id<"_storage">, purpose: "quick_compare" },
     { token }
   );
+
+  const uploadMetadata = await fetchQuery(
+    api.storage.getStorageMetadata,
+    { storageId: input.storageId as Id<"_storage"> },
+    { token }
+  );
+  validateImageUploadInput({
+    fileName: "quick-compare",
+    contentType: uploadMetadata?.contentType ?? undefined,
+    fileSizeBytes: uploadMetadata?.size,
+  });
 
   const imageUrl = await fetchQuery(
     api.storage.getStorageUrl,
@@ -710,6 +863,17 @@ export const analyzeSelfieAction = async (input: {
     { storageId: input.storageId as Id<"_storage">, purpose: "selfie" },
     { token }
   );
+
+  const uploadMetadata = await fetchQuery(
+    api.storage.getStorageMetadata,
+    { storageId: input.storageId as Id<"_storage"> },
+    { token }
+  );
+  validateImageUploadInput({
+    fileName: "selfie",
+    contentType: uploadMetadata?.contentType ?? undefined,
+    fileSizeBytes: uploadMetadata?.size,
+  });
 
   const imageUrl = await fetchQuery(
     api.storage.getStorageUrl,

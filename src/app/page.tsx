@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { SignInButton, SignedOut, useAuth } from '@clerk/nextjs';
 import { Plus, Sparkles } from 'lucide-react';
 import { useQuery } from 'convex/react';
-import { useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import AddItemSection from '@/components/AddItemSection';
 import GuestClosetDemo from '@/components/GuestClosetDemo';
@@ -12,6 +11,7 @@ import QuickCompareAction from '@/components/QuickCompareAction';
 import WardrobeGrid from '@/components/WardrobeGrid';
 import {
   createWardrobeItemAction,
+  getUploadUrlAction,
   seedWardrobeItemFromGuestAction,
   updateProfileBioAction,
 } from '@/app/actions/wardrobe';
@@ -28,7 +28,6 @@ export default function Home() {
   const uploadInputId = 'rack-upload-input';
   const compareInputId = 'rack-compare-input';
   const items = useQuery(api.wardrobe.listWardrobeItems, isSignedIn ? {} : 'skip');
-  const getUploadUrl = useMutation(api.wardrobe.getUploadUrl);
   const [optimisticItems, setOptimisticItems] = useState<OptimisticWardrobeItem[]>([]);
   const [importStatus, setImportStatus] = useState<string | null>(null);
 
@@ -115,8 +114,12 @@ export default function Home() {
           if (!createdItemId) {
             setImportStatus(`Uploading ${item.fileName}...`);
             const file = dataUrlToFile(item.dataUrl, item.fileName);
-            const uploadUrl = await getUploadUrl();
-            const uploadResponse = await fetch(uploadUrl, { method: 'POST', body: file });
+            const uploadTarget = await getUploadUrlAction({
+              fileName: file.name,
+              contentType: file.type,
+              fileSizeBytes: file.size,
+            });
+            const uploadResponse = await fetch(uploadTarget.uploadUrl, { method: 'POST', body: file });
             if (!uploadResponse.ok) throw new Error(`Upload failed: ${uploadResponse.statusText}`);
             const { storageId } = await uploadResponse.json();
             if (!storageId) throw new Error('Upload response missing storageId');
@@ -125,6 +128,7 @@ export default function Home() {
               storageId,
               clientFileName: file.name,
               contentType: file.type,
+              fileSizeBytes: file.size,
               traceId,
               traceparent,
             });
@@ -210,7 +214,7 @@ export default function Home() {
           imageUrl: item.imageUrl,
           category: item.category ?? null,
           description: item.description ?? null,
-          styleTags: item.styleTags ?? null,
+          styleTags: item.styleTags ? [...item.styleTags] : null,
           analysisStatus: item.analysisStatus,
           analysisError: item.analysisError ?? null,
           createdAt: item.createdAt,

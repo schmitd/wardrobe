@@ -7,8 +7,8 @@ import {
   addWardrobeItemsMemory,
   deleteWardrobeItemMemory,
   updateProfileMemory,
-} from "./zep";
-import { ensureTraceContext } from "./trace";
+} from "../confect/zep";
+import { ensureTraceContext } from "../confect/trace";
 
 const http = httpRouter();
 
