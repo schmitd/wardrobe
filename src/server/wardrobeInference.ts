@@ -12,7 +12,6 @@ import {
   truncateWords,
 } from "@/lib/inferenceOutputGuards";
 import { runServerAction } from "@/lib/run-effect";
-import { publishJson } from "@/lib/qstash";
 import { GeminiLive, GeminiService } from "@/services/GeminiService";
 
 const parseJson = <T>(text: string, label: string) =>
@@ -277,16 +276,15 @@ export const processWardrobeInference = async ({
     );
 
     try {
-      await publishJson(
-        "/zep/sync",
+      await fetchMutation(
+        api.zep.enqueueSyncEvent,
         {
           type: "wardrobe_add",
-          userId,
-          itemId,
+          itemId: itemId as Id<"wardrobeItems">,
           traceId,
           traceparent,
         },
-        traceparent ? { headers: { traceparent } } : undefined
+        { token }
       );
     } catch (error) {
       console.warn("zep.sync.enqueue.failed", {

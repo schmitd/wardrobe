@@ -12,6 +12,7 @@ import type * as http from "../http.js";
 import type * as profile from "../profile.js";
 import type * as storage from "../storage.js";
 import type * as wardrobe from "../wardrobe.js";
+import type * as zep from "../zep.js";
 
 import type {
   ApiFromModules,
@@ -24,6 +25,7 @@ declare const fullApi: ApiFromModules<{
   profile: typeof profile;
   storage: typeof storage;
   wardrobe: typeof wardrobe;
+  zep: typeof zep;
 }>;
 
 /**

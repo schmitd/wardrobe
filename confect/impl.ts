@@ -2,9 +2,16 @@ import type { GenericId } from "convex/values";
 import { Effect, Layer } from "effect";
 import { FunctionImpl, GroupImpl, Impl } from "@confect/server";
 
-import { MutationCtx, QueryCtx } from "./_generated/services";
+import { ActionCtx, MutationCtx, QueryCtx } from "./_generated/services";
 import api from "./_generated/api";
+import refs from "./_generated/refs";
 import { ensureTraceContext } from "./trace";
+import {
+  addWardrobeItemsMemory,
+  deleteWardrobeItemMemory,
+  getCompatibilityContext as getZepCompatibilityContext,
+  updateProfileMemory,
+} from "./zep";
 
 const now = () => Date.now();
 
@@ -29,6 +36,9 @@ const getUserId = async (ctx: AuthCtx) => {
   const identity = await ctx.auth.getUserIdentity();
   return identity?.subject ?? null;
 };
+
+const redactUserId = (userId: string) =>
+  userId.length <= 8 ? "[redacted]" : `${userId.slice(0, 4)}...${userId.slice(-4)}`;
 
 const assertOwnedItem = async (
   ctx: {
@@ -601,8 +611,162 @@ const profileGroup = GroupImpl.make(api, "profile").pipe(
   ),
 );
 
+const zepGroup = GroupImpl.make(api, "zep").pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      FunctionImpl.make(api, "zep", "enqueueSyncEvent", (args) =>
+        Effect.gen(function* () {
+          const ctx = yield* MutationCtx;
+          const userId = yield* Effect.promise(() => getUserId(ctx)).pipe(Effect.orDie);
+          if (!userId) throw new Error("Unauthorized");
+
+          if (args.type === "wardrobe_add" && !args.itemId) {
+            throw new Error("Missing itemId for wardrobe_add sync event");
+          }
+
+          if (args.type === "wardrobe_delete" && !args.reason) {
+            throw new Error("Missing reason for wardrobe_delete sync event");
+          }
+
+          const { traceId, traceparent } = ensureTraceContext({
+            traceId: args.traceId,
+            traceparent: args.traceparent,
+          });
+
+          yield* Effect.promise(() =>
+            ctx.scheduler.runAfter(0, refs.internal.zep.processSyncEvent as any, {
+              type: args.type,
+              userId,
+              ...(args.itemId ? { itemId: args.itemId } : {}),
+              ...(args.description ? { description: args.description } : {}),
+              ...(args.reason ? { reason: args.reason } : {}),
+              ...(args.bio ? { bio: args.bio } : {}),
+              ...(args.skinTone ? { skinTone: args.skinTone } : {}),
+              ...(args.hairColor ? { hairColor: args.hairColor } : {}),
+              traceId,
+              traceparent,
+            }),
+          ).pipe(Effect.orDie);
+
+          console.info("zep.sync.enqueued", {
+            traceId,
+            traceparent,
+            type: args.type,
+            userId: redactUserId(userId),
+          });
+
+          return { success: true as const };
+        }),
+      ),
+      FunctionImpl.make(api, "zep", "processSyncEvent", (args) =>
+        Effect.gen(function* () {
+          const ctx = yield* ActionCtx;
+          const { traceId, traceparent } = ensureTraceContext({
+            traceId: args.traceId,
+            traceparent: args.traceparent,
+          });
+
+          console.info("zep.sync.process", {
+            traceId,
+            traceparent,
+            type: args.type,
+            userId: redactUserId(args.userId),
+          });
+
+          try {
+            if (args.type === "wardrobe_add") {
+              if (!args.itemId) {
+                throw new Error("Missing itemId for wardrobe_add sync event");
+              }
+
+              const item = (yield* Effect.promise(() =>
+                ctx.runQuery(refs.internal.wardrobe.getWardrobeItemInternal as any, {
+                  itemId: args.itemId,
+                }),
+              ).pipe(Effect.orDie)) as {
+                category?: string | null;
+                description?: string | null;
+                styleTags?: string[] | null;
+              } | null;
+
+              if (item) {
+                yield* Effect.promise(() =>
+                  addWardrobeItemsMemory(args.userId, [
+                    {
+                      category: item.category ?? null,
+                      description: item.description ?? null,
+                      styleTags: item.styleTags ?? null,
+                    },
+                  ]),
+                ).pipe(Effect.orDie);
+              }
+            }
+
+            if (args.type === "wardrobe_delete") {
+              yield* Effect.promise(() =>
+                deleteWardrobeItemMemory(
+                  args.userId,
+                  args.description ?? "Unknown item",
+                  args.reason ?? "removed",
+                ),
+              ).pipe(Effect.orDie);
+            }
+
+            if (args.type === "profile_update") {
+              yield* Effect.promise(() =>
+                updateProfileMemory(args.userId, {
+                  bio: args.bio ?? null,
+                  skinTone: args.skinTone ?? null,
+                  hairColor: args.hairColor ?? null,
+                }),
+              ).pipe(Effect.orDie);
+            }
+          } catch (error) {
+            console.error("zep.sync.process.failed", {
+              traceId,
+              traceparent,
+              type: args.type,
+              userId: redactUserId(args.userId),
+              message: error instanceof Error ? error.message : String(error),
+            });
+          }
+
+          return null;
+        }),
+      ),
+      FunctionImpl.make(api, "zep", "getCompatibilityContext", (args) =>
+        Effect.gen(function* () {
+          const ctx = yield* ActionCtx;
+          const userId = yield* Effect.promise(() => getUserId(ctx)).pipe(Effect.orDie);
+          if (!userId) throw new Error("Unauthorized");
+
+          const context = yield* Effect.promise(() =>
+            getZepCompatibilityContext(userId, {
+              candidateCategory: args.candidateCategory ?? null,
+              candidateDescription: args.candidateDescription,
+              candidateStyleTags: args.candidateStyleTags,
+              similarItems: args.similarItems.map((item) => ({
+                category: item.category,
+                description: item.description,
+              })),
+              dissimilarItems: args.dissimilarItems.map((item) => ({
+                category: item.category,
+                description: item.description,
+              })),
+            }),
+          ).pipe(Effect.orDie);
+
+          return context;
+        }),
+      ),
+    ),
+  ),
+);
+
 export default Impl.finalize(
   Impl.make(api).pipe(
-    Layer.provide(Layer.mergeAll(wardrobeGroup, storageGroup, profileGroup)),
+    Layer.provide(
+      Layer.mergeAll(wardrobeGroup, storageGroup, profileGroup, zepGroup),
+    ),
   ),
 );

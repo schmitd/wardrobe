@@ -5,7 +5,7 @@ import { SchemaType, type Schema } from "@google/generative-ai";
 import type { Id } from "@convex/_generated/dataModel";
 import { auth } from "@clerk/nextjs/server";
 import arcjet, { detectBot, fixedWindow, request, slidingWindow } from "@arcjet/next";
-import { fetchMutation, fetchQuery } from "convex/nextjs";
+import { fetchAction, fetchMutation, fetchQuery } from "convex/nextjs";
 import { api } from "@convex/_generated/api";
 
 import {
@@ -16,7 +16,6 @@ import {
   truncateWords,
 } from "@/lib/inferenceOutputGuards";
 import { runServerAction } from "@/lib/run-effect";
-import { publishJson } from "@/lib/qstash";
 import { ensureTraceContext } from "@/lib/trace";
 import { GeminiLive, GeminiService } from "@/services/GeminiService";
 import {
@@ -178,6 +177,34 @@ const withRetries = <A, E, R>(effect: Effect.Effect<A, E, R>, attempts = 3) =>
 const toErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
+const enqueueZepSyncEvent = async (
+  token: string,
+  event:
+    | {
+        type: "wardrobe_add";
+        itemId: Id<"wardrobeItems">;
+        traceId?: string;
+        traceparent?: string;
+      }
+    | {
+        type: "wardrobe_delete";
+        description: string;
+        reason: string;
+        traceId?: string;
+        traceparent?: string;
+      }
+    | {
+        type: "profile_update";
+        bio?: string;
+        skinTone?: string;
+        hairColor?: string;
+        traceId?: string;
+        traceparent?: string;
+      }
+) => {
+  await fetchMutation(api.zep.enqueueSyncEvent, event, { token });
+};
+
 const GUEST_BATCH_UPLOAD_LIMIT = 2;
 const GUEST_BATCH_LIMIT_WINDOW = "7d";
 const GUEST_AUTH_PROMPT_MESSAGE =
@@ -283,6 +310,9 @@ const evaluateCompatibility = (input: {
   candidate: { category: string; description: string; style_tags: string[] };
   similarItems: { category: string | null; description: string | null; similarity: number }[];
   dissimilarItems: { category: string | null; description: string | null; similarity: number }[];
+  zepContext?: string | null;
+  influenceSignals?: readonly { kind: string; signal: string; weight: number }[];
+  ontology?: readonly string[];
 }) =>
   Effect.gen(function* () {
     const gemini = yield* GeminiService;
@@ -331,8 +361,27 @@ ${input.dissimilarItems.length > 0
       .join("\n")}`
   : ""}
 
+${input.zepContext
+  ? `\nUSER MEMORY CONTEXT (Historical Preferences & Events):\n${input.zepContext}`
+  : ""}
+
+${input.influenceSignals && input.influenceSignals.length > 0
+  ? `\nINFLUENCING SIGNALS:\n${input.influenceSignals
+      .map(
+        (signal, i) =>
+          `${i + 1}. [${signal.kind}] ${signal.signal} (weight: ${Math.round(signal.weight * 100)}%)`
+      )
+      .join("\n")}`
+  : ""}
+
+${input.ontology && input.ontology.length > 0
+  ? `\nSIGNAL ONTOLOGY:\n${input.ontology.map((entry) => `- ${entry}`).join("\n")}`
+  : ""}
+
 CRITICAL EVALUATION GUIDELINES:
 - Focus ONLY on how well this candidate fits with the EXISTING WARDROBE ITEMS listed above
+- Weigh memory context as user preference evidence, especially negative history (dislikes/discards/returns)
+- Do not treat memory context as absolute rules; balance it with similarity evidence from current wardrobe items
 - Do NOT evaluate the candidate item's internal consistency or standalone quality
 - Be CRITICAL and HONEST - most items should score 40-70%, not 90%+
 - Score 90-100%: Perfect match, complements multiple wardrobe items, fills a gap
@@ -557,17 +606,12 @@ export const seedWardrobeItemFromGuestAction = async (input: {
     );
 
     try {
-      await publishJson(
-        "/zep/sync",
-        {
-          type: "wardrobe_add",
-          userId,
-          itemId: input.itemId,
-          traceId,
-          traceparent,
-        },
-        traceparent ? { headers: { traceparent } } : undefined
-      );
+      await enqueueZepSyncEvent(token, {
+        type: "wardrobe_add",
+        itemId: input.itemId as Id<"wardrobeItems">,
+        traceId,
+        traceparent,
+      });
     } catch (error) {
       console.warn("zep.sync.enqueue.failed", {
         traceId,
@@ -621,18 +665,13 @@ export const deleteWardrobeItemAction = async (input: {
   );
 
   try {
-    await publishJson(
-      "/zep/sync",
-      {
-        type: "wardrobe_delete",
-        userId,
-        description: item?.description ?? item?.category ?? "Unknown item",
-        reason: input.reason,
-        traceId,
-        traceparent,
-      },
-      traceparent ? { headers: { traceparent } } : undefined
-    );
+    await enqueueZepSyncEvent(token, {
+      type: "wardrobe_delete",
+      description: item?.description ?? item?.category ?? "Unknown item",
+      reason: input.reason,
+      traceId,
+      traceparent,
+    });
   } catch (error) {
     console.warn("zep.sync.delete.failed", {
       traceId,
@@ -657,17 +696,12 @@ export const updateProfileBioAction = async (input: {
   await fetchMutation(api.profile.updateBio, { bio: input.bio }, { token });
 
   try {
-    await publishJson(
-      "/zep/sync",
-      {
-        type: "profile_update",
-        userId,
-        bio: input.bio,
-        traceId,
-        traceparent,
-      },
-      traceparent ? { headers: { traceparent } } : undefined
-    );
+    await enqueueZepSyncEvent(token, {
+      type: "profile_update",
+      bio: input.bio,
+      traceId,
+      traceparent,
+    });
   } catch (error) {
     console.warn("profile.zep.sync.failed", {
       traceId,
@@ -813,6 +847,35 @@ export const checkCompatibilityAction = async (input: {
     .map(hydrate)
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
+  const zepCompatibilityContext = await fetchAction(
+    api.zep.getCompatibilityContext,
+    {
+      candidateCategory: candidate.category ?? null,
+      candidateDescription: candidate.description,
+      candidateStyleTags: candidate.style_tags,
+      similarItems: hydratedSimilar.map((item) => ({
+        category: item.category,
+        description: item.description,
+      })),
+      dissimilarItems: hydratedDissimilar.map((item) => ({
+        category: item.category,
+        description: item.description,
+      })),
+    },
+    { token }
+  ).catch((error) => {
+    console.warn("zep.compatibility.context.failed", {
+      traceId,
+      traceparent,
+      message: toErrorMessage(error),
+    });
+    return {
+      context: null,
+      influenceSignals: [],
+      ontology: [],
+    };
+  });
+
   if (hydratedSimilar.length === 0 && hydratedDissimilar.length === 0) {
     return {
       candidate,
@@ -821,6 +884,8 @@ export const checkCompatibilityAction = async (input: {
       evaluation: null,
       message:
         "The item does not relate to any pieces in your wardrobe, but it also does not clash with existing items.",
+      zepContext: zepCompatibilityContext.context,
+      influenceSignals: zepCompatibilityContext.influenceSignals,
     };
   }
 
@@ -837,6 +902,9 @@ export const checkCompatibilityAction = async (input: {
         description: entry.description,
         similarity: entry.similarity,
       })),
+      zepContext: zepCompatibilityContext.context,
+      influenceSignals: zepCompatibilityContext.influenceSignals,
+      ontology: zepCompatibilityContext.ontology,
     }).pipe(Effect.provide(GeminiLive))
   );
 
@@ -845,6 +913,8 @@ export const checkCompatibilityAction = async (input: {
     similarItems: hydratedSimilar,
     dissimilarItems: hydratedDissimilar,
     evaluation,
+    zepContext: zepCompatibilityContext.context,
+    influenceSignals: zepCompatibilityContext.influenceSignals,
   };
 };
 
@@ -902,19 +972,14 @@ export const analyzeSelfieAction = async (input: {
   );
 
   try {
-    await publishJson(
-      "/zep/sync",
-      {
-        type: "profile_update",
-        userId,
-        bio: analysis.bio,
-        skinTone: analysis.skin_tone,
-        hairColor: analysis.hair_color,
-        traceId,
-        traceparent,
-      },
-      traceparent ? { headers: { traceparent } } : undefined
-    );
+    await enqueueZepSyncEvent(token, {
+      type: "profile_update",
+      bio: analysis.bio,
+      skinTone: analysis.skin_tone,
+      hairColor: analysis.hair_color,
+      traceId,
+      traceparent,
+    });
   } catch (error) {
     console.warn("profile.zep.sync.failed", {
       traceId,

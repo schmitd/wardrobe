@@ -12,6 +12,12 @@ const OptionalStringArray = Schema.optionalWith(Schema.Array(Schema.String), {
   exact: true,
 });
 const NullableString = Schema.Union(Schema.String, Schema.Null);
+const OptionalWardrobeItemId = Schema.optionalWith(
+  GenericId.GenericId("wardrobeItems"),
+  {
+    exact: true,
+  },
+);
 const OptionalNullableString = Schema.optionalWith(NullableString, {
   exact: true,
 });
@@ -58,6 +64,25 @@ const StorageMetadataSchema = Schema.Struct({
 
 const SuccessSchema = Schema.Struct({ success: Schema.Boolean });
 const OkSchema = Schema.Struct({ ok: Schema.Boolean });
+const SimilarityContextItemSchema = Schema.Struct({
+  category: NullableString,
+  description: NullableString,
+});
+const SyncEventTypeSchema = Schema.Union(
+  Schema.Literal("wardrobe_add"),
+  Schema.Literal("wardrobe_delete"),
+  Schema.Literal("profile_update"),
+);
+const ZepInfluenceSignalSchema = Schema.Struct({
+  kind: Schema.String,
+  signal: Schema.String,
+  weight: Schema.Number,
+});
+const ZepCompatibilityContextSchema = Schema.Struct({
+  context: NullableString,
+  influenceSignals: Schema.Array(ZepInfluenceSignalSchema),
+  ontology: Schema.Array(Schema.String),
+});
 
 const wardrobeGroup = GroupSpec.make("wardrobe")
   .addFunction(
@@ -256,4 +281,58 @@ const profileGroup = GroupSpec.make("profile")
     }),
   );
 
-export default Spec.make().add(wardrobeGroup).add(storageGroup).add(profileGroup);
+const zepGroup = GroupSpec.make("zep")
+  .addFunction(
+    FunctionSpec.publicMutation({
+      name: "enqueueSyncEvent",
+      args: Schema.Struct({
+        type: SyncEventTypeSchema,
+        itemId: OptionalWardrobeItemId,
+        description: OptionalString,
+        reason: OptionalString,
+        bio: OptionalString,
+        skinTone: OptionalString,
+        hairColor: OptionalString,
+        traceId: OptionalString,
+        traceparent: OptionalString,
+      }),
+      returns: SuccessSchema,
+    }),
+  )
+  .addFunction(
+    FunctionSpec.internalAction({
+      name: "processSyncEvent",
+      args: Schema.Struct({
+        type: SyncEventTypeSchema,
+        userId: Schema.String,
+        itemId: OptionalWardrobeItemId,
+        description: OptionalString,
+        reason: OptionalString,
+        bio: OptionalString,
+        skinTone: OptionalString,
+        hairColor: OptionalString,
+        traceId: OptionalString,
+        traceparent: OptionalString,
+      }),
+      returns: Schema.Null,
+    }),
+  )
+  .addFunction(
+    FunctionSpec.publicAction({
+      name: "getCompatibilityContext",
+      args: Schema.Struct({
+        candidateCategory: OptionalNullableString,
+        candidateDescription: Schema.String,
+        candidateStyleTags: Schema.Array(Schema.String),
+        similarItems: Schema.Array(SimilarityContextItemSchema),
+        dissimilarItems: Schema.Array(SimilarityContextItemSchema),
+      }),
+      returns: ZepCompatibilityContextSchema,
+    }),
+  );
+
+export default Spec.make()
+  .add(wardrobeGroup)
+  .add(storageGroup)
+  .add(profileGroup)
+  .add(zepGroup);

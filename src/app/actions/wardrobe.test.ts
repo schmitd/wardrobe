@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, mock } from "bun:test";
 
 const fetchMutationMock = mock();
 const fetchQueryMock = mock();
+const fetchActionMock = mock();
 const runServerActionMock = mock();
-const publishJsonMock = mock();
 const arcjetProtectMock = mock(async () => ({
   isDenied: () => false,
 }));
@@ -23,6 +23,7 @@ const apiMock = {
     listWardrobeItems: {},
   },
   storage: {
+    registerUpload: {},
     getStorageUrl: {},
     getStorageMetadata: {},
   },
@@ -30,9 +31,14 @@ const apiMock = {
     updateBio: {},
     updateProfileAttributes: {},
   },
+  zep: {
+    enqueueSyncEvent: {},
+    getCompatibilityContext: {},
+  },
 };
 
 mock.module("convex/nextjs", () => ({
+  fetchAction: fetchActionMock,
   fetchMutation: fetchMutationMock,
   fetchQuery: fetchQueryMock,
 }));
@@ -50,10 +56,6 @@ mock.module("@convex/_generated/api", () => ({
 
 mock.module("@/lib/run-effect", () => ({
   runServerAction: runServerActionMock,
-}));
-
-mock.module("@/lib/qstash", () => ({
-  publishJson: publishJsonMock,
 }));
 
 mock.module("@arcjet/next", () => ({
@@ -82,10 +84,10 @@ const setupFetch = () => {
 };
 
 beforeEach(() => {
+  fetchActionMock.mockClear();
   fetchMutationMock.mockClear();
   fetchQueryMock.mockClear();
   runServerActionMock.mockClear();
-  publishJsonMock.mockClear();
   arcjetProtectMock.mockClear();
   setupFetch();
 });
@@ -132,7 +134,9 @@ describe("wardrobe server actions", () => {
     expect(mutation).toBe(api.wardrobe.deleteWardrobeItem);
     expect(args.itemId).toBe("item_1");
     expect(args.reason).toBe("duplicate");
-    expect(publishJsonMock).toHaveBeenCalled();
+    expect(fetchMutationMock.mock.calls.some(([called]) => called === api.zep.enqueueSyncEvent)).toBe(
+      true
+    );
   });
 
   it("updates profile bio via Convex mutation", async () => {
@@ -144,7 +148,9 @@ describe("wardrobe server actions", () => {
     const [mutation, args] = fetchMutationMock.mock.calls[0];
     expect(mutation).toBe(api.profile.updateBio);
     expect(args.bio).toBe("New bio");
-    expect(publishJsonMock).toHaveBeenCalled();
+    expect(fetchMutationMock.mock.calls.some(([called]) => called === api.zep.enqueueSyncEvent)).toBe(
+      true
+    );
   });
 
   it("processes a wardrobe item and enqueues Zep sync", async () => {
@@ -169,7 +175,9 @@ describe("wardrobe server actions", () => {
     const result = await actions.processWardrobeItemAction({ itemId: "item_1" });
 
     expect(result.success).toBe(true);
-    expect(publishJsonMock).toHaveBeenCalled();
+    expect(fetchMutationMock.mock.calls.some(([called]) => called === api.zep.enqueueSyncEvent)).toBe(
+      true
+    );
   });
 
   it("marks analysis error when inference fails", async () => {
@@ -252,6 +260,17 @@ describe("wardrobe server actions", () => {
         best_pairings: [0],
         worst_clashes: [],
       });
+    fetchActionMock.mockResolvedValue({
+      context: "User usually avoids scratchy wool tops.",
+      influenceSignals: [
+        {
+          kind: "preference_negative",
+          signal: "Discarded similar itchy sweater.",
+          weight: 0.85,
+        },
+      ],
+      ontology: ["preference_negative", "lifecycle_event"],
+    });
 
     const result = await actions.checkCompatibilityAction({ storageId: "storage_1" });
 
@@ -259,6 +278,11 @@ describe("wardrobe server actions", () => {
     expect(result.evaluation?.score).toBe(80);
     expect(result.similarItems.length).toBeGreaterThan(0);
     expect(result.dissimilarItems.length).toBeGreaterThan(0);
+    expect(fetchActionMock).toHaveBeenCalledWith(
+      api.zep.getCompatibilityContext,
+      expect.anything(),
+      expect.objectContaining({ token: "token_123" })
+    );
   });
 
   it("analyzes selfie and syncs profile", async () => {
@@ -290,6 +314,8 @@ describe("wardrobe server actions", () => {
       }),
       expect.objectContaining({ token: "token_123" })
     );
-    expect(publishJsonMock).toHaveBeenCalled();
+    expect(fetchMutationMock.mock.calls.some(([called]) => called === api.zep.enqueueSyncEvent)).toBe(
+      true
+    );
   });
 });
