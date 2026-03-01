@@ -24,7 +24,7 @@ import {
 } from "@/server/wardrobeInference";
 
 type UserTier = "free" | "pro";
-type AuthenticatedScope = "upload" | "check";
+type AuthenticatedScope = "upload" | "check" | "inference";
 
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 const ALLOWED_UPLOAD_CONTENT_TYPES = new Set([
@@ -37,17 +37,20 @@ const ALLOWED_UPLOAD_CONTENT_TYPES = new Set([
 ]);
 const UPLOAD_DAILY_LIMIT: Record<UserTier, number> = { free: 5, pro: 20 };
 const CHECK_DAILY_LIMIT: Record<UserTier, number> = { free: 3, pro: 20 };
+const INFERENCE_DAILY_LIMIT: Record<UserTier, number> = { free: 5, pro: 20 };
 const RATE_LIMIT_WINDOW = "1d";
 const RATE_LIMIT_BURST_INTERVAL = "10s";
-const RATE_LIMIT_BURST_MAX: Record<AuthenticatedScope, number> = {
-  upload: 10,
+const RATE_LIMIT_BURST_MAX: Partial<Record<AuthenticatedScope, number>> = {
   check: 1,
+  inference: 1,
 };
 const BOT_BLOCK_MESSAGE = "Request blocked because automated traffic was detected.";
 const UPLOAD_RATE_LIMIT_MESSAGE =
   "Upload limit reached for your plan. Please try again later or upgrade to continue.";
 const CHECK_RATE_LIMIT_MESSAGE =
   "Compatibility check limit reached for your plan. Please try again later or upgrade to continue.";
+const INFERENCE_RATE_LIMIT_MESSAGE =
+  "Analysis limit reached for your plan. Please try again later or upgrade to continue.";
 
 const normalizeContentType = (value?: string | null) => value?.split(";")[0]?.trim().toLowerCase() ?? null;
 
@@ -100,12 +103,16 @@ const createAuthenticatedProtection = (scope: AuthenticatedScope, dailyLimit: nu
         window: RATE_LIMIT_WINDOW,
         characteristics: ["userId"],
       }),
-      slidingWindow({
-        mode: "LIVE",
-        max: RATE_LIMIT_BURST_MAX[scope],
-        interval: RATE_LIMIT_BURST_INTERVAL,
-        characteristics: ["userId"],
-      }),
+      ...(RATE_LIMIT_BURST_MAX[scope]
+        ? [
+            slidingWindow({
+              mode: "LIVE",
+              max: RATE_LIMIT_BURST_MAX[scope],
+              interval: RATE_LIMIT_BURST_INTERVAL,
+              characteristics: ["userId"],
+            }),
+          ]
+        : []),
     ],
   });
 };
@@ -121,6 +128,10 @@ const authenticatedProtection: Record<
   check: {
     free: createAuthenticatedProtection("check", CHECK_DAILY_LIMIT.free),
     pro: createAuthenticatedProtection("check", CHECK_DAILY_LIMIT.pro),
+  },
+  inference: {
+    free: createAuthenticatedProtection("inference", INFERENCE_DAILY_LIMIT.free),
+    pro: createAuthenticatedProtection("inference", INFERENCE_DAILY_LIMIT.pro),
   },
 };
 
@@ -140,7 +151,9 @@ const enforceAuthenticatedProtection = async (input: {
   if (!decision.isDenied()) return;
   if (decision.reason.isBot()) throw new Error(BOT_BLOCK_MESSAGE);
   if (decision.reason.isRateLimit()) {
-    throw new Error(input.scope === "upload" ? UPLOAD_RATE_LIMIT_MESSAGE : CHECK_RATE_LIMIT_MESSAGE);
+    if (input.scope === "upload") throw new Error(UPLOAD_RATE_LIMIT_MESSAGE);
+    if (input.scope === "check") throw new Error(CHECK_RATE_LIMIT_MESSAGE);
+    throw new Error(INFERENCE_RATE_LIMIT_MESSAGE);
   }
 
   throw new Error("Request denied. Please try again.");
@@ -557,8 +570,9 @@ export const seedWardrobeItemFromGuestAction = async (input: {
   traceId?: string;
   traceparent?: string;
 }) => {
-  const { userId, token } = await getConvexAuth();
+  const { userId, token, tier } = await getConvexAuth();
   const { traceId, traceparent } = ensureTraceContext(input);
+  await enforceAuthenticatedProtection({ scope: "inference", tier, userId });
 
   try {
     await fetchMutation(
@@ -722,7 +736,8 @@ export const processWardrobeItemAction = async (input: {
   traceId?: string;
   traceparent?: string;
 }) => {
-  const { userId, token } = await getConvexAuth();
+  const { userId, token, tier } = await getConvexAuth();
+  await enforceAuthenticatedProtection({ scope: "inference", tier, userId });
   const { traceId, traceparent } = ensureTraceContext(input);
 
   console.info("inference.start", { traceId, traceparent, itemId: input.itemId, userId });
