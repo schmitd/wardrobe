@@ -39,7 +39,10 @@ const UPLOAD_DAILY_LIMIT: Record<UserTier, number> = { free: 5, pro: 20 };
 const CHECK_DAILY_LIMIT: Record<UserTier, number> = { free: 3, pro: 20 };
 const RATE_LIMIT_WINDOW = "1d";
 const RATE_LIMIT_BURST_INTERVAL = "10s";
-const RATE_LIMIT_BURST_MAX = 1;
+const RATE_LIMIT_BURST_MAX: Record<AuthenticatedScope, number> = {
+  upload: 10,
+  check: 1,
+};
 const BOT_BLOCK_MESSAGE = "Request blocked because automated traffic was detected.";
 const UPLOAD_RATE_LIMIT_MESSAGE =
   "Upload limit reached for your plan. Please try again later or upgrade to continue.";
@@ -79,7 +82,7 @@ const validateImageUploadInput = (input: {
 const resolveUserTier = (has: Awaited<ReturnType<typeof auth>>["has"]): UserTier =>
   has?.({ permission: "compatibility_check" }) || has?.({ plan: "pro" }) ? "pro" : "free";
 
-const createAuthenticatedProtection = (dailyLimit: number) => {
+const createAuthenticatedProtection = (scope: AuthenticatedScope, dailyLimit: number) => {
   const arcjetKey = process.env.ARCJET_KEY;
   if (!arcjetKey) return null;
 
@@ -99,7 +102,7 @@ const createAuthenticatedProtection = (dailyLimit: number) => {
       }),
       slidingWindow({
         mode: "LIVE",
-        max: RATE_LIMIT_BURST_MAX,
+        max: RATE_LIMIT_BURST_MAX[scope],
         interval: RATE_LIMIT_BURST_INTERVAL,
         characteristics: ["userId"],
       }),
@@ -112,12 +115,12 @@ const authenticatedProtection: Record<
   Record<UserTier, ReturnType<typeof createAuthenticatedProtection>>
 > = {
   upload: {
-    free: createAuthenticatedProtection(UPLOAD_DAILY_LIMIT.free),
-    pro: createAuthenticatedProtection(UPLOAD_DAILY_LIMIT.pro),
+    free: createAuthenticatedProtection("upload", UPLOAD_DAILY_LIMIT.free),
+    pro: createAuthenticatedProtection("upload", UPLOAD_DAILY_LIMIT.pro),
   },
   check: {
-    free: createAuthenticatedProtection(CHECK_DAILY_LIMIT.free),
-    pro: createAuthenticatedProtection(CHECK_DAILY_LIMIT.pro),
+    free: createAuthenticatedProtection("check", CHECK_DAILY_LIMIT.free),
+    pro: createAuthenticatedProtection("check", CHECK_DAILY_LIMIT.pro),
   },
 };
 
