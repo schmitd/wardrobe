@@ -195,7 +195,11 @@ export const setAnalysisStatus = mutation({
     ),
   },
   handler: async (ctx, { itemId, status }) => {
-    await getOwnedItem(ctx, itemId);
+    const userId = await getUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const item = await ctx.db.get(itemId);
+    if (!item || item.userId !== userId) throw new Error("Not found");
 
     await ctx.db.patch(itemId, {
       analysisStatus: status,
@@ -211,7 +215,11 @@ export const applyTags = mutation({
     styleTags: v.array(v.string()),
   },
   handler: async (ctx, { itemId, category, styleTags }) => {
-    await getOwnedItem(ctx, itemId);
+    const userId = await getUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const item = await ctx.db.get(itemId);
+    if (!item || item.userId !== userId) throw new Error("Not found");
 
     await ctx.db.patch(itemId, {
       category: category ?? undefined,
@@ -228,7 +236,11 @@ export const applyDescription = mutation({
     description: v.string(),
   },
   handler: async (ctx, { itemId, category, description }) => {
-    await getOwnedItem(ctx, itemId);
+    const userId = await getUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const item = await ctx.db.get(itemId);
+    if (!item || item.userId !== userId) throw new Error("Not found");
 
     await ctx.db.patch(itemId, {
       category: category ?? undefined,
@@ -244,7 +256,11 @@ export const applyEmbedding = mutation({
     embedding: v.array(v.number()),
   },
   handler: async (ctx, { itemId, embedding }) => {
-    await getOwnedItem(ctx, itemId);
+    const userId = await getUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const item = await ctx.db.get(itemId);
+    if (!item || item.userId !== userId) throw new Error("Not found");
 
     await ctx.db.patch(itemId, {
       embedding,
@@ -262,7 +278,11 @@ export const applyFullAnalysis = mutation({
     embedding: v.array(v.number()),
   },
   handler: async (ctx, { itemId, category, description, styleTags, embedding }) => {
-    await getOwnedItem(ctx, itemId);
+    const userId = await getUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const item = await ctx.db.get(itemId);
+    if (!item || item.userId !== userId) throw new Error("Not found");
 
     await ctx.db.patch(itemId, {
       category: category ?? undefined,
@@ -282,7 +302,11 @@ export const setAnalysisError = mutation({
     error: v.string(),
   },
   handler: async (ctx, { itemId, error }) => {
-    await getOwnedItem(ctx, itemId);
+    const userId = await getUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const item = await ctx.db.get(itemId);
+    if (!item || item.userId !== userId) throw new Error("Not found");
 
     await ctx.db.patch(itemId, {
       analysisStatus: "error",
