@@ -72,6 +72,9 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
         );
 
         try {
+            let successCount = 0;
+            let failureCount = 0;
+
             for (const { upload, tempId, traceId, traceparent } of queue) {
                 try {
                     const result = await createWardrobeItemAction({
@@ -165,22 +168,34 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                                 error: 'Processing stream ended before completion',
                             });
                         }
+                        failureCount += 1;
                         continue;
                     }
+
+                    successCount += 1;
                 } catch (error) {
                     console.error('wardrobe.create.failed', error);
                     onOptimisticUpdate(tempId, {
                         status: 'error',
                         error: error instanceof Error ? error.message : 'Failed to add item',
                     });
+                    failureCount += 1;
                 }
             }
 
-            setStatus(`Processed ${uploads.length} item${uploads.length === 1 ? '' : 's'}.`);
+            if (failureCount > 0) {
+                setStatus(
+                    `Processed ${successCount}/${uploads.length} item${uploads.length === 1 ? '' : 's'} (${failureCount} failed).`
+                );
+            } else {
+                setStatus(`Processed ${uploads.length} item${uploads.length === 1 ? '' : 's'}.`);
+            }
             setTimeout(() => setStatus(null), 3000);
         } catch (e) {
             console.error("wardrobe.batch.failed", e);
-            setStatus("Error: An unexpected error occurred.");
+            setStatus(
+                `Error: ${e instanceof Error ? e.message : 'Unexpected upload failure. Please try again.'}`
+            );
         }
         setIsProcessing(false);
     };
