@@ -30,6 +30,24 @@ const loadImage = (src: string) =>
     img.src = src;
   });
 
+const DEFAULT_MAX_SIZE = 1024;
+const MAX_CANVAS_SIZE = 8192;
+const DEFAULT_QUALITY = 0.82;
+
+const clampNumber = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const sanitizeMaxSize = (value?: number) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_MAX_SIZE;
+  return Math.max(1, Math.round(clampNumber(parsed, 1, MAX_CANVAS_SIZE)));
+};
+
+const sanitizeQuality = (value?: number) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return DEFAULT_QUALITY;
+  return clampNumber(parsed, 0, 1);
+};
+
 export const downscaleToJpegDataUrl = async (
   file: File,
   opts?: { maxSize?: number; quality?: number }
