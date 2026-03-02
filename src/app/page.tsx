@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SignInButton, SignedOut, useAuth } from '@clerk/nextjs';
 import { Plus, Sparkles } from 'lucide-react';
 import { useQuery } from 'convex/react';
@@ -31,7 +31,8 @@ export default function Home() {
   const getUploadUrl = useMutation(api.wardrobe.getUploadUrl);
   const [optimisticItems, setOptimisticItems] = useState<OptimisticWardrobeItem[]>([]);
   const [importStatus, setImportStatus] = useState<string | null>(null);
-  const hasStartedGuestImport = useRef(false);
+  const importedSnapshotRef = useRef<number | null>(null);
+  const isImportingSnapshotRef = useRef(false);
 
   const { filteredOptimisticItems, hiddenServerIds, removedOptimisticItems } = useMemo(() => {
     if (!items) {
@@ -73,14 +74,21 @@ export default function Home() {
     setOptimisticItems((prev) => prev.filter((item) => !removedIds.has(item.tempId)));
   }, [removedOptimisticItems]);
 
-  useEffect(() => {
-    if (!isSignedIn) return;
-    if (hasStartedGuestImport.current) return;
+  const patchOptimisticItem = useCallback((tempId: string, patch: Partial<OptimisticWardrobeItem>) => {
+    setOptimisticItems((prev) =>
+      prev.map((entry) => (entry.tempId === tempId ? { ...entry, ...patch } : entry))
+    );
+  }, []);
+
+  const importGuestSnapshot = useCallback(async () => {
+    if (isImportingSnapshotRef.current) return;
 
     const snapshot = loadGuestSnapshot();
     if (!snapshot || snapshot.items.length === 0) return;
+    if (importedSnapshotRef.current === snapshot.createdAt) return;
 
-    hasStartedGuestImport.current = true;
+    importedSnapshotRef.current = snapshot.createdAt;
+    isImportingSnapshotRef.current = true;
 
     const queue = snapshot.items.map((item) => ({
       item,
@@ -102,23 +110,20 @@ export default function Home() {
       ...prev,
     ]);
 
-    const run = async () => {
-      setImportStatus(`Importing ${queue.length} item${queue.length === 1 ? '' : 's'} from guest demo...`);
+    setImportStatus(`Importing ${queue.length} item${queue.length === 1 ? '' : 's'} from guest demo...`);
 
-      // Preserve the guest bio as the signed-in profile draft.
-      try {
-        const trace = createTraceContext();
-        await updateProfileBioAction({ bio: snapshot.bio, ...trace });
-      } catch {
-        // Non-blocking; the user can still edit/save on Profile.
-      }
+    // Preserve the guest bio as the signed-in profile draft.
+    try {
+      const trace = createTraceContext();
+      await updateProfileBioAction({ bio: snapshot.bio, ...trace });
+    } catch {
+      // Non-blocking; the user can still edit/save on Profile.
+    }
 
+    try {
       for (const { item, tempId, traceId, traceparent } of queue) {
         try {
-          setOptimisticItems((prev) =>
-            prev.map((entry) => (entry.tempId === tempId ? { ...entry, status: 'processing' } : entry))
-          );
-
+          patchOptimisticItem(tempId, { status: 'processing' });
           let createdItemId = item.createdItemId;
 
           if (!createdItemId) {
@@ -140,14 +145,7 @@ export default function Home() {
 
             createdItemId = created.id;
             updateGuestSnapshotItem(item.id, { createdItemId });
-
-            setOptimisticItems((prev) =>
-              prev.map((entry) =>
-                entry.tempId === tempId
-                  ? { ...entry, status: 'processing', serverId: createdItemId }
-                  : entry
-              )
-            );
+            patchOptimisticItem(tempId, { status: 'processing', serverId: createdItemId });
           }
 
           if (!createdItemId) {
@@ -164,13 +162,10 @@ export default function Home() {
           });
 
           if (!seeded.success) {
-            setOptimisticItems((prev) =>
-              prev.map((entry) =>
-                entry.tempId === tempId
-                  ? { ...entry, status: 'error', error: seeded.error ?? 'Processing failed' }
-                  : entry
-              )
-            );
+            patchOptimisticItem(tempId, {
+              status: 'error',
+              error: seeded.error ?? 'Processing failed',
+            });
             continue;
           }
 
@@ -178,26 +173,22 @@ export default function Home() {
           // doesn't re-import duplicates.
           removeGuestSnapshotItem(item.id);
         } catch (error) {
-          setOptimisticItems((prev) =>
-            prev.map((entry) =>
-              entry.tempId === tempId
-                ? {
-                    ...entry,
-                    status: 'error',
-                    error: error instanceof Error ? error.message : 'Import failed',
-                  }
-                : entry
-            )
-          );
+          patchOptimisticItem(tempId, {
+            status: 'error',
+            error: error instanceof Error ? error.message : 'Import failed',
+          });
         }
       }
-
+    } finally {
       setImportStatus(null);
-    };
+      isImportingSnapshotRef.current = false;
+    }
+  }, [getUploadUrl, patchOptimisticItem]);
 
-    void run();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSignedIn]);
+  useEffect(() => {
+    if (!isSignedIn) return;
+    void importGuestSnapshot();
+  }, [importGuestSnapshot, isSignedIn]);
 
   const handleOptimisticAdd = (newItems: OptimisticWardrobeItem[]) => {
     setOptimisticItems((prev) => [...newItems, ...prev]);
