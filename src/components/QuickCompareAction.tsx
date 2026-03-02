@@ -1,10 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { useMutation } from 'convex/react';
 import { Loader2, Sparkles, Ticket } from 'lucide-react';
-import { api } from '@convex/_generated/api';
-import { checkCompatibilityAction } from '@/app/actions/wardrobe';
+import { checkCompatibilityAction, getUploadUrlAction } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -15,7 +13,6 @@ interface QuickCompareActionProps {
 }
 
 export default function QuickCompareAction({ inputId }: QuickCompareActionProps) {
-  const getUploadUrl = useMutation(api.wardrobe.getUploadUrl);
   const previewUrlRef = useRef<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isChecking, setIsChecking] = useState(false);
@@ -56,8 +53,12 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
     setStatus('Comparing this piece with your closet...');
 
     try {
-      const uploadUrl = await getUploadUrl();
-      const uploadResponse = await fetch(uploadUrl, {
+      const uploadTarget = await getUploadUrlAction({
+        fileName: file.name,
+        contentType: file.type,
+        fileSizeBytes: file.size,
+      });
+      const uploadResponse = await fetch(uploadTarget.uploadUrl, {
         method: 'POST',
         body: file,
       });

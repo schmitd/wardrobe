@@ -4,11 +4,18 @@ import { Effect, Schedule } from "effect";
 import { SchemaType, type Schema } from "@google/generative-ai";
 import type { Id } from "@convex/_generated/dataModel";
 import { auth } from "@clerk/nextjs/server";
-import { fetchMutation, fetchQuery } from "convex/nextjs";
+import arcjet, { detectBot, fixedWindow, request, slidingWindow } from "@arcjet/next";
+import { fetchAction, fetchMutation, fetchQuery } from "convex/nextjs";
 import { api } from "@convex/_generated/api";
 
+import {
+  DESCRIPTION_MAX_OUTPUT_TOKENS,
+  ITEM_DESCRIPTION_WORD_LIMIT,
+  STYLE_LABEL_MAX_OUTPUT_TOKENS,
+  sanitizeStyleTags,
+  truncateWords,
+} from "@/lib/inferenceOutputGuards";
 import { runServerAction } from "@/lib/run-effect";
-import { publishJson } from "@/lib/qstash";
 import { ensureTraceContext } from "@/lib/trace";
 import { GeminiLive, GeminiService } from "@/services/GeminiService";
 import {
@@ -16,8 +23,144 @@ import {
   USER_SAFE_INFERENCE_ERROR,
 } from "@/server/wardrobeInference";
 
+type UserTier = "free" | "pro";
+type AuthenticatedScope = "upload" | "check" | "inference";
+
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+const ALLOWED_UPLOAD_CONTENT_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/heic",
+  "image/heif",
+]);
+const UPLOAD_DAILY_LIMIT: Record<UserTier, number> = { free: 5, pro: 20 };
+const CHECK_DAILY_LIMIT: Record<UserTier, number> = { free: 3, pro: 20 };
+const INFERENCE_DAILY_LIMIT: Record<UserTier, number> = { free: 5, pro: 20 };
+const RATE_LIMIT_WINDOW = "1d";
+const RATE_LIMIT_BURST_INTERVAL = "10s";
+const RATE_LIMIT_BURST_MAX: Partial<Record<AuthenticatedScope, number>> = {
+  check: 1,
+  inference: 1,
+};
+const BOT_BLOCK_MESSAGE = "Request blocked because automated traffic was detected.";
+const UPLOAD_RATE_LIMIT_MESSAGE =
+  "Upload limit reached for your plan. Please try again later or upgrade to continue.";
+const CHECK_RATE_LIMIT_MESSAGE =
+  "Compatibility check limit reached for your plan. Please try again later or upgrade to continue.";
+const INFERENCE_RATE_LIMIT_MESSAGE =
+  "Analysis limit reached for your plan. Please try again later or upgrade to continue.";
+
+const normalizeContentType = (value?: string | null) => value?.split(";")[0]?.trim().toLowerCase() ?? null;
+
+const validateImageUploadInput = (input: {
+  fileName?: string;
+  contentType?: string;
+  fileSizeBytes?: number;
+}) => {
+  if (input.fileName !== undefined && input.fileName.trim().length === 0) {
+    throw new Error("Missing file name.");
+  }
+
+  const normalizedContentType = normalizeContentType(input.contentType);
+  if (!normalizedContentType) {
+    throw new Error("Missing file content type.");
+  }
+
+  if (!ALLOWED_UPLOAD_CONTENT_TYPES.has(normalizedContentType)) {
+    throw new Error("Only JPEG, PNG, WEBP, GIF, HEIC, and HEIF images are allowed.");
+  }
+
+  if (typeof input.fileSizeBytes === "number") {
+    if (!Number.isFinite(input.fileSizeBytes) || input.fileSizeBytes <= 0) {
+      throw new Error("Invalid file size.");
+    }
+    if (input.fileSizeBytes > MAX_UPLOAD_BYTES) {
+      throw new Error("Image is too large. Maximum upload size is 4 MB.");
+    }
+  }
+};
+
+const resolveUserTier = (has: Awaited<ReturnType<typeof auth>>["has"]): UserTier =>
+  has?.({ permission: "compatibility_check" }) || has?.({ plan: "pro" }) ? "pro" : "free";
+
+const createAuthenticatedProtection = (scope: AuthenticatedScope, dailyLimit: number) => {
+  const arcjetKey = process.env.ARCJET_KEY;
+  if (!arcjetKey) return null;
+
+  return arcjet({
+    key: arcjetKey,
+    characteristics: ["userId"],
+    rules: [
+      detectBot({
+        mode: "LIVE",
+        allow: [],
+      }),
+      fixedWindow({
+        mode: "LIVE",
+        max: dailyLimit,
+        window: RATE_LIMIT_WINDOW,
+        characteristics: ["userId"],
+      }),
+      ...(RATE_LIMIT_BURST_MAX[scope]
+        ? [
+            slidingWindow({
+              mode: "LIVE",
+              max: RATE_LIMIT_BURST_MAX[scope],
+              interval: RATE_LIMIT_BURST_INTERVAL,
+              characteristics: ["userId"],
+            }),
+          ]
+        : []),
+    ],
+  });
+};
+
+const authenticatedProtection: Record<
+  AuthenticatedScope,
+  Record<UserTier, ReturnType<typeof createAuthenticatedProtection>>
+> = {
+  upload: {
+    free: createAuthenticatedProtection("upload", UPLOAD_DAILY_LIMIT.free),
+    pro: createAuthenticatedProtection("upload", UPLOAD_DAILY_LIMIT.pro),
+  },
+  check: {
+    free: createAuthenticatedProtection("check", CHECK_DAILY_LIMIT.free),
+    pro: createAuthenticatedProtection("check", CHECK_DAILY_LIMIT.pro),
+  },
+  inference: {
+    free: createAuthenticatedProtection("inference", INFERENCE_DAILY_LIMIT.free),
+    pro: createAuthenticatedProtection("inference", INFERENCE_DAILY_LIMIT.pro),
+  },
+};
+
+const enforceAuthenticatedProtection = async (input: {
+  scope: AuthenticatedScope;
+  tier: UserTier;
+  userId: string;
+}) => {
+  const protection = authenticatedProtection[input.scope][input.tier];
+  if (!protection) {
+    throw new Error("Security checks are unavailable right now. Please try again.");
+  }
+
+  const req = await request();
+  const decision = await protection.protect(req, { userId: input.userId });
+
+  if (!decision.isDenied()) return;
+  if (decision.reason.isBot()) throw new Error(BOT_BLOCK_MESSAGE);
+  if (decision.reason.isRateLimit()) {
+    if (input.scope === "upload") throw new Error(UPLOAD_RATE_LIMIT_MESSAGE);
+    if (input.scope === "check") throw new Error(CHECK_RATE_LIMIT_MESSAGE);
+    throw new Error(INFERENCE_RATE_LIMIT_MESSAGE);
+  }
+
+  throw new Error("Request denied. Please try again.");
+};
+
 const getConvexAuth = async () => {
-  const { userId, getToken } = await auth();
+  const { userId, getToken, has } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
   const token = await getToken({
@@ -25,7 +168,7 @@ const getConvexAuth = async () => {
   });
   if (!token) throw new Error("Missing Convex token");
 
-  return { userId, token };
+  return { userId, token, tier: resolveUserTier(has) };
 };
 
 const fetchImageBase64 = async (imageUrl: string) => {
@@ -50,6 +193,66 @@ const withRetries = <A, E, R>(effect: Effect.Effect<A, E, R>, attempts = 3) =>
 const toErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
+const enqueueZepSyncEvent = async (
+  token: string,
+  event:
+    | {
+        type: "wardrobe_add";
+        itemId: Id<"wardrobeItems">;
+        traceId?: string;
+        traceparent?: string;
+      }
+    | {
+        type: "wardrobe_delete";
+        description: string;
+        reason: string;
+        traceId?: string;
+        traceparent?: string;
+      }
+    | {
+        type: "profile_update";
+        bio?: string;
+        skinTone?: string;
+        hairColor?: string;
+        traceId?: string;
+        traceparent?: string;
+      }
+) => {
+  await fetchMutation(api.zep.enqueueSyncEvent, event, { token });
+};
+
+const GUEST_BATCH_UPLOAD_LIMIT = 2;
+const GUEST_BATCH_LIMIT_WINDOW = "7d";
+const GUEST_AUTH_PROMPT_MESSAGE =
+  "You have reached the guest upload limit (2 batches per week). Please sign in or create an account to continue.";
+const GUEST_BOT_BLOCK_MESSAGE =
+  "Upload blocked because automated traffic was detected. Please sign in or create an account to continue.";
+
+const guestBatchProtection = (() => {
+  const arcjetKey = process.env.ARCJET_KEY;
+  if (!arcjetKey) return null;
+
+  return arcjet({
+    key: arcjetKey,
+    rules: [
+      detectBot({
+        mode: "LIVE",
+        allow: [],
+      }),
+      fixedWindow({
+        mode: "LIVE",
+        max: GUEST_BATCH_UPLOAD_LIMIT,
+        window: GUEST_BATCH_LIMIT_WINDOW,
+        characteristics: [
+          "ip.src",
+          'http.request.headers["user-agent"]',
+          'http.request.headers["accept-language"]',
+        ],
+      }),
+    ],
+  });
+})();
+
 const analyzeImageFull = (base64: string) =>
   Effect.gen(function* () {
     const gemini = yield* GeminiService;
@@ -66,8 +269,11 @@ const analyzeImageFull = (base64: string) =>
       required: ["category", "description", "style_tags"],
     };
 
-    const prompt =
-      "Analyze this clothing item. Extract 3-5 style tags, category, and description. Return JSON with keys in this order: style_tags, category, description.";
+    const prompt = `Analyze this clothing item.
+- Return JSON with keys in this exact order: style_tags, category, description.
+- style_tags: provide 3-5 concise labels, each at most 3 words.
+- category: short noun phrase.
+- description: at most ${ITEM_DESCRIPTION_WORD_LIMIT} words.`;
 
     const result = yield* gemini.generateContent("gemini-2.0-flash-lite", {
       contents: [
@@ -82,13 +288,20 @@ const analyzeImageFull = (base64: string) =>
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: schema,
+        maxOutputTokens: DESCRIPTION_MAX_OUTPUT_TOKENS + STYLE_LABEL_MAX_OUTPUT_TOKENS,
       },
     });
 
-    return yield* parseJson<{ category: string; description: string; style_tags: string[] }>(
+    const parsed = yield* parseJson<{ category: string; description: string; style_tags: string[] }>(
       result.response.text(),
       "analyzeImageFull"
     );
+
+    return {
+      category: truncateWords(parsed.category, 6),
+      description: truncateWords(parsed.description, ITEM_DESCRIPTION_WORD_LIMIT),
+      style_tags: sanitizeStyleTags(parsed.style_tags),
+    };
   }).pipe(withRetries);
 
 const generateStyleQuery = (description: string, styleTags: string[]) =>
@@ -113,6 +326,9 @@ const evaluateCompatibility = (input: {
   candidate: { category: string; description: string; style_tags: string[] };
   similarItems: { category: string | null; description: string | null; similarity: number }[];
   dissimilarItems: { category: string | null; description: string | null; similarity: number }[];
+  zepContext?: string | null;
+  influenceSignals?: readonly { kind: string; signal: string; weight: number }[];
+  ontology?: readonly string[];
 }) =>
   Effect.gen(function* () {
     const gemini = yield* GeminiService;
@@ -161,8 +377,27 @@ ${input.dissimilarItems.length > 0
       .join("\n")}`
   : ""}
 
+${input.zepContext
+  ? `\nUSER MEMORY CONTEXT (Historical Preferences & Events):\n${input.zepContext}`
+  : ""}
+
+${input.influenceSignals && input.influenceSignals.length > 0
+  ? `\nINFLUENCING SIGNALS:\n${input.influenceSignals
+      .map(
+        (signal, i) =>
+          `${i + 1}. [${signal.kind}] ${signal.signal} (weight: ${Math.round(signal.weight * 100)}%)`
+      )
+      .join("\n")}`
+  : ""}
+
+${input.ontology && input.ontology.length > 0
+  ? `\nSIGNAL ONTOLOGY:\n${input.ontology.map((entry) => `- ${entry}`).join("\n")}`
+  : ""}
+
 CRITICAL EVALUATION GUIDELINES:
 - Focus ONLY on how well this candidate fits with the EXISTING WARDROBE ITEMS listed above
+- Weigh memory context as user preference evidence, especially negative history (dislikes/discards/returns)
+- Do not treat memory context as absolute rules; balance it with similarity evidence from current wardrobe items
 - Do NOT evaluate the candidate item's internal consistency or standalone quality
 - Be CRITICAL and HONEST - most items should score 40-70%, not 90%+
 - Score 90-100%: Perfect match, complements multiple wardrobe items, fills a gap
@@ -264,7 +499,7 @@ ${items
     return yield* parseJson<{ bio: string }>(result.response.text(), "generateClosetBio");
   }).pipe(withRetries);
 
-const cosineSimilarity = (a: number[], b: number[]) => {
+const cosineSimilarity = (a: readonly number[], b: readonly number[]) => {
   let dot = 0;
   let normA = 0;
   let normB = 0;
@@ -284,11 +519,17 @@ export const createWardrobeItemAction = async (input: {
   storageId: string;
   clientFileName?: string;
   contentType?: string;
+  fileSizeBytes?: number;
   traceId?: string;
   traceparent?: string;
 }) => {
   const { userId, token } = await getConvexAuth();
   const { traceId, traceparent } = ensureTraceContext(input);
+  validateImageUploadInput({
+    fileName: input.clientFileName,
+    contentType: input.contentType,
+    fileSizeBytes: input.fileSizeBytes,
+  });
 
   const result = await fetchMutation(
     api.wardrobe.createWardrobeItem,
@@ -306,6 +547,21 @@ export const createWardrobeItemAction = async (input: {
   return result;
 };
 
+export const getUploadUrlAction = async (input: {
+  fileName: string;
+  contentType: string;
+  fileSizeBytes: number;
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { userId, token, tier } = await getConvexAuth();
+  validateImageUploadInput(input);
+  await enforceAuthenticatedProtection({ scope: "upload", tier, userId });
+
+  const uploadUrl = await fetchMutation(api.wardrobe.getUploadUrl, {}, { token });
+  return { uploadUrl };
+};
+
 export const seedWardrobeItemFromGuestAction = async (input: {
   itemId: string;
   category?: string | null;
@@ -314,8 +570,9 @@ export const seedWardrobeItemFromGuestAction = async (input: {
   traceId?: string;
   traceparent?: string;
 }) => {
-  const { userId, token } = await getConvexAuth();
+  const { userId, token, tier } = await getConvexAuth();
   const { traceId, traceparent } = ensureTraceContext(input);
+  await enforceAuthenticatedProtection({ scope: "inference", tier, userId });
 
   try {
     await fetchMutation(
@@ -366,17 +623,12 @@ export const seedWardrobeItemFromGuestAction = async (input: {
     );
 
     try {
-      await publishJson(
-        "/zep/sync",
-        {
-          type: "wardrobe_add",
-          userId,
-          itemId: input.itemId,
-          traceId,
-          traceparent,
-        },
-        traceparent ? { headers: { traceparent } } : undefined
-      );
+      await enqueueZepSyncEvent(token, {
+        type: "wardrobe_add",
+        itemId: input.itemId as Id<"wardrobeItems">,
+        traceId,
+        traceparent,
+      });
     } catch (error) {
       console.warn("zep.sync.enqueue.failed", {
         traceId,
@@ -430,18 +682,13 @@ export const deleteWardrobeItemAction = async (input: {
   );
 
   try {
-    await publishJson(
-      "/zep/sync",
-      {
-        type: "wardrobe_delete",
-        userId,
-        description: item?.description ?? item?.category ?? "Unknown item",
-        reason: input.reason,
-        traceId,
-        traceparent,
-      },
-      traceparent ? { headers: { traceparent } } : undefined
-    );
+    await enqueueZepSyncEvent(token, {
+      type: "wardrobe_delete",
+      description: item?.description ?? item?.category ?? "Unknown item",
+      reason: input.reason,
+      traceId,
+      traceparent,
+    });
   } catch (error) {
     console.warn("zep.sync.delete.failed", {
       traceId,
@@ -466,17 +713,12 @@ export const updateProfileBioAction = async (input: {
   await fetchMutation(api.profile.updateBio, { bio: input.bio }, { token });
 
   try {
-    await publishJson(
-      "/zep/sync",
-      {
-        type: "profile_update",
-        userId,
-        bio: input.bio,
-        traceId,
-        traceparent,
-      },
-      traceparent ? { headers: { traceparent } } : undefined
-    );
+    await enqueueZepSyncEvent(token, {
+      type: "profile_update",
+      bio: input.bio,
+      traceId,
+      traceparent,
+    });
   } catch (error) {
     console.warn("profile.zep.sync.failed", {
       traceId,
@@ -494,7 +736,8 @@ export const processWardrobeItemAction = async (input: {
   traceId?: string;
   traceparent?: string;
 }) => {
-  const { userId, token } = await getConvexAuth();
+  const { userId, token, tier } = await getConvexAuth();
+  await enforceAuthenticatedProtection({ scope: "inference", tier, userId });
   const { traceId, traceparent } = ensureTraceContext(input);
 
   console.info("inference.start", { traceId, traceparent, itemId: input.itemId, userId });
@@ -526,10 +769,11 @@ export const checkCompatibilityAction = async (input: {
   traceId?: string;
   traceparent?: string;
 }) => {
-  const { userId, token } = await getConvexAuth();
+  const { userId, token, tier } = await getConvexAuth();
   const { traceId, traceparent } = ensureTraceContext(input);
 
   console.info("compatibility.start", { traceId, traceparent, userId });
+  await enforceAuthenticatedProtection({ scope: "check", tier, userId });
 
   // Quick-compare uploads aren't attached to a wardrobe item, so we explicitly
   // register them to authorize retrieval via `storage.getStorageUrl`.
@@ -538,6 +782,17 @@ export const checkCompatibilityAction = async (input: {
     { storageId: input.storageId as Id<"_storage">, purpose: "quick_compare" },
     { token }
   );
+
+  const uploadMetadata = await fetchQuery(
+    api.storage.getStorageMetadata,
+    { storageId: input.storageId as Id<"_storage"> },
+    { token }
+  );
+  validateImageUploadInput({
+    fileName: "quick-compare",
+    contentType: uploadMetadata?.contentType ?? undefined,
+    fileSizeBytes: uploadMetadata?.size,
+  });
 
   const imageUrl = await fetchQuery(
     api.storage.getStorageUrl,
@@ -610,6 +865,35 @@ export const checkCompatibilityAction = async (input: {
     .map(hydrate)
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
+  const zepCompatibilityContext = await fetchAction(
+    api.zep.getCompatibilityContext,
+    {
+      candidateCategory: candidate.category ?? null,
+      candidateDescription: candidate.description,
+      candidateStyleTags: candidate.style_tags,
+      similarItems: hydratedSimilar.map((item) => ({
+        category: item.category,
+        description: item.description,
+      })),
+      dissimilarItems: hydratedDissimilar.map((item) => ({
+        category: item.category,
+        description: item.description,
+      })),
+    },
+    { token }
+  ).catch((error) => {
+    console.warn("zep.compatibility.context.failed", {
+      traceId,
+      traceparent,
+      message: toErrorMessage(error),
+    });
+    return {
+      context: null,
+      influenceSignals: [],
+      ontology: [],
+    };
+  });
+
   if (hydratedSimilar.length === 0 && hydratedDissimilar.length === 0) {
     return {
       candidate,
@@ -618,6 +902,8 @@ export const checkCompatibilityAction = async (input: {
       evaluation: null,
       message:
         "The item does not relate to any pieces in your wardrobe, but it also does not clash with existing items.",
+      zepContext: zepCompatibilityContext.context,
+      influenceSignals: zepCompatibilityContext.influenceSignals,
     };
   }
 
@@ -634,6 +920,9 @@ export const checkCompatibilityAction = async (input: {
         description: entry.description,
         similarity: entry.similarity,
       })),
+      zepContext: zepCompatibilityContext.context,
+      influenceSignals: zepCompatibilityContext.influenceSignals,
+      ontology: zepCompatibilityContext.ontology,
     }).pipe(Effect.provide(GeminiLive))
   );
 
@@ -642,6 +931,8 @@ export const checkCompatibilityAction = async (input: {
     similarItems: hydratedSimilar,
     dissimilarItems: hydratedDissimilar,
     evaluation,
+    zepContext: zepCompatibilityContext.context,
+    influenceSignals: zepCompatibilityContext.influenceSignals,
   };
 };
 
@@ -660,6 +951,17 @@ export const analyzeSelfieAction = async (input: {
     { storageId: input.storageId as Id<"_storage">, purpose: "selfie" },
     { token }
   );
+
+  const uploadMetadata = await fetchQuery(
+    api.storage.getStorageMetadata,
+    { storageId: input.storageId as Id<"_storage"> },
+    { token }
+  );
+  validateImageUploadInput({
+    fileName: "selfie",
+    contentType: uploadMetadata?.contentType ?? undefined,
+    fileSizeBytes: uploadMetadata?.size,
+  });
 
   const imageUrl = await fetchQuery(
     api.storage.getStorageUrl,
@@ -688,19 +990,14 @@ export const analyzeSelfieAction = async (input: {
   );
 
   try {
-    await publishJson(
-      "/zep/sync",
-      {
-        type: "profile_update",
-        userId,
-        bio: analysis.bio,
-        skinTone: analysis.skin_tone,
-        hairColor: analysis.hair_color,
-        traceId,
-        traceparent,
-      },
-      traceparent ? { headers: { traceparent } } : undefined
-    );
+    await enqueueZepSyncEvent(token, {
+      type: "profile_update",
+      bio: analysis.bio,
+      skinTone: analysis.skin_tone,
+      hairColor: analysis.hair_color,
+      traceId,
+      traceparent,
+    });
   } catch (error) {
     console.warn("profile.zep.sync.failed", {
       traceId,
@@ -725,6 +1022,26 @@ export const analyzeGuestBatchAction = async (input: {
 
   if (cappedItems.length === 0) {
     throw new Error("No images provided");
+  }
+
+  if (!guestBatchProtection) {
+    console.error("guest.demo.arcjet.missing_key", { traceId, traceparent });
+    throw new Error("Guest uploads are unavailable right now. Please sign in or create an account.");
+  }
+
+  const req = await request();
+  const decision = await guestBatchProtection.protect(req);
+
+  if (decision.isDenied()) {
+    if (decision.reason.isBot()) {
+      throw new Error(GUEST_BOT_BLOCK_MESSAGE);
+    }
+
+    if (decision.reason.isRateLimit()) {
+      throw new Error(GUEST_AUTH_PROMPT_MESSAGE);
+    }
+
+    throw new Error("Guest upload request blocked. Please sign in or create an account.");
   }
 
   const analyzed = [];

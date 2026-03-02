@@ -78,6 +78,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                         storageId: upload.storageId,
                         clientFileName: upload.file.name,
                         contentType: upload.file.type,
+                        fileSizeBytes: upload.file.size,
                         traceId,
                         traceparent,
                     });

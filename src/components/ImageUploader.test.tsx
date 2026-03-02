@@ -18,15 +18,10 @@ declare module "bun:test" {
 }
 
 // extend expect
-expect.extend(matchers as any);
+expect.extend(matchers as unknown as Parameters<typeof expect.extend>[0]);
 
-// Mock Convex hooks + api
-mock.module('convex/react', () => ({
-    useMutation: () => async () => 'https://fake-upload-url.com'
-}));
-
-mock.module('@convex/_generated/api', () => ({
-    api: { wardrobe: { getUploadUrl: {} } }
+mock.module('@/app/actions/wardrobe', () => ({
+    getUploadUrlAction: async () => ({ uploadUrl: 'https://fake-upload-url.com' }),
 }));
 
 // Mock fetch

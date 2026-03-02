@@ -1,9 +1,8 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { useMutation } from 'convex/react';
-import { api } from '@convex/_generated/api';
 import { CloudUpload, AlertCircle } from 'lucide-react';
+import { getUploadUrlAction } from '@/app/actions/wardrobe';
 
 export interface UploadedFile {
     storageId: string;
@@ -32,7 +31,6 @@ export default function ImageUploader({
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const getUploadUrl = useMutation(api.wardrobe.getUploadUrl);
 
     // Determine label based on allowMultiple if not explicitly provided
     const displayLabel = label || (allowMultiple ? "Upload Images" : "Upload Image");
@@ -79,8 +77,12 @@ export default function ImageUploader({
                     continue;
                 }
 
-                const uploadUrl = await getUploadUrl();
-                const uploadResponse = await fetch(uploadUrl, {
+                const uploadTarget = await getUploadUrlAction({
+                    fileName: file.name,
+                    contentType: file.type,
+                    fileSizeBytes: file.size,
+                });
+                const uploadResponse = await fetch(uploadTarget.uploadUrl, {
                     method: 'POST',
                     body: file,
                 });
