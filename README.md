@@ -41,15 +41,14 @@ A Single Page Application (SPA) that acts as a "Virtual Wardrobe Stylist". The a
     CLERK_JWT_ISSUER_DOMAIN=your_clerk_jwt_issuer_domain
     CLERK_JWT_AUDIENCE=convex
     CLERK_JWT_TEMPLATE=convex
-    QSTASH_TOKEN=your_qstash_token
-    QSTASH_CURRENT_SIGNING_KEY=your_qstash_current_signing_key
-    QSTASH_NEXT_SIGNING_KEY=your_qstash_next_signing_key
+    WARDROBE_SYNC_SHARED_SECRET=your_sync_shared_secret
     ZEP_KEY=your_zep_key
     AXIOM_TOKEN=your_axiom_token
     AXIOM_DATASET=your_axiom_dataset
     ```
     Notes:
-    - `CONVEX_SITE_URL` should be the public `.convex.site` domain so QStash can call the HTTP actions.
+    - `CONVEX_SITE_URL` should be the public `.convex.site` domain so Next.js server actions can call Convex HTTP actions.
+    - Set `WARDROBE_SYNC_SHARED_SECRET` in both the Next.js app and Convex deployment to authenticate `/zep/sync` calls.
     - The Clerk JWT template must include the `aud` claim matching `CLERK_JWT_AUDIENCE` (default `convex`).
     - Server actions export OTLP telemetry to Axiom via Effect runtime; enable Convex log streaming separately if you want Convex logs in Axiom.
 5.  **Run the app**:
