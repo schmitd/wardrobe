@@ -23,9 +23,12 @@ const toErrorMessage = (error: unknown) =>
 
 const shouldRetryStatus = (status: number) => status === 429 || status >= 500;
 
-const getSharedSecretHeader = () => {
+const getSharedSecretHeader = (): Record<string, string> => {
   const secret = process.env.WARDROBE_SYNC_SHARED_SECRET;
-  return secret ? { "x-wardrobe-sync-secret": secret } : {};
+  if (!secret) {
+    return {};
+  }
+  return { "x-wardrobe-sync-secret": secret };
 };
 
 export const publishJson = async <T>(
