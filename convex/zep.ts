@@ -82,6 +82,16 @@ export const updateProfileMemory = async (
     hair_color: profile.hairColor ?? undefined,
   };
 
+  const existingUser = await client.user.get(userId);
+  const previousMetadata =
+    typeof existingUser === "object" &&
+    existingUser !== null &&
+    "metadata" in existingUser &&
+    typeof existingUser.metadata === "object" &&
+    existingUser.metadata !== null
+      ? { ...existingUser.metadata }
+      : {};
+
   await client.user.update(userId, {
     metadata: {
       ...metadata,
@@ -101,6 +111,20 @@ export const updateProfileMemory = async (
       ],
     });
   } catch (error) {
+    try {
+      await client.user.update(userId, {
+        metadata: {
+          ...previousMetadata,
+        },
+      });
+    } catch (rollbackError) {
+      console.error("zep.updateProfileMemory.rollback.failed", {
+        userId,
+        previousMetadata,
+        error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+      });
+    }
+
     console.error("zep.updateProfileMemory.failed", {
       userId,
       metadata,
