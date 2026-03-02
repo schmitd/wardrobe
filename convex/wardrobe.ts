@@ -8,6 +8,20 @@ import { retrier } from "./retrier";
 const now = () => Date.now();
 const toErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+const DEFAULT_SIMILARITY_LIMIT = 200;
+const MAX_SIMILARITY_LIMIT = 200;
+const SIMILARITY_SCAN_BATCH_SIZE = 64;
+
+const normalizeSimilarityLimit = (limit?: number) => {
+  const fallback = DEFAULT_SIMILARITY_LIMIT;
+  if (limit === undefined) return fallback;
+  if (!Number.isFinite(limit)) return fallback;
+
+  const rounded = Math.floor(limit);
+  if (rounded < 1) return 1;
+  if (rounded > MAX_SIMILARITY_LIMIT) return MAX_SIMILARITY_LIMIT;
+  return rounded;
+};
 
 const getUserId = async (ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) => {
   const identity = await ctx.auth.getUserIdentity();
@@ -209,14 +223,30 @@ export const listItemsForSimilarity = query({
     const userId = await getUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
-    const items = await ctx.db
-      .query("wardrobeItems")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
+    const targetCount = normalizeSimilarityLimit(limit);
+    let cursor: string | null = null;
+    const withEmbeddings = [];
 
-    return items
-      .filter((item) => Array.isArray(item.embedding))
-      .slice(0, limit ?? 200);
+    while (withEmbeddings.length < targetCount) {
+      const page = await ctx.db
+        .query("wardrobeItems")
+        .withIndex("by_user_createdAt", (q) => q.eq("userId", userId))
+        .order("desc")
+        .paginate({
+          cursor,
+          numItems: SIMILARITY_SCAN_BATCH_SIZE,
+        });
+
+      withEmbeddings.push(...page.page.filter((item) => Array.isArray(item.embedding)));
+
+      if (page.isDone) {
+        break;
+      }
+
+      cursor = page.continueCursor;
+    }
+
+    return withEmbeddings.slice(0, targetCount);
   },
 });
 

@@ -1,38 +1,21 @@
 'use client';
 
-import { useState } from 'react';
 import Image from 'next/image';
 import { Loader2, Ticket } from 'lucide-react';
 import ImageUploader, { type UploadedFile } from './ImageUploader';
-import { checkCompatibilityAction } from '@/app/actions/wardrobe';
-import { createTraceContext } from '@/lib/trace';
-
-type CompatibilityResult = Awaited<ReturnType<typeof checkCompatibilityAction>>;
+import { useCompatibilityCheck } from '@/hooks/useCompatibilityCheck';
 
 export default function CompatibilityChecker() {
-  const [result, setResult] = useState<CompatibilityResult | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
+  const { result, isProcessing, status, runCompatibilityCheck } = useCompatibilityCheck();
 
   const handleCheck = async (uploads: UploadedFile[]) => {
     if (uploads.length === 0) return;
 
     const upload = uploads[0];
-    setIsProcessing(true);
-    setStatus('Comparing this piece with your closet...');
-    setResult(null);
-
-    try {
-      const trace = createTraceContext();
-      const response = await checkCompatibilityAction({ storageId: upload.storageId, ...trace });
-      setResult(response);
-      setStatus(null);
-    } catch (error) {
-      console.error('compatibility.check.failed', error);
-      setStatus('Compatibility check failed. Try another photo.');
-    } finally {
-      setIsProcessing(false);
-    }
+    await runCompatibilityCheck(upload.storageId, {
+      startMessage: 'Comparing this piece with your closet...',
+      fallbackErrorMessage: 'Compatibility check failed. Try another photo.',
+    });
   };
 
   return (
