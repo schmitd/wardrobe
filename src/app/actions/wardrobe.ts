@@ -419,11 +419,19 @@ export const deleteWardrobeItemAction = async (input: {
 
   let item: { description?: string | null; category?: string | null } | null = null;
   try {
-    item = await fetchQuery(
+    const fetched = await fetchQuery(
       api.wardrobe.getWardrobeItem,
       { itemId: input.itemId as Id<"wardrobeItems"> },
       { token }
     );
+    if (fetched && typeof fetched === "object") {
+      const record = fetched as Record<string, unknown>;
+      item = {
+        description:
+          typeof record.description === "string" ? record.description : null,
+        category: typeof record.category === "string" ? record.category : null,
+      };
+    }
   } catch (error) {
     console.warn("wardrobe.delete.prefetch.failed", {
       traceId,
