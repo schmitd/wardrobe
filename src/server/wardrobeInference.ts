@@ -1,4 +1,4 @@
-import { Effect, Schedule } from "effect";
+import { Effect } from "effect";
 import { SchemaType, type Schema } from "@google/generative-ai";
 import type { Id } from "@convex/_generated/dataModel";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
@@ -7,30 +7,15 @@ import { api } from "@convex/_generated/api";
 import { runServerAction } from "@/lib/run-effect";
 import { publishJson } from "@/lib/qstash";
 import { GeminiLive, GeminiService } from "@/services/GeminiService";
-
-const parseJson = <T>(text: string, label: string) =>
-  Effect.try({
-    try: () => JSON.parse(text) as T,
-    catch: (error) => new Error(`${label} JSON parse failed: ${String(error)}`),
-  });
-
-const withRetries = <A, E, R>(effect: Effect.Effect<A, E, R>, attempts = 3) =>
-  effect.pipe(Effect.retry(Schedule.recurs(attempts - 1)));
-
-const toErrorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : String(error);
+import {
+  embedText,
+  fetchImageBase64,
+  parseJson,
+  toErrorMessage,
+  withRetries,
+} from "@/server/inference/shared";
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-const fetchImageBase64 = async (imageUrl: string) => {
-  const response = await fetch(imageUrl);
-  if (!response.ok) {
-    throw new Error(`Image fetch failed: ${response.statusText}`);
-  }
-
-  const buffer = await response.arrayBuffer();
-  return Buffer.from(buffer).toString("base64");
-};
 
 const fetchWithRetry = async <T>(
   fn: () => Promise<T>,
@@ -132,13 +117,6 @@ const analyzeImageDescription = (
       result.response.text(),
       "analyzeImageDescription"
     );
-  }).pipe(withRetries);
-
-const embedText = (text: string) =>
-  Effect.gen(function* () {
-    const gemini = yield* GeminiService;
-    const result = yield* gemini.embedContent(text);
-    return result.embedding.values;
   }).pipe(withRetries);
 
 export const USER_SAFE_INFERENCE_ERROR =

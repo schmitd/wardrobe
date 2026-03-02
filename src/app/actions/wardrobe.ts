@@ -1,6 +1,6 @@
 "use server";
 
-import { Effect, Schedule } from "effect";
+import { Effect } from "effect";
 import { SchemaType, type Schema } from "@google/generative-ai";
 import type { Id } from "@convex/_generated/dataModel";
 import { auth } from "@clerk/nextjs/server";
@@ -12,6 +12,13 @@ import { runServerAction } from "@/lib/run-effect";
 import { publishJson } from "@/lib/qstash";
 import { ensureTraceContext } from "@/lib/trace";
 import { GeminiLive, GeminiService } from "@/services/GeminiService";
+import {
+  embedText,
+  fetchImageBase64,
+  parseJson,
+  toErrorMessage,
+  withRetries,
+} from "@/server/inference/shared";
 import {
   processWardrobeInference,
   USER_SAFE_INFERENCE_ERROR,
@@ -28,28 +35,6 @@ const getConvexAuth = async () => {
 
   return { userId, token };
 };
-
-const fetchImageBase64 = async (imageUrl: string) => {
-  const response = await fetch(imageUrl);
-  if (!response.ok) {
-    throw new Error(`Image fetch failed: ${response.statusText}`);
-  }
-
-  const buffer = await response.arrayBuffer();
-  return Buffer.from(buffer).toString("base64");
-};
-
-const parseJson = <T>(text: string, label: string) =>
-  Effect.try({
-    try: () => JSON.parse(text) as T,
-    catch: (error) => new Error(`${label} JSON parse failed: ${String(error)}`),
-  });
-
-const withRetries = <A, E, R>(effect: Effect.Effect<A, E, R>, attempts = 3) =>
-  effect.pipe(Effect.retry(Schedule.recurs(attempts - 1)));
-
-const toErrorMessage = (error: unknown) =>
-  error instanceof Error ? error.message : String(error);
 
 const analyzeImageFull = (base64: string) =>
   Effect.gen(function* () {
@@ -101,13 +86,6 @@ const generateStyleQuery = (description: string, styleTags: string[]) =>
 
     const result = yield* gemini.generateContent("gemini-2.0-flash-lite", prompt);
     return result.response.text().trim();
-  }).pipe(withRetries);
-
-const embedText = (text: string) =>
-  Effect.gen(function* () {
-    const gemini = yield* GeminiService;
-    const result = yield* gemini.embedContent(text);
-    return result.embedding.values;
   }).pipe(withRetries);
 
 const evaluateCompatibility = (input: {
