@@ -37,38 +37,45 @@ export async function POST(request: Request) {
 
   const encoder = new TextEncoder();
   const send = (controller: ReadableStreamDefaultController, event: StreamEvent) => {
-    controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+    try {
+      controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+    } catch {
+      // Stream may already be closed/cancelled by the client.
+    }
   };
 
   const stream = new ReadableStream({
-    start: async (controller) => {
-      try {
-        const result = await processWardrobeInference({
-          itemId,
-          userId,
-          token,
-          traceId,
-          traceparent,
-          onProgress: (stage) => send(controller, { type: "status", stage }),
-          onTags: ({ category, styleTags }) =>
-            send(controller, { type: "tags", category, styleTags }),
-          onDescription: ({ category, description }) =>
-            send(controller, { type: "description", category, description }),
-        });
+    start(controller) {
+      void (async () => {
+        try {
+          const result = await processWardrobeInference({
+            itemId,
+            userId,
+            token,
+            traceId,
+            traceparent,
+            onProgress: (stage) => send(controller, { type: "status", stage }),
+            onTags: ({ category, styleTags }) =>
+              send(controller, { type: "tags", category, styleTags }),
+            onDescription: ({ category, description }) =>
+              send(controller, { type: "description", category, description }),
+          });
 
-        if (!result.success) {
-          send(controller, { type: "error", error: result.error });
-        } else {
-          send(controller, { type: "complete" });
+          if (!result.success) {
+            send(controller, { type: "error", error: result.error });
+          } else {
+            send(controller, { type: "complete" });
+          }
+        } catch (error) {
+          console.error("process-stream.error", { itemId, traceId, error });
+          send(controller, {
+            type: "error",
+            error: "Failed to process this item right now. Please try again.",
+          });
+        } finally {
+          controller.close();
         }
-      } catch {
-        send(controller, {
-          type: "error",
-          error: "Failed to process this item right now. Please try again.",
-        });
-      } finally {
-        controller.close();
-      }
+      })();
     },
   });
 
