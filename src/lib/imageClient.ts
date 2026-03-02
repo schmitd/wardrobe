@@ -1,3 +1,19 @@
+const DEFAULT_MAX_SIZE = 1024;
+const MAX_ALLOWED_SIZE = 8192;
+const DEFAULT_QUALITY = 0.82;
+
+const sanitizeMaxSize = (value?: number) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return DEFAULT_MAX_SIZE;
+  return Math.min(MAX_ALLOWED_SIZE, Math.max(1, Math.round(numeric)));
+};
+
+const sanitizeQuality = (value?: number) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return DEFAULT_QUALITY;
+  return Math.min(1, Math.max(0, numeric));
+};
+
 const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -18,8 +34,8 @@ export const downscaleToJpegDataUrl = async (
   file: File,
   opts?: { maxSize?: number; quality?: number }
 ) => {
-  const maxSize = opts?.maxSize ?? 1024;
-  const quality = opts?.quality ?? 0.82;
+  const maxSize = sanitizeMaxSize(opts?.maxSize);
+  const quality = sanitizeQuality(opts?.quality);
 
   // Decode the image.
   const originalDataUrl = await readFileAsDataUrl(file);
@@ -51,9 +67,14 @@ export const dataUrlToFile = (dataUrl: string, fileName: string) => {
   if (!match) throw new Error("Invalid data URL");
   const mimeType = match[1] || "application/octet-stream";
   const base64 = match[2] || "";
-  const bin = atob(base64);
+  let bin = "";
+  try {
+    bin = atob(base64);
+  } catch {
+    throw new Error("Invalid base64 payload");
+  }
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
-  return new File([bytes], fileName, { type: mimeType });
+  const safeName = fileName.trim() || "upload.jpg";
+  return new File([bytes], safeName, { type: mimeType });
 };
-
