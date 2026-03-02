@@ -4,6 +4,7 @@ import { Effect, Schedule } from "effect";
 import { SchemaType, type Schema } from "@google/generative-ai";
 import type { Id } from "@convex/_generated/dataModel";
 import { auth } from "@clerk/nextjs/server";
+import { headers } from "next/headers";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
 import { api } from "@convex/_generated/api";
 
@@ -732,24 +733,114 @@ export const analyzeSelfieAction = async (input: {
 };
 
 const GUEST_DEMO_ITEM_LIMIT = 4;
+const GUEST_DEMO_MAX_IMAGE_BYTES = 1_500_000;
+const GUEST_DEMO_MAX_TOTAL_BYTES = 4_000_000;
+const GUEST_DEMO_MAX_FILENAME_LENGTH = 140;
+const GUEST_DEMO_RATE_WINDOW_MS = 60_000;
+const GUEST_DEMO_RATE_MAX_REQUESTS = 4;
+const GUEST_DEMO_ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+
+const guestRequestWindow = new Map<string, { count: number; resetAt: number }>();
+
+const extractBase64Payload = (value: string) => value.replace(/^data:.*;base64,/, "").replace(/\s+/g, "");
+
+const estimateDecodedBytes = (base64: string) => {
+  if (!base64 || !/^[a-zA-Z0-9+/=]+$/.test(base64)) {
+    throw new Error("Invalid image encoding");
+  }
+
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+};
+
+const getGuestRateLimitKey = async () => {
+  try {
+    const requestHeaders = await headers();
+    const forwardedFor = requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim();
+    const realIp = requestHeaders.get("x-real-ip")?.trim();
+    const userAgent = requestHeaders.get("user-agent")?.slice(0, 120);
+    return forwardedFor || realIp || userAgent || "guest:unknown";
+  } catch {
+    return "guest:unknown";
+  }
+};
+
+const enforceGuestRateLimit = async () => {
+  const key = await getGuestRateLimitKey();
+  const nowTs = Date.now();
+  const existing = guestRequestWindow.get(key);
+
+  if (!existing || existing.resetAt <= nowTs) {
+    guestRequestWindow.set(key, {
+      count: 1,
+      resetAt: nowTs + GUEST_DEMO_RATE_WINDOW_MS,
+    });
+    return;
+  }
+
+  if (existing.count >= GUEST_DEMO_RATE_MAX_REQUESTS) {
+    throw new Error("Guest demo is busy. Please wait a minute and try again.");
+  }
+
+  existing.count += 1;
+};
+
+const validateGuestBatchItems = (items: { fileName: string; mimeType: string; base64: string }[]) => {
+  let totalBytes = 0;
+
+  return items.map((item) => {
+    const fileName = item.fileName.trim();
+    if (!fileName || fileName.length > GUEST_DEMO_MAX_FILENAME_LENGTH) {
+      throw new Error("Invalid file name");
+    }
+
+    if (!GUEST_DEMO_ALLOWED_MIME_TYPES.has(item.mimeType)) {
+      throw new Error(`Unsupported image type: ${item.mimeType}`);
+    }
+
+    const normalizedBase64 = extractBase64Payload(item.base64);
+    const decodedBytes = estimateDecodedBytes(normalizedBase64);
+    if (decodedBytes === 0 || decodedBytes > GUEST_DEMO_MAX_IMAGE_BYTES) {
+      throw new Error("Each image must be under 1.5MB after compression");
+    }
+
+    totalBytes += decodedBytes;
+    if (totalBytes > GUEST_DEMO_MAX_TOTAL_BYTES) {
+      throw new Error("Total upload size is too large for guest demo");
+    }
+
+    return {
+      fileName,
+      mimeType: item.mimeType,
+      normalizedBase64,
+    };
+  });
+};
 
 export const analyzeGuestBatchAction = async (input: {
   items: { fileName: string; mimeType: string; base64: string }[];
   traceId?: string;
   traceparent?: string;
 }) => {
+  await enforceGuestRateLimit();
   const { traceId, traceparent } = ensureTraceContext(input);
   const cappedItems = input.items.slice(0, GUEST_DEMO_ITEM_LIMIT);
+  const validatedItems = validateGuestBatchItems(cappedItems);
 
-  if (cappedItems.length === 0) {
+  if (validatedItems.length === 0) {
     throw new Error("No images provided");
   }
 
   const analyzed = [];
-  for (const item of cappedItems) {
-    const normalizedBase64 = item.base64.replace(/^data:.*;base64,/, "");
+  for (const item of validatedItems) {
     const analysis = await runServerAction(
-      analyzeImageFull(normalizedBase64).pipe(Effect.provide(GeminiLive))
+      analyzeImageFull(item.normalizedBase64).pipe(Effect.provide(GeminiLive))
     );
     analyzed.push({
       fileName: item.fileName,

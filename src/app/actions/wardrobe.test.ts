@@ -267,4 +267,62 @@ describe("wardrobe server actions", () => {
     );
     expect(publishJsonMock).toHaveBeenCalled();
   });
+
+  it("caps guest batch analysis at four items", async () => {
+    runServerActionMock
+      .mockResolvedValueOnce({
+        category: "Top",
+        description: "Blue shirt",
+        style_tags: ["casual"],
+      })
+      .mockResolvedValueOnce({
+        category: "Bottom",
+        description: "Black jeans",
+        style_tags: ["minimal"],
+      })
+      .mockResolvedValueOnce({
+        category: "Outerwear",
+        description: "Olive jacket",
+        style_tags: ["layered"],
+      })
+      .mockResolvedValueOnce({
+        category: "Shoes",
+        description: "White sneakers",
+        style_tags: ["sporty"],
+      })
+      .mockResolvedValueOnce({ bio: "I wear clean lines with practical layers." });
+
+    const result = await actions.analyzeGuestBatchAction({
+      items: [
+        { fileName: "one.jpg", mimeType: "image/jpeg", base64: "data:image/jpeg;base64,QUJDRA==" },
+        { fileName: "two.jpg", mimeType: "image/jpeg", base64: "data:image/jpeg;base64,QUJDRA==" },
+        { fileName: "three.jpg", mimeType: "image/jpeg", base64: "data:image/jpeg;base64,QUJDRA==" },
+        { fileName: "four.jpg", mimeType: "image/jpeg", base64: "data:image/jpeg;base64,QUJDRA==" },
+        { fileName: "five.jpg", mimeType: "image/jpeg", base64: "data:image/jpeg;base64,QUJDRA==" },
+      ],
+    });
+
+    expect(result.limit).toBe(4);
+    expect(result.capped).toBe(true);
+    expect(result.items).toHaveLength(4);
+    expect(runServerActionMock).toHaveBeenCalledTimes(5);
+  });
+
+  it("rejects oversized guest images before inference", async () => {
+    const oversized = "A".repeat(2_100_000);
+
+    await expect(
+      actions.analyzeGuestBatchAction({
+        items: [
+          {
+            fileName: "huge.jpg",
+            mimeType: "image/jpeg",
+            base64: oversized,
+          },
+        ],
+      })
+    ).rejects.toThrow("Each image must be under 1.5MB after compression");
+
+    expect(runServerActionMock).not.toHaveBeenCalled();
+  });
 });
