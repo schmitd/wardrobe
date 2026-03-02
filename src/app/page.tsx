@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { SignInButton, SignedOut, useAuth } from '@clerk/nextjs';
 import { Plus, Sparkles } from 'lucide-react';
 import { useQuery } from 'convex/react';
@@ -31,6 +31,7 @@ export default function Home() {
   const getUploadUrl = useMutation(api.wardrobe.getUploadUrl);
   const [optimisticItems, setOptimisticItems] = useState<OptimisticWardrobeItem[]>([]);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const hasStartedGuestImport = useRef(false);
 
   const { filteredOptimisticItems, hiddenServerIds, removedOptimisticItems } = useMemo(() => {
     if (!items) {
@@ -62,16 +63,24 @@ export default function Home() {
   }, [items, optimisticItems]);
 
   useEffect(() => {
+    if (removedOptimisticItems.length === 0) return;
+    const removedIds = new Set(removedOptimisticItems.map((item) => item.tempId));
+
     for (const item of removedOptimisticItems) {
       URL.revokeObjectURL(item.imageUrl);
     }
+
+    setOptimisticItems((prev) => prev.filter((item) => !removedIds.has(item.tempId)));
   }, [removedOptimisticItems]);
 
   useEffect(() => {
     if (!isSignedIn) return;
+    if (hasStartedGuestImport.current) return;
 
     const snapshot = loadGuestSnapshot();
     if (!snapshot || snapshot.items.length === 0) return;
+
+    hasStartedGuestImport.current = true;
 
     const queue = snapshot.items.map((item) => ({
       item,
