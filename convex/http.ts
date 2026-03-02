@@ -2,7 +2,6 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { Receiver } from "@upstash/qstash";
 import {
   addWardrobeItemsMemory,
   deleteWardrobeItemMemory,
@@ -12,25 +11,28 @@ import { ensureTraceContext } from "./trace";
 
 const http = httpRouter();
 
-const receiver = new Receiver({
-  currentSigningKey: process.env.QSTASH_CURRENT_SIGNING_KEY ?? "",
-  nextSigningKey: process.env.QSTASH_NEXT_SIGNING_KEY ?? "",
-});
+const syncSecret = process.env.WARDROBE_SYNC_SHARED_SECRET ?? "";
 
-const verifyQStash = async (req: Request, body: string) => {
-  const signature = req.headers.get("Upstash-Signature") ?? "";
-  if (!signature) return false;
-
-  try {
-    return await receiver.verify({
-      signature,
-      body,
-      url: req.url,
-    });
-  } catch (error) {
-    console.warn("QStash signature verification failed", error);
+const constantTimeEqual = (a: string, b: string) => {
+  if (a.length === 0 || b.length !== a.length) {
     return false;
   }
+
+  let diff = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+
+  return diff === 0;
+};
+
+const verifySyncRequest = (req: Request) => {
+  if (!syncSecret) {
+    return true;
+  }
+
+  const headerSecret = req.headers.get("x-wardrobe-sync-secret") ?? "";
+  return constantTimeEqual(syncSecret, headerSecret);
 };
 
 const redactUserId = (userId: string) =>
@@ -40,12 +42,11 @@ http.route({
   path: "/zep/sync",
   method: "POST",
   handler: httpAction(async (ctx, req) => {
-    const body = await req.text();
-    const verified = await verifyQStash(req, body);
-
-    if (!verified) {
-      return new Response("Invalid signature", { status: 401 });
+    if (!verifySyncRequest(req)) {
+      return new Response("Unauthorized", { status: 401 });
     }
+
+    const body = await req.text();
 
     let payload: unknown;
     try {

@@ -8,17 +8,10 @@ GlobalRegistrator.register();
 const { render, screen, fireEvent, cleanup } = await import('@testing-library/react');
 const matchers = await import("@testing-library/jest-dom/matchers");
 
-// Add type for jest-dom matchers
-declare module "bun:test" {
-    interface Matchers<T> {
-        toBeInTheDocument(): void;
-        toHaveClass(className: string): void;
-        toBeDisabled(): void;
-    }
-}
-
 // extend expect
-expect.extend(matchers as any);
+expect.extend(
+    matchers as unknown as Record<string, (this: unknown, ...args: unknown[]) => unknown>
+);
 
 // Mock Convex hooks + api
 mock.module('convex/react', () => ({
