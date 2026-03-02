@@ -417,11 +417,21 @@ export const deleteWardrobeItemAction = async (input: {
   const { userId, token } = await getConvexAuth();
   const { traceId, traceparent } = ensureTraceContext(input);
 
-  const item = await fetchQuery(
-    api.wardrobe.getWardrobeItemWithUrl,
-    { itemId: input.itemId as Id<"wardrobeItems"> },
-    { token }
-  );
+  let item: { description?: string | null; category?: string | null } | null = null;
+  try {
+    item = await fetchQuery(
+      api.wardrobe.getWardrobeItem,
+      { itemId: input.itemId as Id<"wardrobeItems"> },
+      { token }
+    );
+  } catch (error) {
+    console.warn("wardrobe.delete.prefetch.failed", {
+      traceId,
+      traceparent,
+      itemId: input.itemId,
+      message: toErrorMessage(error),
+    });
+  }
 
   await fetchMutation(
     api.wardrobe.deleteWardrobeItem,
