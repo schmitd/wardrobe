@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@clerk/nextjs": "^6.36.1",
+    "@convex-dev/action-retrier": "^0.3.0",
     "@effect/opentelemetry": "^0.60.0",
     "@getzep/zep-cloud": "^3.14.0",
     "@google/generative-ai": "^0.24.1",

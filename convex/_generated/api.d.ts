@@ -10,10 +10,12 @@
 
 import type * as http from "../http.js";
 import type * as profile from "../profile.js";
+import type * as retrier from "../retrier.js";
 import type * as storage from "../storage.js";
 import type * as trace from "../trace.js";
 import type * as wardrobe from "../wardrobe.js";
 import type * as zep from "../zep.js";
+import type * as zepSync from "../zepSync.js";
 
 import type {
   ApiFromModules,
@@ -24,10 +26,12 @@ import type {
 declare const fullApi: ApiFromModules<{
   http: typeof http;
   profile: typeof profile;
+  retrier: typeof retrier;
   storage: typeof storage;
   trace: typeof trace;
   wardrobe: typeof wardrobe;
   zep: typeof zep;
+  zepSync: typeof zepSync;
 }>;
 
 /**
@@ -56,4 +60,52 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  actionRetrier: {
+    public: {
+      cancel: FunctionReference<
+        "mutation",
+        "internal",
+        { runId: string },
+        boolean
+      >;
+      cleanup: FunctionReference<
+        "mutation",
+        "internal",
+        { runId: string },
+        any
+      >;
+      start: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          functionArgs: any;
+          functionHandle: string;
+          options: {
+            base: number;
+            initialBackoffMs: number;
+            logLevel: "DEBUG" | "INFO" | "WARN" | "ERROR";
+            maxFailures: number;
+            onComplete?: string;
+            runAfter?: number;
+            runAt?: number;
+          };
+        },
+        string
+      >;
+      status: FunctionReference<
+        "query",
+        "internal",
+        { runId: string },
+        | { type: "inProgress" }
+        | {
+            result:
+              | { returnValue: any; type: "success" }
+              | { error: string; type: "failed" }
+              | { type: "canceled" };
+            type: "completed";
+          }
+      >;
+    };
+  };
+};

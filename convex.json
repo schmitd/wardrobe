@@ -4,7 +4,6 @@
     "externalPackages": [
       "@google/generative-ai",
       "@getzep/zep-cloud",
-      "@upstash/qstash",
       "effect"
     ]
   }

@@ -1,7 +1,12 @@
 import { v } from "convex/values";
 import { internalMutation, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { retrier } from "./retrier";
+import { ensureTraceContext } from "./trace";
 
 const now = () => Date.now();
+const toErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
 
 const getUserId = async (ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) => {
   const identity = await ctx.auth.getUserIdentity();
@@ -26,10 +31,16 @@ export const getProfile = query({
 export const updateBio = mutation({
   args: {
     bio: v.string(),
+    traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
   },
-  handler: async (ctx, { bio }) => {
+  handler: async (ctx, { bio, traceId: argTraceId, traceparent: argTraceparent }) => {
     const userId = await getUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
+    const { traceId, traceparent } = ensureTraceContext({
+      traceId: argTraceId,
+      traceparent: argTraceparent,
+    });
 
     const existing = await ctx.db
       .query("profiles")
@@ -49,6 +60,28 @@ export const updateBio = mutation({
       });
     }
 
+    try {
+      const runId = await retrier.run(ctx, internal.zepSync.syncProfileUpdate, {
+        userId,
+        bio,
+        traceId,
+        traceparent,
+      });
+      console.info("zep.sync.profile_update.enqueued", {
+        traceId,
+        traceparent,
+        userId,
+        runId,
+      });
+    } catch (error) {
+      console.warn("zep.sync.profile_update.enqueue_failed", {
+        traceId,
+        traceparent,
+        userId,
+        message: toErrorMessage(error),
+      });
+    }
+
     return { success: true };
   },
 });
@@ -58,10 +91,16 @@ export const updateProfileAttributes = mutation({
     bio: v.optional(v.string()),
     skinTone: v.optional(v.string()),
     hairColor: v.optional(v.string()),
+    traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
   },
-  handler: async (ctx, { bio, skinTone, hairColor }) => {
+  handler: async (ctx, { bio, skinTone, hairColor, traceId: argTraceId, traceparent: argTraceparent }) => {
     const userId = await getUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
+    const { traceId, traceparent } = ensureTraceContext({
+      traceId: argTraceId,
+      traceparent: argTraceparent,
+    });
 
     const existing = await ctx.db
       .query("profiles")
@@ -81,6 +120,30 @@ export const updateProfileAttributes = mutation({
       await ctx.db.insert("profiles", {
         userId,
         ...payload,
+      });
+    }
+
+    try {
+      const runId = await retrier.run(ctx, internal.zepSync.syncProfileUpdate, {
+        userId,
+        bio,
+        skinTone,
+        hairColor,
+        traceId,
+        traceparent,
+      });
+      console.info("zep.sync.profile_update.enqueued", {
+        traceId,
+        traceparent,
+        userId,
+        runId,
+      });
+    } catch (error) {
+      console.warn("zep.sync.profile_update.enqueue_failed", {
+        traceId,
+        traceparent,
+        userId,
+        message: toErrorMessage(error),
       });
     }
 
