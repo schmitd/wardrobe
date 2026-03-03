@@ -124,7 +124,11 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         setLimitMessage(`Demo capped at ${result.limit} photos. Create an account to continue.`);
       }
     } catch (uploadError) {
-      setError(uploadError instanceof Error ? uploadError.message : 'Demo analysis failed.');
+      const message = uploadError instanceof Error ? uploadError.message : 'Demo analysis failed.';
+      setError(message);
+      if (/sign in|create an account/i.test(message)) {
+        setShowSignupPrompt(true);
+      }
     } finally {
       setIsAnalyzing(false);
     }

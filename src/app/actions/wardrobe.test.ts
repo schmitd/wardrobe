@@ -3,6 +3,17 @@ import { describe, it, expect, beforeEach, mock } from "bun:test";
 const fetchMutationMock = mock();
 const fetchQueryMock = mock();
 const runServerActionMock = mock();
+const protectMock = mock(async () => ({
+  isDenied: () => false,
+  reason: {
+    isBot: () => false,
+    isRateLimit: () => false,
+  },
+}));
+const arcjetFactoryMock = mock(() => ({
+  protect: protectMock,
+}));
+const arcjetRequestMock = mock(async () => ({ headers: new Headers() }));
 
 const apiMock = {
   wardrobe: {
@@ -35,6 +46,7 @@ mock.module("@clerk/nextjs/server", () => ({
   auth: () => ({
     userId: "user_123",
     getToken: async () => "token_123",
+    has: () => false,
   }),
 }));
 
@@ -45,6 +57,16 @@ mock.module("@convex/_generated/api", () => ({
 mock.module("@/lib/run-effect", () => ({
   runServerAction: runServerActionMock,
 }));
+
+mock.module("@arcjet/next", () => ({
+  default: arcjetFactoryMock,
+  detectBot: () => ({}),
+  fixedWindow: () => ({}),
+  slidingWindow: () => ({}),
+  request: arcjetRequestMock,
+}));
+
+process.env.ARCJET_KEY = "test_arcjet_key";
 
 const { api } = await import("@convex/_generated/api");
 const actions = await import("./wardrobe");
@@ -61,6 +83,9 @@ beforeEach(() => {
   fetchMutationMock.mockClear();
   fetchQueryMock.mockClear();
   runServerActionMock.mockClear();
+  protectMock.mockClear();
+  arcjetFactoryMock.mockClear();
+  arcjetRequestMock.mockClear();
   setupFetch();
 });
 
