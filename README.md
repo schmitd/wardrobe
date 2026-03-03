@@ -16,7 +16,7 @@ A Single Page Application (SPA) that acts as a "Virtual Wardrobe Stylist". The a
 - **Database + Sync**: Convex
 - **Storage**: Convex File Storage
 - **AI**: Google Gemini (Vision & Text Embeddings)
-- **Background Jobs**: QStash
+- **Background Jobs**: Convex Scheduler + Action Retrier
 
 ## Setup
 
@@ -35,20 +35,16 @@ A Single Page Application (SPA) that acts as a "Virtual Wardrobe Stylist". The a
     ```env
     GEMINI_API_KEY=your_gemini_key
     NEXT_PUBLIC_CONVEX_URL=your_convex_url
-    CONVEX_SITE_URL=your_convex_site_url
     CLERK_SECRET_KEY=your_clerk_secret_key
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
     CLERK_JWT_ISSUER_DOMAIN=your_clerk_jwt_issuer_domain
     CLERK_JWT_AUDIENCE=convex
     CLERK_JWT_TEMPLATE=convex
-    WARDROBE_SYNC_SHARED_SECRET=your_sync_shared_secret
     ZEP_KEY=your_zep_key
     AXIOM_TOKEN=your_axiom_token
     AXIOM_DATASET=your_axiom_dataset
     ```
     Notes:
-    - `CONVEX_SITE_URL` should be the public `.convex.site` domain so Next.js server actions can call Convex HTTP actions.
-    - Set `WARDROBE_SYNC_SHARED_SECRET` in both the Next.js app and Convex deployment to authenticate `/zep/sync` calls.
     - The Clerk JWT template must include the `aud` claim matching `CLERK_JWT_AUDIENCE` (default `convex`).
     - Server actions export OTLP telemetry to Axiom via Effect runtime; enable Convex log streaming separately if you want Convex logs in Axiom.
 5.  **Run the app**:

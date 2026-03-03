@@ -8,7 +8,6 @@ import { fetchMutation, fetchQuery } from "convex/nextjs";
 import { api } from "@convex/_generated/api";
 
 import { runServerAction } from "@/lib/run-effect";
-import { publishJson } from "@/lib/qstash";
 import { ensureTraceContext } from "@/lib/trace";
 import { GeminiLive, GeminiService } from "@/services/GeminiService";
 import {
@@ -354,37 +353,18 @@ export const seedWardrobeItemFromGuestAction = async (input: {
     );
 
     await fetchMutation(
-      api.wardrobe.applyEmbedding,
-      { itemId: input.itemId as Id<"wardrobeItems">, embedding },
-      { token }
-    );
-
-    await fetchMutation(
-      api.wardrobe.setAnalysisStatus,
-      { itemId: input.itemId as Id<"wardrobeItems">, status: "ready" },
-      { token }
-    );
-
-    try {
-      await publishJson(
-        "/zep/sync",
-        {
-          type: "wardrobe_add",
-          userId,
-          itemId: input.itemId,
-          traceId,
-          traceparent,
-        },
-        traceparent ? { headers: { traceparent } } : undefined
-      );
-    } catch (error) {
-      console.warn("zep.sync.enqueue.failed", {
+      api.wardrobe.applyFullAnalysis,
+      {
+        itemId: input.itemId as Id<"wardrobeItems">,
+        category: input.category ?? null,
+        description: input.description,
+        styleTags: input.styleTags,
+        embedding,
         traceId,
         traceparent,
-        itemId: input.itemId,
-        message: toErrorMessage(error),
-      });
-    }
+      },
+      { token }
+    );
 
     return { success: true as const };
   } catch (error) {
@@ -417,57 +397,16 @@ export const deleteWardrobeItemAction = async (input: {
   const { userId, token } = await getConvexAuth();
   const { traceId, traceparent } = ensureTraceContext(input);
 
-  let item: { description?: string | null; category?: string | null } | null = null;
-  try {
-    const fetched = await fetchQuery(
-      api.wardrobe.getWardrobeItem,
-      { itemId: input.itemId as Id<"wardrobeItems"> },
-      { token }
-    );
-    if (fetched && typeof fetched === "object") {
-      const record = fetched as Record<string, unknown>;
-      item = {
-        description:
-          typeof record.description === "string" ? record.description : null,
-        category: typeof record.category === "string" ? record.category : null,
-      };
-    }
-  } catch (error) {
-    console.warn("wardrobe.delete.prefetch.failed", {
-      traceId,
-      traceparent,
-      itemId: input.itemId,
-      message: toErrorMessage(error),
-    });
-  }
-
   await fetchMutation(
     api.wardrobe.deleteWardrobeItem,
-    { itemId: input.itemId as Id<"wardrobeItems">, reason: input.reason },
-    { token }
-  );
-
-  try {
-    await publishJson(
-      "/zep/sync",
-      {
-        type: "wardrobe_delete",
-        userId,
-        description: item?.description ?? item?.category ?? "Unknown item",
-        reason: input.reason,
-        traceId,
-        traceparent,
-      },
-      traceparent ? { headers: { traceparent } } : undefined
-    );
-  } catch (error) {
-    console.warn("zep.sync.delete.failed", {
+    {
+      itemId: input.itemId as Id<"wardrobeItems">,
+      reason: input.reason,
       traceId,
       traceparent,
-      itemId: input.itemId,
-      message: toErrorMessage(error),
-    });
-  }
+    },
+    { token }
+  );
 
   console.info("wardrobe.delete.request", { traceId, traceparent, itemId: input.itemId, userId });
   return { success: true };
@@ -481,27 +420,11 @@ export const updateProfileBioAction = async (input: {
   const { userId, token } = await getConvexAuth();
   const { traceId, traceparent } = ensureTraceContext(input);
 
-  await fetchMutation(api.profile.updateBio, { bio: input.bio }, { token });
-
-  try {
-    await publishJson(
-      "/zep/sync",
-      {
-        type: "profile_update",
-        userId,
-        bio: input.bio,
-        traceId,
-        traceparent,
-      },
-      traceparent ? { headers: { traceparent } } : undefined
-    );
-  } catch (error) {
-    console.warn("profile.zep.sync.failed", {
-      traceId,
-      traceparent,
-      message: toErrorMessage(error),
-    });
-  }
+  await fetchMutation(
+    api.profile.updateBio,
+    { bio: input.bio, traceId, traceparent },
+    { token }
+  );
 
   console.info("profile.update.request", { traceId, traceparent, userId });
   return { success: true };
@@ -701,31 +624,11 @@ export const analyzeSelfieAction = async (input: {
       bio: analysis.bio,
       skinTone: analysis.skin_tone,
       hairColor: analysis.hair_color,
+      traceId,
+      traceparent,
     },
     { token }
   );
-
-  try {
-    await publishJson(
-      "/zep/sync",
-      {
-        type: "profile_update",
-        userId,
-        bio: analysis.bio,
-        skinTone: analysis.skin_tone,
-        hairColor: analysis.hair_color,
-        traceId,
-        traceparent,
-      },
-      traceparent ? { headers: { traceparent } } : undefined
-    );
-  } catch (error) {
-    console.warn("profile.zep.sync.failed", {
-      traceId,
-      traceparent,
-      message: toErrorMessage(error),
-    });
-  }
 
   console.info("selfie.analyze.complete", { traceId, traceparent, userId });
   return analysis;

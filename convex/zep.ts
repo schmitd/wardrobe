@@ -44,6 +44,7 @@ export const addWardrobeItemsMemory = async (
       message,
       error: error instanceof Error ? error.message : String(error),
     });
+    throw error;
   }
 };
 
@@ -131,5 +132,6 @@ export const updateProfileMemory = async (
       message,
       error: error instanceof Error ? error.message : String(error),
     });
+    throw error;
   }
 };

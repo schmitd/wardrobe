@@ -5,7 +5,6 @@ import { fetchMutation, fetchQuery } from "convex/nextjs";
 
 import { api } from "@convex/_generated/api";
 import { runServerAction } from "@/lib/run-effect";
-import { publishJson } from "@/lib/qstash";
 import { GeminiLive, GeminiService } from "@/services/GeminiService";
 
 const parseJson = <T>(text: string, label: string) =>
@@ -247,30 +246,11 @@ export const processWardrobeInference = async ({
         description: detailResult.description,
         styleTags: tagResult.style_tags,
         embedding,
+        traceId,
+        traceparent,
       },
       { token }
     );
-
-    try {
-      await publishJson(
-        "/zep/sync",
-        {
-          type: "wardrobe_add",
-          userId,
-          itemId,
-          traceId,
-          traceparent,
-        },
-        traceparent ? { headers: { traceparent } } : undefined
-      );
-    } catch (error) {
-      console.warn("zep.sync.enqueue.failed", {
-        traceId,
-        traceparent,
-        itemId,
-        message: toErrorMessage(error),
-      });
-    }
 
     return { success: true };
   } catch (error) {
