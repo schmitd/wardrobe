@@ -10,6 +10,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@arcjet/next": "^1.1.0",
     "@clerk/nextjs": "^6.36.1",
     "@convex-dev/action-retrier": "^0.3.0",
     "@effect/opentelemetry": "^0.60.0",
