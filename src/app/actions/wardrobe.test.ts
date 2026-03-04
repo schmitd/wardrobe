@@ -3,7 +3,17 @@ import { describe, it, expect, beforeEach, mock } from "bun:test";
 const fetchMutationMock = mock();
 const fetchQueryMock = mock();
 const runServerActionMock = mock();
-const publishJsonMock = mock();
+const protectMock = mock(async () => ({
+  isDenied: () => false,
+  reason: {
+    isBot: () => false,
+    isRateLimit: () => false,
+  },
+}));
+const arcjetFactoryMock = mock(() => ({
+  protect: protectMock,
+}));
+const arcjetRequestMock = mock(async () => ({ headers: new Headers() }));
 
 const apiMock = {
   wardrobe: {
@@ -13,7 +23,6 @@ const apiMock = {
     setAnalysisStatus: {},
     applyTags: {},
     applyDescription: {},
-    applyEmbedding: {},
     applyFullAnalysis: {},
     setAnalysisError: {},
     listItemsForSimilarity: {},
@@ -37,6 +46,7 @@ mock.module("@clerk/nextjs/server", () => ({
   auth: () => ({
     userId: "user_123",
     getToken: async () => "token_123",
+    has: () => false,
   }),
 }));
 
@@ -48,9 +58,15 @@ mock.module("@/lib/run-effect", () => ({
   runServerAction: runServerActionMock,
 }));
 
-mock.module("@/lib/qstash", () => ({
-  publishJson: publishJsonMock,
+mock.module("@arcjet/next", () => ({
+  default: arcjetFactoryMock,
+  detectBot: () => ({}),
+  fixedWindow: () => ({}),
+  slidingWindow: () => ({}),
+  request: arcjetRequestMock,
 }));
+
+process.env.ARCJET_KEY = "test_arcjet_key";
 
 const { api } = await import("@convex/_generated/api");
 const actions = await import("./wardrobe");
@@ -67,7 +83,9 @@ beforeEach(() => {
   fetchMutationMock.mockClear();
   fetchQueryMock.mockClear();
   runServerActionMock.mockClear();
-  publishJsonMock.mockClear();
+  protectMock.mockClear();
+  arcjetFactoryMock.mockClear();
+  arcjetRequestMock.mockClear();
   setupFetch();
 });
 
@@ -94,13 +112,6 @@ describe("wardrobe server actions", () => {
   });
 
   it("deletes a wardrobe item", async () => {
-    fetchQueryMock.mockResolvedValue({
-      _id: "item_1",
-      userId: "user_123",
-      description: "Test item",
-      category: "Shirt",
-      imageUrl: "https://example.com/item.jpg",
-    });
     fetchMutationMock.mockResolvedValue({ success: true });
 
     const result = await actions.deleteWardrobeItemAction({
@@ -113,7 +124,8 @@ describe("wardrobe server actions", () => {
     expect(mutation).toBe(api.wardrobe.deleteWardrobeItem);
     expect(args.itemId).toBe("item_1");
     expect(args.reason).toBe("duplicate");
-    expect(publishJsonMock).toHaveBeenCalled();
+    expect(args.traceId).toBeDefined();
+    expect(args.traceparent).toBeDefined();
   });
 
   it("updates profile bio via Convex mutation", async () => {
@@ -125,10 +137,11 @@ describe("wardrobe server actions", () => {
     const [mutation, args] = fetchMutationMock.mock.calls[0];
     expect(mutation).toBe(api.profile.updateBio);
     expect(args.bio).toBe("New bio");
-    expect(publishJsonMock).toHaveBeenCalled();
+    expect(args.traceId).toBeDefined();
+    expect(args.traceparent).toBeDefined();
   });
 
-  it("processes a wardrobe item and enqueues Zep sync", async () => {
+  it("processes a wardrobe item and persists full analysis", async () => {
     fetchQueryMock.mockImplementation(async (query) => {
       if (query === api.wardrobe.getWardrobeItemWithUrl) {
         return {
@@ -150,7 +163,10 @@ describe("wardrobe server actions", () => {
     const result = await actions.processWardrobeItemAction({ itemId: "item_1" });
 
     expect(result.success).toBe(true);
-    expect(publishJsonMock).toHaveBeenCalled();
+    const applyFullAnalysisCalls = fetchMutationMock.mock.calls.filter(
+      ([mutation]) => mutation === api.wardrobe.applyFullAnalysis
+    );
+    expect(applyFullAnalysisCalls.length).toBe(1);
   });
 
   it("marks analysis error when inference fails", async () => {
@@ -262,9 +278,10 @@ describe("wardrobe server actions", () => {
       api.profile.updateProfileAttributes,
       expect.objectContaining({
         bio: "Minimalist profile",
+        traceId: expect.any(String),
+        traceparent: expect.any(String),
       }),
       expect.objectContaining({ token: "token_123" })
     );
-    expect(publishJsonMock).toHaveBeenCalled();
   });
 });

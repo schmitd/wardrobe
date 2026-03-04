@@ -1,9 +1,13 @@
 import { v } from "convex/values";
 import { internalQuery, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { ensureTraceContext } from "./trace";
+import { retrier } from "./retrier";
 
 const now = () => Date.now();
+const toErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
 
 const getUserId = async (ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) => {
   const identity = await ctx.auth.getUserIdentity();
@@ -104,16 +108,50 @@ export const deleteWardrobeItem = mutation({
   args: {
     itemId: v.id("wardrobeItems"),
     reason: v.string(),
+    traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
   },
-  handler: async (ctx, { itemId, reason }) => {
+  handler: async (ctx, { itemId, reason, traceId: argTraceId, traceparent: argTraceparent }) => {
     const userId = await getUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
     const item = await ctx.db.get(itemId);
     if (!item || item.userId !== userId) throw new Error("Not found");
 
+    const { traceId, traceparent } = ensureTraceContext({
+      traceId: argTraceId ?? item.traceId,
+      traceparent: argTraceparent ?? item.traceparent,
+    });
+
     await ctx.db.delete(itemId);
-    console.info("wardrobe.delete", { itemId, userId, reason });
+    const description = item.description ?? item.category ?? "Unknown item";
+
+    try {
+      const runId = await retrier.run(ctx, internal.zepSync.syncWardrobeDelete, {
+        userId,
+        description,
+        reason,
+        traceId,
+        traceparent,
+      });
+      console.info("zep.sync.wardrobe_delete.enqueued", {
+        traceId,
+        traceparent,
+        itemId,
+        userId,
+        runId,
+      });
+    } catch (error) {
+      console.warn("zep.sync.wardrobe_delete.enqueue_failed", {
+        traceId,
+        traceparent,
+        itemId,
+        userId,
+        message: toErrorMessage(error),
+      });
+    }
+
+    console.info("wardrobe.delete", { traceId, traceparent, itemId, userId, reason });
 
     return { success: true };
   },
@@ -276,13 +314,20 @@ export const applyFullAnalysis = mutation({
     description: v.string(),
     styleTags: v.array(v.string()),
     embedding: v.array(v.number()),
+    traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
   },
-  handler: async (ctx, { itemId, category, description, styleTags, embedding }) => {
+  handler: async (ctx, { itemId, category, description, styleTags, embedding, traceId: argTraceId, traceparent: argTraceparent }) => {
     const userId = await getUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
     const item = await ctx.db.get(itemId);
     if (!item || item.userId !== userId) throw new Error("Not found");
+
+    const { traceId, traceparent } = ensureTraceContext({
+      traceId: argTraceId ?? item.traceId,
+      traceparent: argTraceparent ?? item.traceparent,
+    });
 
     await ctx.db.patch(itemId, {
       category: category ?? undefined,
@@ -293,6 +338,30 @@ export const applyFullAnalysis = mutation({
       analysisError: undefined,
       updatedAt: now(),
     });
+
+    try {
+      const runId = await retrier.run(ctx, internal.zepSync.syncWardrobeAdd, {
+        userId,
+        itemId,
+        traceId,
+        traceparent,
+      });
+      console.info("zep.sync.wardrobe_add.enqueued", {
+        traceId,
+        traceparent,
+        itemId,
+        userId,
+        runId,
+      });
+    } catch (error) {
+      console.warn("zep.sync.wardrobe_add.enqueue_failed", {
+        traceId,
+        traceparent,
+        itemId,
+        userId,
+        message: toErrorMessage(error),
+      });
+    }
   },
 });
 

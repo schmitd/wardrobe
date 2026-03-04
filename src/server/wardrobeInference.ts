@@ -4,8 +4,14 @@ import type { Id } from "@convex/_generated/dataModel";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
 
 import { api } from "@convex/_generated/api";
+import {
+  DESCRIPTION_MAX_OUTPUT_TOKENS,
+  ITEM_DESCRIPTION_WORD_LIMIT,
+  STYLE_LABEL_MAX_OUTPUT_TOKENS,
+  sanitizeStyleTags,
+  truncateWords,
+} from "@/lib/inferenceOutputGuards";
 import { runServerAction } from "@/lib/run-effect";
-import { publishJson } from "@/lib/qstash";
 import { GeminiLive, GeminiService } from "@/services/GeminiService";
 
 const parseJson = <T>(text: string, label: string) =>
@@ -70,7 +76,10 @@ const analyzeImageTags = (base64: string) =>
           role: "user",
           parts: [
             {
-              text: "Analyze this clothing item. Return JSON with style_tags first (3-5 strings), then category.",
+              text: `Analyze this clothing item.
+- Return JSON with style_tags first (3-5 strings), then category.
+- Keep each style tag concise (maximum 3 words).
+- Keep category to a short noun phrase.`,
             },
             { inlineData: { data: base64, mimeType: "image/jpeg" } },
           ],
@@ -79,13 +88,19 @@ const analyzeImageTags = (base64: string) =>
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: schema,
+        maxOutputTokens: STYLE_LABEL_MAX_OUTPUT_TOKENS,
       },
     });
 
-    return yield* parseJson<{ category?: string; style_tags: string[] }>(
+    const parsed = yield* parseJson<{ category?: string; style_tags: string[] }>(
       result.response.text(),
       "analyzeImageTags"
     );
+
+    return {
+      category: parsed.category ? truncateWords(parsed.category, 6) : undefined,
+      style_tags: sanitizeStyleTags(parsed.style_tags),
+    };
   }).pipe(withRetries);
 
 const analyzeImageDescription = (
@@ -110,7 +125,10 @@ const analyzeImageDescription = (
       ? `Category so far: ${context.category}.`
       : "";
 
-    const prompt = `Analyze this clothing item and return JSON with category and description. ${contextTags} ${contextCategory}`.trim();
+    const prompt = `Analyze this clothing item and return JSON with category and description.
+The description must be no more than ${ITEM_DESCRIPTION_WORD_LIMIT} words.
+Keep category short and specific.
+${contextTags} ${contextCategory}`.trim();
 
     const result = yield* gemini.generateContent("gemini-2.0-flash-lite", {
       contents: [
@@ -125,13 +143,19 @@ const analyzeImageDescription = (
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: schema,
+        maxOutputTokens: DESCRIPTION_MAX_OUTPUT_TOKENS,
       },
     });
 
-    return yield* parseJson<{ category?: string; description: string }>(
+    const parsed = yield* parseJson<{ category?: string; description: string }>(
       result.response.text(),
       "analyzeImageDescription"
     );
+
+    return {
+      category: parsed.category ? truncateWords(parsed.category, 6) : undefined,
+      description: truncateWords(parsed.description, ITEM_DESCRIPTION_WORD_LIMIT),
+    };
   }).pipe(withRetries);
 
 const embedText = (text: string) =>
@@ -247,30 +271,11 @@ export const processWardrobeInference = async ({
         description: detailResult.description,
         styleTags: tagResult.style_tags,
         embedding,
+        traceId,
+        traceparent,
       },
       { token }
     );
-
-    try {
-      await publishJson(
-        "/zep/sync",
-        {
-          type: "wardrobe_add",
-          userId,
-          itemId,
-          traceId,
-          traceparent,
-        },
-        traceparent ? { headers: { traceparent } } : undefined
-      );
-    } catch (error) {
-      console.warn("zep.sync.enqueue.failed", {
-        traceId,
-        traceparent,
-        itemId,
-        message: toErrorMessage(error),
-      });
-    }
 
     return { success: true };
   } catch (error) {
