@@ -4,8 +4,6 @@ import { Effect, Schedule } from "effect";
 import { SchemaType, type Schema } from "@google/generative-ai";
 import type { Id } from "@convex/_generated/dataModel";
 import { auth } from "@clerk/nextjs/server";
-import arcjet, { detectBot, fixedWindow, request, slidingWindow } from "@arcjet/next";
-import { headers } from "next/headers";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
 import { api } from "@convex/_generated/api";
 
@@ -18,6 +16,7 @@ import {
 } from "@/lib/inferenceOutputGuards";
 import { runServerAction } from "@/lib/run-effect";
 import { ensureTraceContext } from "@/lib/trace";
+import { ArcjetLive, ArcjetService } from "@/services/ArcjetService";
 import { GeminiLive, GeminiService } from "@/services/GeminiService";
 import {
   processWardrobeInference,
@@ -27,99 +26,34 @@ import {
 type UserTier = "free" | "pro";
 type AuthenticatedScope = "upload" | "check" | "inference";
 
-const UPLOAD_DAILY_LIMIT: Record<UserTier, number> = { free: 5, pro: 20 };
-const CHECK_DAILY_LIMIT: Record<UserTier, number> = { free: 3, pro: 20 };
-const INFERENCE_DAILY_LIMIT: Record<UserTier, number> = { free: 5, pro: 20 };
-const RATE_LIMIT_WINDOW = "1d";
-const RATE_LIMIT_BURST_INTERVAL = "10s";
-const RATE_LIMIT_BURST_MAX: Partial<Record<AuthenticatedScope, number>> = {
-  check: 1,
-  inference: 1,
-};
-const BOT_BLOCK_MESSAGE = "Request blocked because automated traffic was detected.";
-const UPLOAD_RATE_LIMIT_MESSAGE =
-  "Upload limit reached for your plan. Please try again later or upgrade to continue.";
-const CHECK_RATE_LIMIT_MESSAGE =
-  "Compatibility check limit reached for your plan. Please try again later or upgrade to continue.";
-const INFERENCE_RATE_LIMIT_MESSAGE =
-  "Analysis limit reached for your plan. Please try again later or upgrade to continue.";
-
 const resolveUserTier = (has: Awaited<ReturnType<typeof auth>>["has"]): UserTier =>
   has?.({ permission: "compatibility_check" }) || has?.({ plan: "pro" }) ? "pro" : "free";
-
-const createAuthenticatedProtection = (scope: AuthenticatedScope, dailyLimit: number) => {
-  const arcjetKey = process.env.ARCJET_KEY;
-  if (!arcjetKey) return null;
-
-  return arcjet({
-    key: arcjetKey,
-    characteristics: ["userId"],
-    rules: [
-      detectBot({
-        mode: "LIVE",
-        allow: [],
-      }),
-      fixedWindow({
-        mode: "LIVE",
-        max: dailyLimit,
-        window: RATE_LIMIT_WINDOW,
-        characteristics: ["userId"],
-      }),
-      ...(RATE_LIMIT_BURST_MAX[scope]
-        ? [
-            slidingWindow({
-              mode: "LIVE",
-              max: RATE_LIMIT_BURST_MAX[scope],
-              interval: RATE_LIMIT_BURST_INTERVAL,
-              characteristics: ["userId"],
-            }),
-          ]
-        : []),
-    ],
-  });
-};
-
-const authenticatedProtection: Record<
-  AuthenticatedScope,
-  Record<UserTier, ReturnType<typeof createAuthenticatedProtection>>
-> = {
-  upload: {
-    free: createAuthenticatedProtection("upload", UPLOAD_DAILY_LIMIT.free),
-    pro: createAuthenticatedProtection("upload", UPLOAD_DAILY_LIMIT.pro),
-  },
-  check: {
-    free: createAuthenticatedProtection("check", CHECK_DAILY_LIMIT.free),
-    pro: createAuthenticatedProtection("check", CHECK_DAILY_LIMIT.pro),
-  },
-  inference: {
-    free: createAuthenticatedProtection("inference", INFERENCE_DAILY_LIMIT.free),
-    pro: createAuthenticatedProtection("inference", INFERENCE_DAILY_LIMIT.pro),
-  },
-};
 
 const enforceAuthenticatedProtection = async (input: {
   scope: AuthenticatedScope;
   tier: UserTier;
   userId: string;
-}) => {
-  const protection = authenticatedProtection[input.scope][input.tier];
-  if (!protection) {
-    throw new Error("Security checks are unavailable right now. Please try again.");
-  }
+}) =>
+  runServerAction(
+    ArcjetService.pipe(
+      Effect.flatMap((arcjet) =>
+        arcjet.protectAuthenticated({
+          scope: input.scope,
+          tier: input.tier,
+          userId: input.userId,
+        })
+      ),
+      Effect.provide(ArcjetLive)
+    )
+  );
 
-  const req = await request();
-  const decision = await protection.protect(req, { userId: input.userId });
-
-  if (!decision.isDenied()) return;
-  if (decision.reason.isBot()) throw new Error(BOT_BLOCK_MESSAGE);
-  if (decision.reason.isRateLimit()) {
-    if (input.scope === "upload") throw new Error(UPLOAD_RATE_LIMIT_MESSAGE);
-    if (input.scope === "check") throw new Error(CHECK_RATE_LIMIT_MESSAGE);
-    throw new Error(INFERENCE_RATE_LIMIT_MESSAGE);
-  }
-
-  throw new Error("Request denied. Please try again.");
-};
+const enforceGuestBatchProtection = () =>
+  runServerAction(
+    ArcjetService.pipe(
+      Effect.flatMap((arcjet) => arcjet.protectGuestBatch()),
+      Effect.provide(ArcjetLive)
+    )
+  );
 
 const getConvexAuth = async () => {
   const { userId, getToken, has } = await auth();
@@ -154,38 +88,6 @@ const withRetries = <A, E, R>(effect: Effect.Effect<A, E, R>, attempts = 3) =>
 
 const toErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
-
-const GUEST_BATCH_UPLOAD_LIMIT = 2;
-const GUEST_BATCH_LIMIT_WINDOW = "7d";
-const GUEST_AUTH_PROMPT_MESSAGE =
-  "You have reached the guest upload limit (2 batches per week). Please sign in or create an account to continue.";
-const GUEST_BOT_BLOCK_MESSAGE =
-  "Upload blocked because automated traffic was detected. Please sign in or create an account to continue.";
-
-const guestBatchProtection = (() => {
-  const arcjetKey = process.env.ARCJET_KEY;
-  if (!arcjetKey) return null;
-
-  return arcjet({
-    key: arcjetKey,
-    rules: [
-      detectBot({
-        mode: "LIVE",
-        allow: [],
-      }),
-      fixedWindow({
-        mode: "LIVE",
-        max: GUEST_BATCH_UPLOAD_LIMIT,
-        window: GUEST_BATCH_LIMIT_WINDOW,
-        characteristics: [
-          "ip.src",
-          'http.request.headers["user-agent"]',
-          'http.request.headers["accept-language"]',
-        ],
-      }),
-    ],
-  });
-})();
 
 const analyzeImageFull = (base64: string) =>
   Effect.gen(function* () {
@@ -790,8 +692,6 @@ const GUEST_DEMO_ITEM_LIMIT = 4;
 const GUEST_DEMO_MAX_IMAGE_BYTES = 1_500_000;
 const GUEST_DEMO_MAX_TOTAL_BYTES = 4_000_000;
 const GUEST_DEMO_MAX_FILENAME_LENGTH = 140;
-const GUEST_DEMO_RATE_WINDOW_MS = 60_000;
-const GUEST_DEMO_RATE_MAX_REQUESTS = 4;
 const GUEST_DEMO_ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -799,8 +699,6 @@ const GUEST_DEMO_ALLOWED_MIME_TYPES = new Set([
   "image/heic",
   "image/heif",
 ]);
-
-const guestRequestWindow = new Map<string, { count: number; resetAt: number }>();
 
 const extractBase64Payload = (value: string) => value.replace(/^data:.*;base64,/, "").replace(/\s+/g, "");
 
@@ -811,38 +709,6 @@ const estimateDecodedBytes = (base64: string) => {
 
   const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
   return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
-};
-
-const getGuestRateLimitKey = async () => {
-  try {
-    const requestHeaders = await headers();
-    const forwardedFor = requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim();
-    const realIp = requestHeaders.get("x-real-ip")?.trim();
-    const userAgent = requestHeaders.get("user-agent")?.slice(0, 120);
-    return forwardedFor || realIp || userAgent || "guest:unknown";
-  } catch {
-    return "guest:unknown";
-  }
-};
-
-const enforceGuestRateLimit = async () => {
-  const key = await getGuestRateLimitKey();
-  const nowTs = Date.now();
-  const existing = guestRequestWindow.get(key);
-
-  if (!existing || existing.resetAt <= nowTs) {
-    guestRequestWindow.set(key, {
-      count: 1,
-      resetAt: nowTs + GUEST_DEMO_RATE_WINDOW_MS,
-    });
-    return;
-  }
-
-  if (existing.count >= GUEST_DEMO_RATE_MAX_REQUESTS) {
-    throw new Error("Guest demo is busy. Please wait a minute and try again.");
-  }
-
-  existing.count += 1;
 };
 
 const validateGuestBatchItems = (items: { fileName: string; mimeType: string; base64: string }[]) => {
@@ -882,33 +748,13 @@ export const analyzeGuestBatchAction = async (input: {
   traceId?: string;
   traceparent?: string;
 }) => {
-  await enforceGuestRateLimit();
+  await enforceGuestBatchProtection();
   const { traceId, traceparent } = ensureTraceContext(input);
   const cappedItems = input.items.slice(0, GUEST_DEMO_ITEM_LIMIT);
   const validatedItems = validateGuestBatchItems(cappedItems);
 
   if (validatedItems.length === 0) {
     throw new Error("No images provided");
-  }
-
-  if (!guestBatchProtection) {
-    console.error("guest.demo.arcjet.missing_key", { traceId, traceparent });
-    throw new Error("Guest uploads are unavailable right now. Please sign in or create an account.");
-  }
-
-  const req = await request();
-  const decision = await guestBatchProtection.protect(req);
-
-  if (decision.isDenied()) {
-    if (decision.reason.isBot()) {
-      throw new Error(GUEST_BOT_BLOCK_MESSAGE);
-    }
-
-    if (decision.reason.isRateLimit()) {
-      throw new Error(GUEST_AUTH_PROMPT_MESSAGE);
-    }
-
-    throw new Error("Guest upload request blocked. Please sign in or create an account.");
   }
 
   const analyzed = [];
