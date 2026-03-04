@@ -726,7 +726,6 @@ export const analyzeGuestBatchAction = async (input: {
   traceId?: string;
   traceparent?: string;
 }) => {
-  await enforceGuestBatchProtection();
   const { traceId, traceparent } = ensureTraceContext(input);
   const cappedItems = input.items.slice(0, GUEST_DEMO_ITEM_LIMIT);
   const validatedItems = validateGuestBatchItems(cappedItems);
@@ -734,6 +733,7 @@ export const analyzeGuestBatchAction = async (input: {
   if (validatedItems.length === 0) {
     throw new Error("No images provided");
   }
+  await enforceGuestBatchProtection();
 
   const analyzed = [];
   for (const item of validatedItems) {

@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { Effect, Layer } from 'effect';
 import { useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { CloudUpload, AlertCircle } from 'lucide-react';
+import { ImageUploadService, makeImageUploadLayer } from '@/services/ImageUploadService';
 
 export interface UploadedFile {
     storageId: string;
@@ -18,6 +20,7 @@ interface ImageUploaderProps {
     enablePreview?: boolean;
     inputId?: string;
     capture?: 'user' | 'environment';
+    uploadLayer?: Layer.Layer<ImageUploadService>;
 }
 
 export default function ImageUploader({
@@ -27,12 +30,15 @@ export default function ImageUploader({
     enablePreview = false,
     inputId,
     capture,
+    uploadLayer,
 }: ImageUploaderProps) {
     const [isDragging, setIsDragging] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const getUploadUrl = useMutation(api.wardrobe.getUploadUrl);
+    const liveUploadLayer = makeImageUploadLayer({ getUploadUrl });
+    const activeUploadLayer = uploadLayer ?? liveUploadLayer;
 
     // Determine label based on allowMultiple if not explicitly provided
     const displayLabel = label || (allowMultiple ? "Upload Images" : "Upload Image");
@@ -74,25 +80,12 @@ export default function ImageUploader({
 
         try {
             for (const file of files) {
-                if (!file.type.startsWith('image/')) {
-                    setError('Only image files are allowed.');
-                    continue;
-                }
-
-                const uploadUrl = await getUploadUrl();
-                const uploadResponse = await fetch(uploadUrl, {
-                    method: 'POST',
-                    body: file,
-                });
-
-                if (!uploadResponse.ok) {
-                    throw new Error(`Upload failed: ${uploadResponse.statusText}`);
-                }
-
-                const { storageId } = await uploadResponse.json();
-                if (!storageId) {
-                    throw new Error('Upload response missing storageId');
-                }
+                const { storageId } = await Effect.runPromise(
+                    ImageUploadService.pipe(
+                        Effect.flatMap((service) => service.uploadImageFile(file)),
+                        Effect.provide(activeUploadLayer)
+                    )
+                );
 
                 uploadedFiles.push({
                     storageId,
