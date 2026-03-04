@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { Loader2, Ticket } from 'lucide-react';
 import ImageUploader, { type UploadedFile } from './ImageUploader';
 import { checkCompatibilityAction } from '@/app/actions/wardrobe';
@@ -103,12 +104,15 @@ export default function CompatibilityChecker() {
                   <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
                     {result.similarItems.map((item) => (
                       <div key={item.id} className="border-2 border-black bg-white p-3">
-                        <img
-                          src={item.imageUrl ?? ''}
-                          alt={item.description ?? 'Closet item'}
-                          className="h-56 w-full border-2 border-black object-cover"
-                          loading="lazy"
-                        />
+                        <div className="relative h-56 w-full border-2 border-black">
+                          <Image
+                            src={item.imageUrl ?? ''}
+                            alt={item.description ?? 'Closet item'}
+                            fill
+                            sizes="(min-width: 768px) 33vw, 100vw"
+                            className="object-cover"
+                          />
+                        </div>
                         <p className="mt-2 text-sm font-black uppercase text-[#310A31]">{item.category}</p>
                         <p className="text-xs font-semibold text-emerald-800">
                           Match {Math.round(item.similarity * 100)}%
@@ -131,12 +135,15 @@ export default function CompatibilityChecker() {
                   <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
                     {result.dissimilarItems.map((item) => (
                       <div key={item.id} className="border-2 border-black bg-white p-3">
-                        <img
-                          src={item.imageUrl ?? ''}
-                          alt={item.description ?? 'Closet item'}
-                          className="h-56 w-full border-2 border-black object-cover"
-                          loading="lazy"
-                        />
+                        <div className="relative h-56 w-full border-2 border-black">
+                          <Image
+                            src={item.imageUrl ?? ''}
+                            alt={item.description ?? 'Closet item'}
+                            fill
+                            sizes="(min-width: 768px) 33vw, 100vw"
+                            className="object-cover"
+                          />
+                        </div>
                         <p className="mt-2 text-sm font-black uppercase text-[#310A31]">{item.category}</p>
                         <p className="text-xs font-semibold text-rose-700">
                           Clash {Math.round(item.similarity * 100)}%

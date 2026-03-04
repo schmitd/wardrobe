@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 
 interface RackItemCardProps {
@@ -27,12 +28,13 @@ export default function RackItemCard({
 }: RackItemCardProps) {
   return (
     <article className={`rack-item-card ${className ?? ''}`.trim()}>
-      <div className="rack-item-image-wrap">
-        <img
+      <div className="rack-item-image-wrap relative">
+        <Image
           src={imageUrl}
           alt={description ?? category ?? 'Closet item'}
+          fill
+          sizes="(max-width: 640px) 55vw, (max-width: 1024px) 45vw, 35vw"
           className="rack-item-image"
-          loading="lazy"
         />
       </div>
 
