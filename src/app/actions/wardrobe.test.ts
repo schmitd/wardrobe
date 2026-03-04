@@ -3,17 +3,6 @@ import { describe, it, expect, beforeEach, mock } from "bun:test";
 const fetchMutationMock = mock();
 const fetchQueryMock = mock();
 const runServerActionMock = mock();
-const protectMock = mock(async () => ({
-  isDenied: () => false,
-  reason: {
-    isBot: () => false,
-    isRateLimit: () => false,
-  },
-}));
-const arcjetFactoryMock = mock(() => ({
-  protect: protectMock,
-}));
-const arcjetRequestMock = mock(async () => ({ headers: new Headers() }));
 
 const apiMock = {
   wardrobe: {
@@ -58,14 +47,6 @@ mock.module("@/lib/run-effect", () => ({
   runServerAction: runServerActionMock,
 }));
 
-mock.module("@arcjet/next", () => ({
-  default: arcjetFactoryMock,
-  detectBot: () => ({}),
-  fixedWindow: () => ({}),
-  slidingWindow: () => ({}),
-  request: arcjetRequestMock,
-}));
-
 process.env.ARCJET_KEY = "test_arcjet_key";
 
 const { api } = await import("@convex/_generated/api");
@@ -79,19 +60,28 @@ const setupFetch = () => {
   })) as unknown as typeof fetch;
 };
 
+const allowArcjet = () => {
+  runServerActionMock.mockResolvedValueOnce(undefined);
+};
+
+const queueRunServerAction = (...values: unknown[]) => {
+  allowArcjet();
+  for (const value of values) {
+    runServerActionMock.mockResolvedValueOnce(value);
+  }
+};
+
 beforeEach(() => {
   fetchMutationMock.mockClear();
   fetchQueryMock.mockClear();
   runServerActionMock.mockClear();
-  protectMock.mockClear();
-  arcjetFactoryMock.mockClear();
-  arcjetRequestMock.mockClear();
   setupFetch();
 });
 
 describe("wardrobe server actions", () => {
   it("creates a wardrobe item with trace context", async () => {
     fetchMutationMock.mockResolvedValue({ id: "item_1" });
+    allowArcjet();
 
     const result = await actions.createWardrobeItemAction({
       storageId: "storage_1",
@@ -153,10 +143,11 @@ describe("wardrobe server actions", () => {
       return null;
     });
 
-    runServerActionMock
-      .mockResolvedValueOnce({ category: "Shirt", style_tags: ["casual"] })
-      .mockResolvedValueOnce({ category: "Shirt", description: "Blue shirt" })
-      .mockResolvedValueOnce([0.1, 0.2, 0.3]);
+    queueRunServerAction(
+      { category: "Shirt", style_tags: ["casual"] },
+      { category: "Shirt", description: "Blue shirt" },
+      [0.1, 0.2, 0.3]
+    );
 
     fetchMutationMock.mockResolvedValue({ success: true });
 
@@ -176,7 +167,8 @@ describe("wardrobe server actions", () => {
       imageUrl: "https://example.com/item.jpg",
     });
 
-    runServerActionMock.mockRejectedValue(new Error("boom"));
+    allowArcjet();
+    runServerActionMock.mockRejectedValueOnce(new Error("boom"));
     fetchMutationMock.mockResolvedValue({ success: true });
 
     const result = await actions.processWardrobeItemAction({ itemId: "item_1" });
@@ -232,20 +224,21 @@ describe("wardrobe server actions", () => {
       return null;
     });
 
-    runServerActionMock
-      .mockResolvedValueOnce({
+    queueRunServerAction(
+      {
         category: "Shirt",
         description: "Blue shirt",
         style_tags: ["casual"],
-      })
-      .mockResolvedValueOnce("blue shirt casual")
-      .mockResolvedValueOnce([1, 0, 0])
-      .mockResolvedValueOnce({
+      },
+      "blue shirt casual",
+      [1, 0, 0],
+      {
         score: 80,
         explanation: "Works well",
         best_pairings: [0],
         worst_clashes: [],
-      });
+      }
+    );
 
     const result = await actions.checkCompatibilityAction({ storageId: "storage_1" });
 
@@ -283,5 +276,65 @@ describe("wardrobe server actions", () => {
       }),
       expect.objectContaining({ token: "token_123" })
     );
+  });
+
+  it("caps guest batch analysis at four items", async () => {
+    queueRunServerAction(
+      {
+        category: "Top",
+        description: "Blue shirt",
+        style_tags: ["casual"],
+      },
+      {
+        category: "Bottom",
+        description: "Black jeans",
+        style_tags: ["minimal"],
+      },
+      {
+        category: "Outerwear",
+        description: "Olive jacket",
+        style_tags: ["layered"],
+      },
+      {
+        category: "Shoes",
+        description: "White sneakers",
+        style_tags: ["sporty"],
+      },
+      { bio: "I wear clean lines with practical layers." }
+    );
+
+    const result = await actions.analyzeGuestBatchAction({
+      items: [
+        { fileName: "one.jpg", mimeType: "image/jpeg", base64: "data:image/jpeg;base64,QUJDRA==" },
+        { fileName: "two.jpg", mimeType: "image/jpeg", base64: "data:image/jpeg;base64,QUJDRA==" },
+        { fileName: "three.jpg", mimeType: "image/jpeg", base64: "data:image/jpeg;base64,QUJDRA==" },
+        { fileName: "four.jpg", mimeType: "image/jpeg", base64: "data:image/jpeg;base64,QUJDRA==" },
+        { fileName: "five.jpg", mimeType: "image/jpeg", base64: "data:image/jpeg;base64,QUJDRA==" },
+      ],
+    });
+
+    expect(result.limit).toBe(4);
+    expect(result.capped).toBe(true);
+    expect(result.items).toHaveLength(4);
+    expect(runServerActionMock).toHaveBeenCalledTimes(6);
+  });
+
+  it("rejects oversized guest images before inference", async () => {
+    const oversized = "A".repeat(2_100_000);
+    allowArcjet();
+
+    await expect(
+      actions.analyzeGuestBatchAction({
+        items: [
+          {
+            fileName: "huge.jpg",
+            mimeType: "image/jpeg",
+            base64: oversized,
+          },
+        ],
+      })
+    ).rejects.toThrow("Each image must be under 1.5MB after compression");
+
+    expect(runServerActionMock).toHaveBeenCalledTimes(1);
   });
 });
