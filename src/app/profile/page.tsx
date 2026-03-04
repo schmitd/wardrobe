@@ -1,138 +1,197 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useUser } from '@clerk/nextjs';
-import { updateBio, getBio, analyzeSelfie } from '../actions';
-import ImageUploader from '@/components/ImageUploader';
+import { useMemo, useState } from 'react';
+import { useClerk, useUser } from '@clerk/nextjs';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import { Sparkles } from 'lucide-react';
+import ImageUploader, { type UploadedFile } from '@/components/ImageUploader';
+import { analyzeSelfieAction, updateProfileBioAction } from '@/app/actions/wardrobe';
+import { createTraceContext } from '@/lib/trace';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
 
 export default function ProfilePage() {
-  const { user, isLoaded } = useUser();
-  const [bio, setBio] = useState('');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'saving' | 'success' | 'error'>('loading');
+  const { isLoaded } = useUser();
+  const clerk = useClerk();
+  const profile = useQuery(api.profile.getProfile, isLoaded ? {} : 'skip');
+
+  const [bioDraft, setBioDraft] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'loading' | 'saving' | 'success' | 'error'>(
+    'idle'
+  );
   const [errorMessage, setErrorMessage] = useState('');
-  const [analysisResult, setAnalysisResult] = useState<{ skinTone: string, hairColor: string } | null>(null);
+  const [analysisOverride, setAnalysisOverride] = useState<{
+    skinTone: string;
+    hairColor: string;
+  } | null>(null);
 
-  useEffect(() => {
-    if (!isLoaded || !user) return;
-
-    const fetchBio = async () => {
-      try {
-        const result = await getBio();
-        // result is { success: boolean, bio?: string, error?: string }
-        if (result.success && 'bio' in result && result.bio) {
-          setBio(result.bio);
-        }
-      } catch (e) {
-        console.error("Failed to fetch bio", e);
-      } finally {
-        setStatus('idle');
-      }
-    };
-    fetchBio();
-  }, [isLoaded, user]);
+  const bio = useMemo(() => bioDraft ?? profile?.bio ?? '', [bioDraft, profile]);
+  const analysisResult = useMemo(() => {
+    if (analysisOverride) return analysisOverride;
+    if (profile?.skinTone || profile?.hairColor) {
+      return {
+        skinTone: profile.skinTone ?? 'Unknown',
+        hairColor: profile.hairColor ?? 'Unknown',
+      };
+    }
+    return null;
+  }, [analysisOverride, profile]);
 
   const handleSave = async () => {
-    setStatus('saving');
+    setSaveStatus('saving');
     setErrorMessage('');
     try {
-      const result = await updateBio(bio);
-      if (result.success) {
-        setStatus('success');
-      } else {
-        setStatus('error');
-        setErrorMessage('error' in result ? result.error : 'Failed to save');
-      }
-    } catch (e) {
-      setStatus('error');
-      setErrorMessage(String(e));
+      const trace = createTraceContext();
+      await updateProfileBioAction({ bio, ...trace });
+      setSaveStatus('success');
+    } catch (error) {
+      setSaveStatus('error');
+      setErrorMessage(String(error));
     }
   };
 
-  if (!isLoaded) return <div className="p-8">Loading...</div>;
+  if (!isLoaded) {
+    return <div className="p-8 text-sm font-semibold uppercase tracking-wide">Loading profile...</div>;
+  }
 
   return (
-    <div className="max-w-2xl mx-auto p-8">
-      <h1 className="text-3xl font-bold mb-6">Your Style Profile</h1>
-
-      <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Style Bio (Pro Feature)
-          </label>
-          <p className="text-sm text-gray-500 mb-2">
-            Describe your personal style, fashion goals, and preferences. The AI will use this to personalize your analysis.
+    <main className="mx-auto grid w-full max-w-[1320px] gap-6 px-4 py-8 lg:grid-cols-[1.1fr_1fr] lg:px-8">
+      <section className="space-y-6">
+        <Card className="rack-panel rounded-none py-0">
+          <CardContent className="px-0">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#9C92A3]">Personalization</p>
+          <h1 className="mt-2 text-4xl font-black uppercase tracking-tight text-[#310A31]">
+            Style profile
+          </h1>
+          <p className="mt-3 text-sm font-medium text-slate-700">
+            Keep your style notes current so recommendations stay aligned with your closet goals.
           </p>
-          <textarea
-            className="w-full p-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[150px]"
-            placeholder="I love vintage aesthetic mixed with modern streetwear..."
+          </CardContent>
+        </Card>
+
+        <Card className="rack-panel rounded-none py-0">
+          <CardContent className="px-0">
+          <label className="block text-xs font-black uppercase tracking-[0.16em] text-[#310A31]">
+            Style bio
+          </label>
+          <Textarea
             value={bio}
-            onChange={(e) => setBio(e.target.value)}
+            onChange={(event) => setBioDraft(event.target.value)}
+            placeholder="I build around neutral layers, tailored fits, and statement outerwear..."
+            className="mt-3 h-48 w-full resize-none rounded-none border-4 border-black bg-white p-4 text-sm font-medium leading-relaxed text-slate-900"
           />
-        </div>
 
-        {status === 'error' && (
-          <div className="mb-4 text-red-600 text-sm">{errorMessage}</div>
-        )}
+          {saveStatus === 'error' && (
+            <p className="mt-4 border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">
+              {errorMessage}
+            </p>
+          )}
 
-        {status === 'success' && (
-          <div className="mb-4 text-green-600 text-sm">Profile updated successfully!</div>
-        )}
+          {saveStatus === 'success' && (
+            <p className="mt-4 border-2 border-black bg-emerald-100 p-3 text-sm font-semibold text-emerald-900">
+              Profile updated.
+            </p>
+          )}
 
-        <button
-          onClick={handleSave}
-          disabled={status === 'saving'}
-          className="bg-black text-white px-6 py-2 rounded-md hover:bg-gray-800 disabled:opacity-50 transition-colors"
-        >
-          {status === 'saving' ? 'Saving...' : 'Save Profile'}
-        </button>
-      </div>
+          <Button
+            type="button"
+            onClick={handleSave}
+            disabled={saveStatus === 'saving'}
+            className="mt-4 h-auto rounded-none border-4 border-black bg-[#310A31] px-5 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[6px_6px_0_#000] disabled:opacity-60"
+          >
+            {saveStatus === 'saving' ? 'Saving...' : 'Save profile'}
+          </Button>
+          </CardContent>
+        </Card>
 
-      <div className="mt-8 p-6 bg-gray-50 rounded-lg border border-gray-200">
-        <h2 className="text-xl font-semibold mb-4">Selfie Analysis (Pro Feature)</h2>
-        <p className="text-gray-600 mb-4">Upload a selfie to analyze your color season and fit.</p>
+        <Card className="rack-panel rounded-none py-0">
+          <CardContent className="px-0">
+          <div className="mb-4 flex items-center gap-2 text-[#310A31]">
+            <Sparkles className="h-4 w-4" />
+            <h2 className="text-lg font-black uppercase tracking-wide">Color and fit profile</h2>
+          </div>
+          <p className="mb-4 text-sm font-medium text-slate-700">
+            Upload a selfie to refresh your tone profile and style summary.
+          </p>
 
-        <ImageUploader
-          label="Upload a Selfie"
-          allowMultiple={false}
-          onUploadComplete={async (paths) => {
-            if (paths.length === 0) return;
-            setStatus('loading');
-            try {
-              const res = await analyzeSelfie(paths[0]);
-              if (res.success && 'data' in res) {
-                setBio(res.data.bio); // Pre-fill bio
-                setAnalysisResult({
-                  skinTone: res.data.skin_tone,
-                  hairColor: res.data.hair_color
+          <ImageUploader
+            label="Upload Selfie"
+            allowMultiple={false}
+            onUploadComplete={async (uploads: UploadedFile[]) => {
+              if (uploads.length === 0) return;
+              setSaveStatus('loading');
+              try {
+                const trace = createTraceContext();
+                const result = await analyzeSelfieAction({
+                  storageId: uploads[0].storageId,
+                  ...trace,
                 });
-                setStatus('success');
-              } else {
-                setStatus('error');
-                setErrorMessage((res as any).error || "Analysis failed");
+                setBioDraft(result.bio);
+                setAnalysisOverride({
+                  skinTone: result.skin_tone,
+                  hairColor: result.hair_color,
+                });
+                setSaveStatus('success');
+              } catch (error) {
+                console.error('selfie.analyze.failed', error);
+                setSaveStatus('error');
+                setErrorMessage('Failed to analyze selfie');
               }
-            } catch (e) {
-              setStatus('error');
-              setErrorMessage("Failed to analyze selfie");
-            }
-          }}
-        />
+            }}
+          />
 
-        {analysisResult && (
-          <div className="mt-6 p-4 bg-white rounded border border-indigo-100 shadow-sm animate-in fade-in">
-            <h3 className="font-semibold text-indigo-900 mb-2">Analysis Results</h3>
-            <div className="grid grid-cols-2 gap-4">
+          {analysisResult && (
+            <div className="mt-4 grid grid-cols-2 gap-3 border-2 border-black bg-white p-4">
               <div>
-                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Skin Tone</span>
-                <p className="font-medium text-gray-900">{analysisResult.skinTone}</p>
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                  Skin tone
+                </span>
+                <p className="mt-1 text-sm font-black uppercase text-[#310A31]">
+                  {analysisResult.skinTone}
+                </p>
               </div>
               <div>
-                <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Hair Color</span>
-                <p className="font-medium text-gray-900">{analysisResult.hairColor}</p>
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                  Hair color
+                </span>
+                <p className="mt-1 text-sm font-black uppercase text-[#310A31]">
+                  {analysisResult.hairColor}
+                </p>
               </div>
             </div>
+          )}
+          </CardContent>
+        </Card>
+      </section>
+
+      <Card className="rack-panel rounded-none py-0">
+        <CardContent className="px-0">
+          <h2 className="text-lg font-black uppercase tracking-wide text-[#310A31]">Account settings</h2>
+          <p className="mt-2 text-sm font-medium text-slate-700">
+            Manage account details, authentication methods, and security settings.
+          </p>
+
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button
+              type="button"
+              onClick={() => clerk.openUserProfile()}
+              className="h-auto rounded-none border-4 border-black bg-[#310A31] px-5 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[6px_6px_0_#000]"
+            >
+              Manage account
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => clerk.signOut({ redirectUrl: '/' })}
+              className="h-auto rounded-none border-4 border-black bg-white px-5 py-3 text-xs font-black uppercase tracking-wide text-[#310A31] shadow-[6px_6px_0_#000]"
+            >
+              Sign out
+            </Button>
           </div>
-        )}
-      </div>
-    </div>
+        </CardContent>
+      </Card>
+    </main>
   );
 }

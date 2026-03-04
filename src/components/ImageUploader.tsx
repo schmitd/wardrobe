@@ -1,20 +1,38 @@
 'use client';
 
 import { useState, useRef } from 'react';
-import { CloudUpload, X, Image as ImageIcon, CheckCircle, AlertCircle } from 'lucide-react';
-import { getUploadUrl } from '@/app/upload-actions';
+import { useMutation } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import { CloudUpload, AlertCircle } from 'lucide-react';
 
-interface ImageUploaderProps {
-    onUploadComplete: (paths: string[]) => void;
-    label?: string;
-    allowMultiple?: boolean;
+export interface UploadedFile {
+    storageId: string;
+    previewUrl?: string;
+    file: File;
 }
 
-export default function ImageUploader({ onUploadComplete, label, allowMultiple = true }: ImageUploaderProps) {
+interface ImageUploaderProps {
+    onUploadComplete: (files: UploadedFile[]) => void;
+    label?: string;
+    allowMultiple?: boolean;
+    enablePreview?: boolean;
+    inputId?: string;
+    capture?: 'user' | 'environment';
+}
+
+export default function ImageUploader({
+    onUploadComplete,
+    label,
+    allowMultiple = true,
+    enablePreview = false,
+    inputId,
+    capture,
+}: ImageUploaderProps) {
     const [isDragging, setIsDragging] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const getUploadUrl = useMutation(api.wardrobe.getUploadUrl);
 
     // Determine label based on allowMultiple if not explicitly provided
     const displayLabel = label || (allowMultiple ? "Upload Images" : "Upload Image");
@@ -52,7 +70,7 @@ export default function ImageUploader({ onUploadComplete, label, allowMultiple =
     const handleFiles = async (files: File[]) => {
         setUploading(true);
         setError(null);
-        const uploadedPaths: string[] = [];
+        const uploadedFiles: UploadedFile[] = [];
 
         try {
             for (const file of files) {
@@ -61,26 +79,9 @@ export default function ImageUploader({ onUploadComplete, label, allowMultiple =
                     continue;
                 }
 
-                // 1. Get Signed URL
-                const response = await getUploadUrl(file.name, file.type);
-
-                if (!response.success) {
-                    throw new Error(response.error || 'Failed to get upload URL');
-                }
-
-                // Assert type for success case
-                const { url, path } = response as { success: true; url: string; token: string; path: string };
-
-                if (!url || !path) {
-                    throw new Error('Invalid response from server');
-                }
-
-                // 2. Upload to Supabase Storage via signed URL
-                const uploadResponse = await fetch(url, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': file.type,
-                    },
+                const uploadUrl = await getUploadUrl();
+                const uploadResponse = await fetch(uploadUrl, {
+                    method: 'POST',
                     body: file,
                 });
 
@@ -88,11 +89,20 @@ export default function ImageUploader({ onUploadComplete, label, allowMultiple =
                     throw new Error(`Upload failed: ${uploadResponse.statusText}`);
                 }
 
-                uploadedPaths.push(path);
+                const { storageId } = await uploadResponse.json();
+                if (!storageId) {
+                    throw new Error('Upload response missing storageId');
+                }
+
+                uploadedFiles.push({
+                    storageId,
+                    previewUrl: enablePreview ? URL.createObjectURL(file) : undefined,
+                    file,
+                });
             }
 
-            if (uploadedPaths.length > 0) {
-                onUploadComplete(uploadedPaths);
+            if (uploadedFiles.length > 0) {
+                onUploadComplete(uploadedFiles);
             }
 
         } catch (e) {
@@ -109,10 +119,11 @@ export default function ImageUploader({ onUploadComplete, label, allowMultiple =
     return (
         <div className="w-full">
             <div
-                className={`relative border-2 border-dashed rounded-xl p-8 transition-all duration-200 ease-in-out text-center cursor-pointer ${isDragging
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-300 hover:border-gray-400 hover:bg-gray-50'
-                    }`}
+                className={`relative cursor-pointer border-4 border-black p-8 text-center transition-all duration-200 ease-in-out ${
+                    isDragging
+                        ? 'bg-[#c6b9cd]'
+                        : 'bg-white hover:-translate-y-1 hover:shadow-[8px_8px_0_#000]'
+                }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
@@ -120,15 +131,17 @@ export default function ImageUploader({ onUploadComplete, label, allowMultiple =
             >
                 <input
                     type="file"
+                    id={inputId}
                     ref={fileInputRef}
                     className="hidden"
                     multiple={allowMultiple}
                     accept="image/*"
+                    capture={capture}
                     onChange={handleFileSelect}
                 />
 
                 <div className="flex flex-col items-center justify-center gap-4">
-                    <div className={`p-4 rounded-full ${isDragging ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+                    <div className={`rounded-none border-2 border-black p-4 ${isDragging ? 'bg-white text-[#310A31]' : 'bg-[#9C92A3] text-white'}`}>
                         {uploading ? (
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
                         ) : (
@@ -137,27 +150,27 @@ export default function ImageUploader({ onUploadComplete, label, allowMultiple =
                     </div>
 
                     <div>
-                        <h4 className="text-lg font-medium text-gray-700">
+                        <h4 className="text-lg font-black uppercase tracking-wide text-[#310A31]">
                             {uploading ? 'Uploading...' : displayLabel}
                         </h4>
-                        <p className="text-sm text-gray-500 mt-1">
+                        <p className="mt-1 text-sm font-medium text-slate-700">
                             {uploading
                                 ? 'Please wait while we process your images'
-                                : (allowMultiple ? 'Click or drag images to upload' : 'Click or drag an image to upload')
+                                : (allowMultiple ? 'Click or drag photos to upload' : 'Click or drag one photo to upload')
                             }
                         </p>
                     </div>
                 </div>
 
                 {uploading && (
-                    <div className="absolute inset-0 bg-white/50 flex items-center justify-center rounded-xl cursor-not-allowed">
+                    <div className="absolute inset-0 cursor-not-allowed bg-white/40">
                         {/* Overlay to prevent interactions while uploading */}
                     </div>
                 )}
             </div>
 
             {error && (
-                <div className="mt-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2">
+                <div className="mt-4 flex items-center gap-2 border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">
                     <AlertCircle size={16} />
                     <span>{error}</span>
                 </div>

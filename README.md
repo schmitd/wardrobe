@@ -11,11 +11,12 @@ A Single Page Application (SPA) that acts as a "Virtual Wardrobe Stylist". The a
 
 ## Tech Stack
 
-- **Framework**: Next.js 14+ (App Router)
+- **Framework**: Next.js (App Router)
 - **Styling**: Tailwind CSS
-- **Database**: Supabase (PostgreSQL + pgvector), accessed via Drizzle ORM
-- **Storage**: Supabase Storage
+- **Database + Sync**: Convex
+- **Storage**: Convex File Storage
 - **AI**: Google Gemini (Vision & Text Embeddings)
+- **Background Jobs**: QStash
 
 ## Setup
 
@@ -24,22 +25,33 @@ A Single Page Application (SPA) that acts as a "Virtual Wardrobe Stylist". The a
     ```bash
     bun install
     ```
-3.  **Environment Variables**:
+3.  **Convex Setup**:
+    ```bash
+    bunx convex dev
+    ```
+    This creates the Convex project config and generates the `convex/_generated` API types.
+4.  **Environment Variables**:
     Copy `.env.local` (or create it) and fill in the following:
     ```env
     GEMINI_API_KEY=your_gemini_key
-    NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-    SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+    NEXT_PUBLIC_CONVEX_URL=your_convex_url
+    CONVEX_SITE_URL=your_convex_site_url
     CLERK_SECRET_KEY=your_clerk_secret_key
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+    CLERK_JWT_ISSUER_DOMAIN=your_clerk_jwt_issuer_domain
+    CLERK_JWT_AUDIENCE=convex
+    CLERK_JWT_TEMPLATE=convex
+    QSTASH_TOKEN=your_qstash_token
+    QSTASH_CURRENT_SIGNING_KEY=your_qstash_current_signing_key
+    QSTASH_NEXT_SIGNING_KEY=your_qstash_next_signing_key
     ZEP_KEY=your_zep_key
-    ARCJET_KEY=your_arcjet_key
+    AXIOM_TOKEN=your_axiom_token
+    AXIOM_DATASET=your_axiom_dataset
     ```
-4.  **Supabase Setup**:
-    -   Create a new Supabase project.
-    -   Go to the SQL Editor and run the script in `sql/schema.sql`.
-    -   This will enable `pgvector` and create the `wardrobe_items` table and matching function.
+    Notes:
+    - `CONVEX_SITE_URL` should be the public `.convex.site` domain so QStash can call the HTTP actions.
+    - The Clerk JWT template must include the `aud` claim matching `CLERK_JWT_AUDIENCE` (default `convex`).
+    - Server actions export OTLP telemetry to Axiom via Effect runtime; enable Convex log streaming separately if you want Convex logs in Axiom.
 5.  **Run the app**:
     ```bash
     bun dev

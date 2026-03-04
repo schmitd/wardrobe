@@ -1,77 +1,320 @@
-import WardrobeGrid from '@/components/WardrobeGrid';
-import { Effect } from 'effect';
-import { runtime } from '@/lib/run-effect';
-import { DatabaseService } from '@/services/DatabaseService';
-import { SupabaseService } from '@/services/SupabaseService';
-import { AppLive } from '@/services';
+'use client';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { SignInButton, SignedOut, useAuth } from '@clerk/nextjs';
+import { Plus, Sparkles } from 'lucide-react';
+import { useQuery } from 'convex/react';
+import { useMutation } from 'convex/react';
+import { api } from '@convex/_generated/api';
 import AddItemSection from '@/components/AddItemSection';
-import { SignInButton, SignedOut } from '@clerk/nextjs';
-import { auth } from '@clerk/nextjs/server';
+import GuestClosetDemo from '@/components/GuestClosetDemo';
+import QuickCompareAction from '@/components/QuickCompareAction';
+import WardrobeGrid from '@/components/WardrobeGrid';
+import {
+  createWardrobeItemAction,
+  seedWardrobeItemFromGuestAction,
+  updateProfileBioAction,
+} from '@/app/actions/wardrobe';
+import { createTraceContext } from '@/lib/trace';
+import { loadGuestSnapshot, removeGuestSnapshotItem, updateGuestSnapshotItem } from '@/lib/guestSnapshot';
+import { dataUrlToFile } from '@/lib/imageClient';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardHeader, CardTitle } from '@/components/ui/card';
+import type { OptimisticWardrobeItem, WardrobeItem } from '@/types/wardrobe';
 
-export const dynamic = 'force-dynamic';
+export default function Home() {
+  const { isSignedIn } = useAuth();
+  const uploadInputId = 'rack-upload-input';
+  const compareInputId = 'rack-compare-input';
+  const items = useQuery(api.wardrobe.listWardrobeItems, isSignedIn ? {} : 'skip');
+  const getUploadUrl = useMutation(api.wardrobe.getUploadUrl);
+  const [optimisticItems, setOptimisticItems] = useState<OptimisticWardrobeItem[]>([]);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
+  const hasStartedGuestImport = useRef(false);
 
-export default async function Home() {
-    const { userId } = await auth();
+  const { filteredOptimisticItems, hiddenServerIds, removedOptimisticItems } = useMemo(() => {
+    if (!items) {
+      return { filteredOptimisticItems: optimisticItems, hiddenServerIds: new Set<string>(), removedOptimisticItems: [] };
+    }
+    const byId = new Map(items.map((item) => [String(item.id), item]));
+    const isTerminal = (status: string) => status === 'ready' || status === 'error';
 
-    let items: any[] = [];
+    const removed = optimisticItems.filter((item) => {
+      if (!item.serverId) return false;
+      const serverItem = byId.get(String(item.serverId));
+      return Boolean(serverItem && isTerminal(serverItem.analysisStatus));
+    });
 
-    if (userId) {
-        items = await runtime.runPromise(
-            Effect.gen(function* () {
-                const databaseService = yield* DatabaseService
-                const supabaseService = yield* SupabaseService
+    const filtered = optimisticItems.filter((item) => {
+      if (!item.serverId) return true;
+      const serverItem = byId.get(String(item.serverId));
+      if (!serverItem) return true;
+      return !isTerminal(serverItem.analysisStatus);
+    });
 
-                const dbItems = yield* databaseService.getWardrobeItems(userId)
+    const hiddenIds = new Set(
+      filtered
+        .map((item) => item.serverId)
+        .filter((id): id is string => Boolean(id))
+        .map(String)
+    );
+    return { filteredOptimisticItems: filtered, hiddenServerIds: hiddenIds, removedOptimisticItems: removed };
+  }, [items, optimisticItems]);
 
-                // Sign URLs for display
-                const signedItems = yield* Effect.all(
-                    dbItems.map(item =>
-                        Effect.gen(function* () {
-                            // If imageUrl is already a full URL (e.g. external), leave it. 
-                            // But we assume it's a path "users/..."
-                            const signedUrl = yield* supabaseService.createSignedUrl(item.imageUrl, 3600)
-                            return { ...item, imageUrl: signedUrl }
-                        }).pipe(
-                            // If signing fails, return null so we can filter it out
-                            Effect.catchAll(e => Effect.succeed(null))
-                        )
-                    ),
-                    { concurrency: 5 }
-                )
+  useEffect(() => {
+    if (removedOptimisticItems.length === 0) return;
+    const removedIds = new Set(removedOptimisticItems.map((item) => item.tempId));
 
-                return signedItems.filter((item): item is NonNullable<typeof item> => item !== null)
-            }).pipe(
-                Effect.catchAll(error => Effect.gen(function* () {
-                    yield* Effect.logError("Error fetching wardrobe items", { userId, error })
-                    return []
-                })),
-                Effect.provide(AppLive)
-            )
-        )
+    for (const item of removedOptimisticItems) {
+      URL.revokeObjectURL(item.imageUrl);
     }
 
-    return (
-        <main className="flex-1 bg-gray-50">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                {userId ? (
-                    <>
-                        <AddItemSection />
-                        <WardrobeGrid items={items || []} />
-                    </>
-                ) : (
-                    <div className="text-center py-20">
-                        <h2 className="text-3xl font-bold text-gray-900 mb-4">Welcome to WardrobeAI</h2>
-                        <p className="text-xl text-gray-600 mb-8">Sign in to manage your digital wardrobe and get styling advice.</p>
-                        <SignedOut>
-                            <SignInButton mode="modal">
-                                <button className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-lg">
-                                    Get Started
-                                </button>
-                            </SignInButton>
-                        </SignedOut>
-                    </div>
-                )}
-            </div>
-        </main>
+    setOptimisticItems((prev) => prev.filter((item) => !removedIds.has(item.tempId)));
+  }, [removedOptimisticItems]);
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    if (hasStartedGuestImport.current) return;
+
+    const snapshot = loadGuestSnapshot();
+    if (!snapshot || snapshot.items.length === 0) return;
+
+    hasStartedGuestImport.current = true;
+
+    const queue = snapshot.items.map((item) => ({
+      item,
+      tempId: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+      ...createTraceContext(),
+    }));
+
+    setOptimisticItems((prev) => [
+      ...queue.map(({ item, tempId }) => ({
+        tempId,
+        imageUrl: item.dataUrl,
+        status: (item.createdItemId ? 'processing' : 'uploading') as OptimisticWardrobeItem['status'],
+        createdAt: Date.now(),
+        category: item.category,
+        description: item.description,
+        styleTags: item.styleTags,
+        serverId: item.createdItemId,
+      })),
+      ...prev,
+    ]);
+
+    const run = async () => {
+      setImportStatus(`Importing ${queue.length} item${queue.length === 1 ? '' : 's'} from guest demo...`);
+
+      // Preserve the guest bio as the signed-in profile draft.
+      try {
+        const trace = createTraceContext();
+        await updateProfileBioAction({ bio: snapshot.bio, ...trace });
+      } catch {
+        // Non-blocking; the user can still edit/save on Profile.
+      }
+
+      for (const { item, tempId, traceId, traceparent } of queue) {
+        try {
+          setOptimisticItems((prev) =>
+            prev.map((entry) => (entry.tempId === tempId ? { ...entry, status: 'processing' } : entry))
+          );
+
+          let createdItemId = item.createdItemId;
+
+          if (!createdItemId) {
+            setImportStatus(`Uploading ${item.fileName}...`);
+            const file = dataUrlToFile(item.dataUrl, item.fileName);
+            const uploadUrl = await getUploadUrl();
+            const uploadResponse = await fetch(uploadUrl, { method: 'POST', body: file });
+            if (!uploadResponse.ok) throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+            const { storageId } = await uploadResponse.json();
+            if (!storageId) throw new Error('Upload response missing storageId');
+
+            const created = await createWardrobeItemAction({
+              storageId,
+              clientFileName: file.name,
+              contentType: file.type,
+              traceId,
+              traceparent,
+            });
+
+            createdItemId = created.id;
+            updateGuestSnapshotItem(item.id, { createdItemId });
+
+            setOptimisticItems((prev) =>
+              prev.map((entry) =>
+                entry.tempId === tempId
+                  ? { ...entry, status: 'processing', serverId: createdItemId }
+                  : entry
+              )
+            );
+          }
+
+          if (!createdItemId) {
+            throw new Error('Import failed to create wardrobe item');
+          }
+
+          const seeded = await seedWardrobeItemFromGuestAction({
+            itemId: createdItemId,
+            category: item.category,
+            description: item.description,
+            styleTags: item.styleTags,
+            traceId,
+            traceparent,
+          });
+
+          if (!seeded.success) {
+            setOptimisticItems((prev) =>
+              prev.map((entry) =>
+                entry.tempId === tempId
+                  ? { ...entry, status: 'error', error: seeded.error ?? 'Processing failed' }
+                  : entry
+              )
+            );
+            continue;
+          }
+
+          // Remove imported items from the guest snapshot so backing out of auth or refreshing
+          // doesn't re-import duplicates.
+          removeGuestSnapshotItem(item.id);
+        } catch (error) {
+          setOptimisticItems((prev) =>
+            prev.map((entry) =>
+              entry.tempId === tempId
+                ? {
+                    ...entry,
+                    status: 'error',
+                    error: error instanceof Error ? error.message : 'Import failed',
+                  }
+                : entry
+            )
+          );
+        }
+      }
+
+      setImportStatus(null);
+    };
+
+    void run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn]);
+
+  const handleOptimisticAdd = (newItems: OptimisticWardrobeItem[]) => {
+    setOptimisticItems((prev) => [...newItems, ...prev]);
+  };
+
+  const handleOptimisticUpdate = (tempId: string, patch: Partial<OptimisticWardrobeItem>) => {
+    setOptimisticItems((prev) =>
+      prev.map((item) => (item.tempId === tempId ? { ...item, ...patch } : item))
     );
+  };
+
+  const displayItems = useMemo<WardrobeItem[]>(
+    () =>
+      (items ?? [])
+        .filter((item) => !hiddenServerIds.has(String(item.id)))
+        .filter((item): item is typeof item & { imageUrl: string } => item.imageUrl !== null)
+        .map((item) => ({
+          id: String(item.id),
+          imageUrl: item.imageUrl,
+          category: item.category ?? null,
+          description: item.description ?? null,
+          styleTags: item.styleTags ?? null,
+          analysisStatus: item.analysisStatus,
+          analysisError: item.analysisError ?? null,
+          createdAt: item.createdAt,
+        })),
+    [hiddenServerIds, items]
+  );
+
+  const triggerInput = (inputId: string, fallback?: string) => {
+    const input = document.getElementById(inputId) as HTMLInputElement | null;
+    if (input) {
+      input.click();
+      return;
+    }
+    if (fallback) {
+      document.getElementById(fallback)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+
+  return (
+    <main className="relative min-h-screen pb-32">
+      <div className="mx-auto w-full max-w-[1320px] space-y-6 px-6 pb-16 pt-10 sm:px-8 lg:px-10">
+        <section className="space-y-6">
+          <Card className="rack-panel rounded-none py-0">
+            <CardHeader className="px-0">
+              <Badge
+                variant="outline"
+                className="w-fit rounded-none border-2 border-black bg-white px-2 py-0 text-[10px] font-bold tracking-[0.2em] text-[#9C92A3]"
+              >
+                Season Rack
+              </Badge>
+              <CardTitle className="mt-2 text-3xl font-black uppercase text-[#310A31] md:text-5xl">
+                {isSignedIn ? 'Your closet in motion' : 'Try your closet companion'}
+              </CardTitle>
+              <p className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-600">
+                {isSignedIn ? 'Signed in · your closet is saved' : 'Guest mode · first batch is free'}
+              </p>
+              <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-slate-800 md:text-base">
+                {isSignedIn
+                  ? 'Upload pieces, compare new finds, and keep your wardrobe aligned with your style goals.'
+                  : 'Upload your first batch of closet photos. We analyze the pieces, draft your style profile, and help you decide what to add next.'}
+              </p>
+            </CardHeader>
+          </Card>
+
+          {importStatus && (
+            <div className="rack-panel rounded-none border-4 border-black bg-white px-5 py-4 text-sm font-semibold uppercase tracking-wide text-[#310A31]">
+              {importStatus}
+            </div>
+          )}
+
+          {isSignedIn ? (
+            <>
+              <AddItemSection
+                onOptimisticAdd={handleOptimisticAdd}
+                onOptimisticUpdate={handleOptimisticUpdate}
+                uploaderInputId={uploadInputId}
+              />
+              <WardrobeGrid items={displayItems} optimisticItems={filteredOptimisticItems} />
+              <QuickCompareAction inputId={compareInputId} />
+            </>
+          ) : (
+            <GuestClosetDemo uploaderInputId={uploadInputId} />
+          )}
+        </section>
+      </div>
+
+      <div className="fixed bottom-6 right-4 z-30 flex flex-col gap-3 sm:right-8">
+        <Button
+          type="button"
+          onClick={() => triggerInput(uploadInputId, 'rack-uploader')}
+          className="rack-fab rounded-none border-2 border-black"
+        >
+          <Plus className="h-4 w-4" />
+          <span>Add to closet</span>
+        </Button>
+        <Button
+          type="button"
+          onClick={() => triggerInput(isSignedIn ? compareInputId : uploadInputId, 'rack-uploader')}
+          variant="outline"
+          className="rack-fab rack-fab-secondary rounded-none border-2 border-black"
+        >
+          <Sparkles className="h-4 w-4" />
+          <span>{isSignedIn ? 'Check fit' : 'Try check'}</span>
+        </Button>
+      </div>
+
+      <SignedOut>
+        <div className="fixed bottom-6 left-4 z-30 sm:left-8">
+          <SignInButton mode="modal" forceRedirectUrl="/" fallbackRedirectUrl="/">
+            <Button className="rounded-full border-2 border-black bg-white px-4 py-2 text-xs font-black uppercase tracking-wide text-[#310A31] shadow-[4px_4px_0_#000]">
+              Sign in
+            </Button>
+          </SignInButton>
+        </div>
+      </SignedOut>
+    </main>
+  );
 }

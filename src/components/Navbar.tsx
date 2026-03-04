@@ -2,59 +2,59 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Shirt } from 'lucide-react';
-import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
-import { useSubscription } from '../hooks/useSubscription';
+import { SignInButton, SignedIn, SignedOut } from '@clerk/nextjs';
+import { Shirt, Sparkles, UserRound } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
-
+const navClass = (active: boolean) =>
+  cn(
+    'h-9 rounded-none border-2 border-black px-3 text-[11px] font-black uppercase tracking-[0.14em] shadow-[3px_3px_0_#000]',
+    active ? 'bg-[#310A31] text-white hover:bg-[#310A31]/95' : 'bg-white text-[#310A31] hover:bg-[#f1e9f5]'
+  );
 
 export default function Navbar() {
-    const pathname = usePathname();
-    const isCheckPage = pathname === '/check';
-    const { isSubscribed } = useSubscription();
+  const pathname = usePathname();
+  return (
+    <nav className="border-b-4 border-black bg-[#f3eef6]">
+      <div className="mx-auto flex w-full max-w-[1320px] items-center justify-between gap-4 px-4 py-4 lg:px-8">
+        <Link href="/" className="inline-flex items-center gap-2">
+          <span className="grid h-9 w-9 place-items-center border-2 border-black bg-[#310A31] text-white">
+            <Shirt className="h-4 w-4" />
+          </span>
+          <span className="text-sm font-black uppercase tracking-[0.18em] text-[#310A31]">Wardrobe</span>
+        </Link>
 
-    return (
-        <nav className="bg-white border-b border-gray-200 sticky top-0 z-10 w-full">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                        <Shirt className="h-6 w-6 text-indigo-600" />
-                        <span className="font-bold text-xl tracking-tight text-gray-900">WardrobeAI</span>
-                    </Link>
-                </div>
-                <div className="flex items-center gap-4">
-                    {!isCheckPage && (
-                        <Link
-                            href="/check"
-                            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium text-sm shadow-sm"
-                        >
-                            Check Compatibility
-                        </Link>
-                    )}
-
-                    {!isSubscribed && (
-                        <Link
-                            href="/pricing"
-                            className="px-4 py-2 text-orange-600 font-medium text-sm hover:bg-orange-50 rounded-lg transition-colors border border-orange-200"
-                        >
-                            Upgrade
-                        </Link>
-                    )}
-
-                    <div className="flex items-center">
-                        <SignedOut>
-                            <SignInButton mode="modal">
-                                <button className="px-4 py-2 text-indigo-600 font-medium text-sm hover:bg-slate-100 rounded-lg transition-colors">
-                                    Sign In
-                                </button>
-                            </SignInButton>
-                        </SignedOut>
-                        <SignedIn>
-                            <UserButton afterSignOutUrl="/" />
-                        </SignedIn>
-                    </div>
-                </div>
-            </div>
-        </nav>
-    );
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" className={navClass(pathname === '/')}>
+            <Link href="/">
+              <Shirt className="h-3.5 w-3.5" />
+              <span>Rack</span>
+            </Link>
+          </Button>
+          <SignedIn>
+            <Button asChild variant="outline" className={navClass(pathname === '/check')}>
+              <Link href="/check">
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Compare</span>
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className={navClass(pathname === '/profile')}>
+              <Link href="/profile">
+                <UserRound className="h-3.5 w-3.5" />
+                <span>Profile</span>
+              </Link>
+            </Button>
+          </SignedIn>
+          <SignedOut>
+            <SignInButton mode="modal">
+              <Button variant="outline" className={navClass(false)}>
+                Sign in
+              </Button>
+            </SignInButton>
+          </SignedOut>
+        </div>
+      </div>
+    </nav>
+  );
 }
