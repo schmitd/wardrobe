@@ -321,7 +321,6 @@ describe("wardrobe server actions", () => {
 
   it("rejects oversized guest images before inference", async () => {
     const oversized = "A".repeat(2_100_000);
-    allowArcjet();
 
     await expect(
       actions.analyzeGuestBatchAction({
@@ -335,6 +334,6 @@ describe("wardrobe server actions", () => {
       })
     ).rejects.toThrow("Each image must be under 1.5MB after compression");
 
-    expect(runServerActionMock).toHaveBeenCalledTimes(1);
+    expect(runServerActionMock).not.toHaveBeenCalled();
   });
 });

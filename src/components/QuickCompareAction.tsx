@@ -4,11 +4,8 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useMutation } from 'convex/react';
 import { Loader2, Sparkles, Ticket } from 'lucide-react';
 import { api } from '@convex/_generated/api';
-import { checkCompatibilityAction } from '@/app/actions/wardrobe';
-import { createTraceContext } from '@/lib/trace';
 import { Card, CardContent } from '@/components/ui/card';
-
-type CompatibilityResult = Awaited<ReturnType<typeof checkCompatibilityAction>>;
+import { useCompatibilityCheck } from '@/hooks/useCompatibilityCheck';
 
 interface QuickCompareActionProps {
   inputId: string;
@@ -18,9 +15,8 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
   const getUploadUrl = useMutation(api.wardrobe.getUploadUrl);
   const previewUrlRef = useRef<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [isChecking, setIsChecking] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
-  const [result, setResult] = useState<CompatibilityResult | null>(null);
+  const { result, isProcessing, status, setStatus, reset, runCompatibilityCheck } =
+    useCompatibilityCheck();
 
   useEffect(() => {
     return () => {
@@ -43,8 +39,7 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
     event.target.value = '';
     if (!file) return;
 
-    setResult(null);
-    setStatus(null);
+    reset();
 
     if (!file.type.startsWith('image/')) {
       setStatus('Only image files are supported for quick compare.');
@@ -52,8 +47,6 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
     }
 
     updatePreview(URL.createObjectURL(file));
-    setIsChecking(true);
-    setStatus('Comparing this piece with your closet...');
 
     try {
       const uploadUrl = await getUploadUrl();
@@ -71,21 +64,16 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
         throw new Error('Upload response missing storageId.');
       }
 
-      const trace = createTraceContext();
-      const response = await checkCompatibilityAction({
-        storageId: payload.storageId,
-        ...trace,
+      await runCompatibilityCheck(payload.storageId, {
+        startMessage: 'Comparing this piece with your closet...',
+        fallbackErrorMessage: 'Quick compare failed.',
       });
-      setResult(response);
-      setStatus(null);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Quick compare failed.');
-    } finally {
-      setIsChecking(false);
     }
   };
 
-  const showPanel = isChecking || Boolean(status) || Boolean(result);
+  const showPanel = isProcessing || Boolean(status) || Boolean(result);
 
   return (
     <>
@@ -106,14 +94,14 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
             <h3 className="text-base font-black uppercase tracking-[0.12em]">Quick compare result</h3>
           </div>
 
-          {isChecking && (
+          {isProcessing && (
             <div className="mt-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[#310A31]">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>{status}</span>
             </div>
           )}
 
-          {!isChecking && status && (
+          {!isProcessing && status && (
             <div className="mt-4 border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">
               {status}
             </div>
