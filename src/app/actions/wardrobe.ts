@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import { SchemaType, type Schema } from "@google/generative-ai";
 import type { Id } from "@convex/_generated/dataModel";
 import { auth } from "@clerk/nextjs/server";
-import { fetchMutation, fetchQuery } from "convex/nextjs";
+import { fetchAction, fetchMutation, fetchQuery } from "convex/nextjs";
 import { api } from "@convex/_generated/api";
 
 import {
@@ -538,32 +538,48 @@ export const checkCompatibilityAction = async (input: {
     embedText(styleQuery).pipe(Effect.provide(GeminiLive))
   );
 
+  const similarResults = await fetchAction(
+    api.wardrobe.searchSimilarItems,
+    { embedding, limit: 5 },
+    { token }
+  );
+
   const items = await fetchQuery(
     api.wardrobe.listItemsForSimilarity,
     { limit: 200 },
     { token }
   );
 
+  const similarIds = new Set(similarResults.map((entry) => String(entry._id)));
   const scored = items
     .filter((item) => Array.isArray(item.embedding))
+    .filter((item) => !similarIds.has(String(item._id)))
     .map((item) => ({
       item,
       similarity: cosineSimilarity(embedding, item.embedding ?? []),
     }))
     .sort((a, b) => b.similarity - a.similarity);
 
-  const similarItems = scored.slice(0, 5);
   const dissimilarItems = scored
     .slice()
     .reverse()
     .slice(0, 3)
     .filter((entry) => entry.similarity < 0.5);
 
-  const displayItems = await fetchQuery(api.wardrobe.listWardrobeItems, {}, { token });
+  const displayItems = await fetchQuery(
+    api.wardrobe.getWardrobeItemsDisplayByIds,
+    {
+      itemIds: [
+        ...similarResults.map((entry) => entry._id),
+        ...dissimilarItems.map((entry) => entry.item._id),
+      ],
+    },
+    { token }
+  );
   const displayMap = new Map(displayItems.map((item) => [item.id, item]));
 
-  const hydrate = (entry: (typeof similarItems)[number]) => {
-    const display = displayMap.get(entry.item._id);
+  const hydrate = (entry: { itemId: Id<"wardrobeItems">; similarity: number }) => {
+    const display = displayMap.get(entry.itemId);
     if (!display) return null;
     return {
       id: display.id,
@@ -575,11 +591,13 @@ export const checkCompatibilityAction = async (input: {
     };
   };
 
-  const hydratedSimilar = similarItems
+  const hydratedSimilar = similarResults
+    .map((entry) => ({ itemId: entry._id, similarity: entry._score }))
     .map(hydrate)
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
   const hydratedDissimilar = dissimilarItems
+    .map((entry) => ({ itemId: entry.item._id, similarity: entry.similarity }))
     .map(hydrate)
     .filter((item): item is NonNullable<typeof item> => item !== null);
 

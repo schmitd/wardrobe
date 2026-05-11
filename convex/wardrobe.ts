@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { internalQuery, mutation, query } from "./_generated/server";
+import { action, internalQuery, mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { ensureTraceContext } from "./trace";
@@ -215,6 +215,63 @@ export const getWardrobeItemWithUrl = query({
   },
 });
 
+export const getWardrobeItemsDisplayByIds = query({
+  args: {
+    itemIds: v.array(v.id("wardrobeItems")),
+  },
+  handler: async (ctx, { itemIds }) => {
+    const userId = await getUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const uniqueIds = [...new Set(itemIds)];
+    const items = await Promise.all(
+      uniqueIds.map(async (itemId) => {
+        const item = await ctx.db.get(itemId);
+        if (!item || item.userId !== userId) {
+          return null;
+        }
+
+        const imageUrl = await ctx.storage.getUrl(item.storageId);
+        if (!imageUrl) {
+          return null;
+        }
+
+        return {
+          id: item._id,
+          imageUrl,
+          category: item.category ?? null,
+          description: item.description ?? null,
+          styleTags: item.styleTags ?? null,
+          analysisStatus: item.analysisStatus,
+          analysisError: item.analysisError ?? null,
+          createdAt: item.createdAt,
+        };
+      })
+    );
+
+    return items.filter((item) => item !== null);
+  },
+});
+
+export const searchSimilarItems = action({
+  args: {
+    embedding: v.array(v.float64()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, { embedding, limit }) => {
+    const userId = await getUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const results = await ctx.vectorSearch("wardrobeItems", "by_embedding", {
+      vector: embedding,
+      limit: normalizeSimilarityLimit(limit),
+      filter: (q) => q.eq("userId", userId),
+    });
+
+    return results;
+  },
+});
+
 export const listItemsForSimilarity = query({
   args: {
     limit: v.optional(v.number()),
@@ -321,7 +378,7 @@ export const applyDescription = mutation({
 export const applyEmbedding = mutation({
   args: {
     itemId: v.id("wardrobeItems"),
-    embedding: v.array(v.number()),
+    embedding: v.array(v.float64()),
   },
   handler: async (ctx, { itemId, embedding }) => {
     const userId = await getUserId(ctx);
@@ -343,7 +400,7 @@ export const applyFullAnalysis = mutation({
     category: v.optional(v.union(v.string(), v.null())),
     description: v.string(),
     styleTags: v.array(v.string()),
-    embedding: v.array(v.number()),
+    embedding: v.array(v.float64()),
     traceId: v.optional(v.string()),
     traceparent: v.optional(v.string()),
   },

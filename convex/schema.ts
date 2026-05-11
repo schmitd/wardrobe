@@ -19,7 +19,7 @@ export default defineSchema({
     category: v.optional(v.string()),
     description: v.optional(v.string()),
     styleTags: v.optional(v.array(v.string())),
-    embedding: v.optional(v.array(v.number())),
+    embedding: v.optional(v.array(v.float64())),
     analysisStatus,
     analysisError: v.optional(v.string()),
     traceId: v.optional(v.string()),
@@ -28,7 +28,12 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_user", ["userId"])
-    .index("by_user_createdAt", ["userId", "createdAt"]),
+    .index("by_user_createdAt", ["userId", "createdAt"])
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 768,
+      filterFields: ["userId"],
+    }),
 
   profiles: defineTable({
     userId: v.string(),

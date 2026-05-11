@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, mock } from "bun:test";
 
 const fetchMutationMock = mock();
 const fetchQueryMock = mock();
+const fetchActionMock = mock();
 const runServerActionMock = mock();
 
 const apiMock = {
@@ -15,9 +16,11 @@ const apiMock = {
     applyFullAnalysis: {},
     setAnalysisError: {},
     listItemsForSimilarity: {},
-    listWardrobeItems: {},
+    getWardrobeItemsDisplayByIds: {},
+    searchSimilarItems: {},
   },
   storage: {
+    registerUpload: {},
     getStorageUrl: {},
   },
   profile: {
@@ -27,6 +30,7 @@ const apiMock = {
 };
 
 mock.module("convex/nextjs", () => ({
+  fetchAction: fetchActionMock,
   fetchMutation: fetchMutationMock,
   fetchQuery: fetchQueryMock,
 }));
@@ -74,6 +78,7 @@ const queueRunServerAction = (...values: unknown[]) => {
 beforeEach(() => {
   fetchMutationMock.mockClear();
   fetchQueryMock.mockClear();
+  fetchActionMock.mockClear();
   runServerActionMock.mockClear();
   setupFetch();
 });
@@ -181,6 +186,10 @@ describe("wardrobe server actions", () => {
   });
 
   it("checks compatibility using generated embeddings", async () => {
+    fetchActionMock.mockResolvedValue([
+      { _id: "item_1", _score: 0.98 },
+    ]);
+
     fetchQueryMock.mockImplementation(async (query) => {
       if (query === api.storage.getStorageUrl) {
         return "https://example.com/candidate.jpg";
@@ -203,7 +212,7 @@ describe("wardrobe server actions", () => {
           },
         ];
       }
-      if (query === api.wardrobe.listWardrobeItems) {
+      if (query === api.wardrobe.getWardrobeItemsDisplayByIds) {
         return [
           {
             id: "item_1",
@@ -244,6 +253,14 @@ describe("wardrobe server actions", () => {
 
     expect(result.candidate.description).toBe("Blue shirt");
     expect(result.evaluation?.score).toBe(80);
+    expect(fetchActionMock).toHaveBeenCalledWith(
+      api.wardrobe.searchSimilarItems,
+      expect.objectContaining({
+        embedding: [1, 0, 0],
+        limit: 5,
+      }),
+      expect.objectContaining({ token: "token_123" })
+    );
     expect(result.similarItems.length).toBeGreaterThan(0);
     expect(result.dissimilarItems.length).toBeGreaterThan(0);
   });
