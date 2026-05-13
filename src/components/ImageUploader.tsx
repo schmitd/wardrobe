@@ -2,9 +2,8 @@
 
 import { useState, useRef } from 'react';
 import { Effect, Layer } from 'effect';
-import { useMutation } from 'convex/react';
-import { api } from '@convex/_generated/api';
 import { CloudUpload, AlertCircle } from 'lucide-react';
+import { getUploadUrlAction } from '@/app/actions/wardrobe';
 import { ImageUploadService, makeImageUploadLayer } from '@/services/ImageUploadService';
 
 export interface UploadedFile {
@@ -36,8 +35,7 @@ export default function ImageUploader({
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const getUploadUrl = useMutation(api.wardrobe.getUploadUrl);
-    const liveUploadLayer = makeImageUploadLayer({ getUploadUrl });
+    const liveUploadLayer = makeImageUploadLayer({ getUploadUrl: getUploadUrlAction });
     const activeUploadLayer = uploadLayer ?? liveUploadLayer;
 
     // Determine label based on allowMultiple if not explicitly provided

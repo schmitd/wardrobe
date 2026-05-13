@@ -7,6 +7,7 @@ const runServerActionMock = mock();
 
 const apiMock = {
   wardrobe: {
+    getUploadUrl: {},
     createWardrobeItem: {},
     deleteWardrobeItem: {},
     getWardrobeItemWithUrl: {},
@@ -84,6 +85,19 @@ beforeEach(() => {
 });
 
 describe("wardrobe server actions", () => {
+  it("generates an authenticated upload URL", async () => {
+    fetchMutationMock.mockResolvedValue("https://uploads.example.test/upload");
+
+    const result = await actions.getUploadUrlAction();
+
+    expect(result).toBe("https://uploads.example.test/upload");
+    expect(fetchMutationMock).toHaveBeenCalledTimes(1);
+    const [mutation, args, options] = fetchMutationMock.mock.calls[0];
+    expect(mutation).toBe(api.wardrobe.getUploadUrl);
+    expect(args).toEqual({});
+    expect(options).toEqual({ token: "token_123" });
+  });
+
   it("creates a wardrobe item with trace context", async () => {
     fetchMutationMock.mockResolvedValue({ id: "item_1" });
     allowArcjet();

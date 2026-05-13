@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SignInButton, SignedOut, useAuth } from '@clerk/nextjs';
 import { Plus, Sparkles } from 'lucide-react';
 import { useQuery } from 'convex/react';
-import { useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import AddItemSection from '@/components/AddItemSection';
 import GuestClosetDemo from '@/components/GuestClosetDemo';
@@ -12,6 +11,7 @@ import QuickCompareAction from '@/components/QuickCompareAction';
 import WardrobeGrid from '@/components/WardrobeGrid';
 import {
   createWardrobeItemAction,
+  getUploadUrlAction,
   seedWardrobeItemFromGuestAction,
   updateProfileBioAction,
 } from '@/app/actions/wardrobe';
@@ -28,7 +28,6 @@ export default function Home() {
   const uploadInputId = 'rack-upload-input';
   const compareInputId = 'rack-compare-input';
   const items = useQuery(api.wardrobe.listWardrobeItems, isSignedIn ? {} : 'skip');
-  const getUploadUrl = useMutation(api.wardrobe.getUploadUrl);
   const [optimisticItems, setOptimisticItems] = useState<OptimisticWardrobeItem[]>([]);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const importedSnapshotRef = useRef<number | null>(null);
@@ -129,7 +128,7 @@ export default function Home() {
           if (!createdItemId) {
             setImportStatus(`Uploading ${item.fileName}...`);
             const file = dataUrlToFile(item.dataUrl, item.fileName);
-            const uploadUrl = await getUploadUrl();
+            const uploadUrl = await getUploadUrlAction();
             const uploadResponse = await fetch(uploadUrl, { method: 'POST', body: file });
             if (!uploadResponse.ok) throw new Error(`Upload failed: ${uploadResponse.statusText}`);
             const { storageId } = await uploadResponse.json();
@@ -183,7 +182,7 @@ export default function Home() {
       setImportStatus(null);
       isImportingSnapshotRef.current = false;
     }
-  }, [getUploadUrl, patchOptimisticItem]);
+  }, [patchOptimisticItem]);
 
   useEffect(() => {
     if (!isSignedIn) return;
