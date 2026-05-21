@@ -74,6 +74,12 @@ const getConvexAuth = async () => {
   return { userId, token, tier: resolveUserTier(has) };
 };
 
+export const getUploadUrlAction = async () => {
+  const { token } = await getConvexAuth();
+
+  return fetchMutation(api.wardrobe.getUploadUrl, {}, { token });
+};
+
 const analyzeImageFull = (base64: string) =>
   Effect.gen(function* () {
     const gemini = yield* GeminiService;

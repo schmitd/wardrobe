@@ -12,19 +12,6 @@ import {
 GlobalRegistrator.register();
 
 const { render, screen, fireEvent, cleanup, waitFor } = await import('@testing-library/react');
-const matchers = await import('@testing-library/jest-dom/matchers');
-
-expect.extend(
-  matchers as unknown as Record<string, (this: unknown, ...args: unknown[]) => unknown>
-);
-
-mock.module('convex/react', () => ({
-  useMutation: () => async () => 'unused-when-test-layer-is-provided',
-}));
-
-mock.module('@convex/_generated/api', () => ({
-  api: { wardrobe: { getUploadUrl: {} } },
-}));
 
 const { default: ImageUploader } = await import('./ImageUploader');
 
@@ -64,19 +51,19 @@ describe('ImageUploader', () => {
 
   it('renders with default label', () => {
     render(<ImageUploader onUploadComplete={mockOnUploadComplete} />);
-    expect(screen.getByText('Upload Images')).toBeInTheDocument();
+    expect(screen.getByText('Upload Images')).not.toBeNull();
   });
 
   it('renders with custom label', () => {
     render(<ImageUploader onUploadComplete={mockOnUploadComplete} label='Custom Label' />);
-    expect(screen.getByText('Custom Label')).toBeInTheDocument();
+    expect(screen.getByText('Custom Label')).not.toBeNull();
   });
 
   it('restricts to single file when allowMultiple is false', () => {
     render(<ImageUploader onUploadComplete={mockOnUploadComplete} allowMultiple={false} />);
     const input = document.querySelector('input[type="file"]') as HTMLInputElement;
     expect(input.multiple).toBe(false);
-    expect(screen.getByText('Upload Image')).toBeInTheDocument();
+    expect(screen.getByText('Upload Image')).not.toBeNull();
   });
 
   it('shows error when dropping multiple files if allowMultiple is false', async () => {
@@ -87,7 +74,7 @@ describe('ImageUploader', () => {
 
     await dropOnUploader('Upload Image', [file1, file2]);
 
-    expect(screen.getByText('Please upload a single image for this feature.')).toBeInTheDocument();
+    expect(screen.getByText('Please upload a single image for this feature.')).not.toBeNull();
     expect(mockOnUploadComplete).not.toHaveBeenCalled();
   });
 
@@ -128,7 +115,7 @@ describe('ImageUploader', () => {
     await dropOnUploader('Upload Image', [file]);
 
     await waitFor(() => {
-      expect(screen.getByText('Upload failed: Bad Gateway')).toBeInTheDocument();
+      expect(screen.getByText('Upload failed: Bad Gateway')).not.toBeNull();
     });
 
     expect(mockOnUploadComplete).not.toHaveBeenCalled();
