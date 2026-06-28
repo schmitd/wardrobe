@@ -1,6 +1,6 @@
 # Virtual Wardrobe Stylist
 
-A Single Page Application (SPA) that acts as a "Virtual Wardrobe Stylist". The app allows users to upload photos of their wardrobe and checks if a new clothing purchase would be a good fit based on style compatibility.
+Wardrobe is a Turborepo monorepo for a virtual wardrobe stylist. The web app lets users upload wardrobe photos and check whether a new clothing purchase fits their style; companion surfaces reuse the same backend context layer.
 
 ## Features
 
@@ -11,12 +11,26 @@ A Single Page Application (SPA) that acts as a "Virtual Wardrobe Stylist". The a
 
 ## Tech Stack
 
-- **Framework**: Next.js (App Router)
+- **Monorepo**: Turborepo + Bun workspaces
+- **Web Framework**: Next.js (App Router)
 - **Styling**: Tailwind CSS
 - **Database + Sync**: Convex
 - **Storage**: Convex File Storage
 - **AI**: Google Gemini (Vision & Text Embeddings)
 - **Background Jobs**: Convex Scheduler + Action Retrier
+
+## Workspaces
+
+- `apps/web`: Existing Next.js + Convex application and backend context API.
+- `apps/mobile`: Expo Router iOS/Android app that calls the context API.
+- `apps/chrome-extension`: Manifest V3 extension for one-click product-page fit checks.
+- `apps/chatgpt-app`: HTTP MCP server and widget resource for a ChatGPT app.
+- `packages/context-client`: Shared client for the web backend context layer.
+- `packages/shared`: Shared request/response types and model selection constants.
+
+## Model Selection
+
+Use `gemini-2.5-flash` in Google AI Studio for the app's primary fit-checking feature. It supports multimodal text/image input, structured JSON outputs, URL context, function calling, and a large context window, which covers product-page interpretation, wardrobe context, and low-latency recommendations. Keep `gemini-2.5-pro` as an escalation model for deeper styling or profile-generation flows.
 
 ## Setup
 
@@ -51,6 +65,18 @@ A Single Page Application (SPA) that acts as a "Virtual Wardrobe Stylist". The a
     ```bash
     bun dev
     ```
+
+## Builds
+
+```bash
+bun run build
+bun run lint
+bun run typecheck
+```
+
+Vercel builds through `bun run vercel-build`, which runs `turbo build --filter=@wardrobe/web`. Convex deployment should be configured as a separate workflow with `CONVEX_DEPLOY_KEY` when production Convex deploys are intended.
+
+Set `STYLE_FIT_API_TOKEN` on the web app to require `Authorization: Bearer <token>` for `/api/context/style-fit`. Companion apps can pass the token through their own runtime config (`WARDROBE_API_TOKEN` for the ChatGPT app, Chrome extension storage, or `EXPO_PUBLIC_WARDROBE_API_TOKEN` for Expo development builds).
 
 ## Usage
 

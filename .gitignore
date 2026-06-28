@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+**/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -12,6 +13,7 @@
 
 # testing
 /coverage
+**/coverage
 
 # local browser automation artifacts
 /.playwright-cli/
@@ -19,10 +21,15 @@
 
 # next.js
 /.next/
+**/.next/
 /out/
+**/out/
 
 # production
 /build
+**/build
+**/dist/
+**/.turbo/
 
 # misc
 .DS_Store

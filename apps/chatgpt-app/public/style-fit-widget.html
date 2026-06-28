@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        color: #111827;
+        background: #fff;
+      }
+
+      main {
+        display: grid;
+        gap: 10px;
+        padding: 16px;
+      }
+
+      .score {
+        color: #310a31;
+        font-size: 44px;
+        font-weight: 900;
+        line-height: 1;
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="score" id="score">--%</div>
+      <strong id="verdict">Waiting for a fit check</strong>
+      <p id="summary">Ask ChatGPT to check an item against your wardrobe style.</p>
+      <ul id="reasons"></ul>
+    </main>
+    <script>
+      const render = (payload) => {
+        const data = payload?.structuredContent ?? payload ?? {};
+        document.getElementById("score").textContent =
+          typeof data.score === "number" ? `${data.score}%` : "--%";
+        document.getElementById("verdict").textContent = data.verdict ?? "Unknown";
+        document.getElementById("summary").textContent = data.summary ?? "";
+        document.getElementById("reasons").innerHTML = (data.reasons ?? [])
+          .map((reason) => `<li>${reason}</li>`)
+          .join("");
+      };
+
+      window.addEventListener("message", (event) => {
+        const message = event.data;
+        if (message?.method === "ui/notifications/tool-result") {
+          render(message.params?.result);
+        }
+      });
+
+      if (window.openai?.toolOutput) render(window.openai.toolOutput);
+    </script>
+  </body>
+</html>

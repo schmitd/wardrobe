@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  transpilePackages: ["@wardrobe/context-client", "@wardrobe/shared"],
   images: {
     remotePatterns: [
       {

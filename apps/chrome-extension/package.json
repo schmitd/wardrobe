@@ -1,0 +1,23 @@
+{
+  "name": "@wardrobe/chrome-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun scripts/build.ts",
+    "dev": "bun scripts/build.ts --watch",
+    "lint": "tsc --noEmit",
+    "test": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@wardrobe/context-client": "workspace:*",
+    "@wardrobe/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.5",
+    "@types/chrome": "^0.1.0",
+    "@types/node": "^20",
+    "typescript": "^5"
+  }
+}

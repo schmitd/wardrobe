@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Wardrobe",
+    "slug": "wardrobe",
+    "scheme": "wardrobe",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.wardrobe.app"
+    },
+    "android": {
+      "package": "com.wardrobe.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#f6f1f8"
+      }
+    },
+    "plugins": ["expo-router"]
+  }
+}

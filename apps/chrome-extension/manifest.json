@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Wardrobe Style Fit",
+  "version": "0.1.0",
+  "description": "Check whether a product page item fits your wardrobe in one click.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["<all_urls>"],
+  "action": {
+    "default_title": "Check style fit"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
