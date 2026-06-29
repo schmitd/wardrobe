@@ -17,7 +17,11 @@ import {
 import { runServerAction } from "@/lib/run-effect";
 import { ensureTraceContext } from "@/lib/trace";
 import { ArcjetLive, ArcjetService } from "@/services/ArcjetService";
-import { GeminiLive, GeminiService } from "@/services/GeminiService";
+import {
+  GEMINI_FLASH_LITE_MODEL,
+  GeminiLive,
+  GeminiService,
+} from "@/services/GeminiService";
 import {
   embedText,
   fetchImageBase64,
@@ -102,7 +106,7 @@ const analyzeImageFull = (base64: string) =>
 - category: short noun phrase.
 - description: at most ${ITEM_DESCRIPTION_WORD_LIMIT} words.`;
 
-    const result = yield* gemini.generateContent("gemini-2.0-flash-lite", {
+    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
       contents: [
         {
           role: "user",
@@ -138,7 +142,7 @@ const generateStyleQuery = (description: string, styleTags: string[]) =>
       ", "
     )}", generate a search query to find compatible items in a wardrobe. Return just the query string.`;
 
-    const result = yield* gemini.generateContent("gemini-2.0-flash-lite", prompt);
+    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, prompt);
     return result.response.text().trim();
   }).pipe(withRetries);
 
@@ -210,7 +214,7 @@ Return JSON with keys:
 - best_pairings (array of indices): Which wardrobe items it pairs best with
 - worst_clashes (array of indices): Which wardrobe items it clashes with most (if any)`;
 
-    const result = yield* gemini.generateContent("gemini-2.0-flash-lite", {
+    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",
@@ -242,7 +246,7 @@ const analyzeSelfie = (base64: string) =>
     const prompt =
       "Analyze this selfie for fashion profiling. Extract approximate skin tone (e.g., Fair, Medium, Deep) and hair color. Also suggest a short professional style bio. Return JSON: { skin_tone, hair_color, bio }.";
 
-    const result = yield* gemini.generateContent("gemini-2.0-flash-lite", {
+    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
       contents: [
         {
           role: "user",
@@ -286,7 +290,7 @@ ${items
   )
   .join("\n")}`;
 
-    const result = yield* gemini.generateContent("gemini-2.0-flash-lite", {
+    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",

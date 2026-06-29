@@ -12,7 +12,11 @@ import {
   truncateWords,
 } from "@/lib/inferenceOutputGuards";
 import { runServerAction } from "@/lib/run-effect";
-import { GeminiLive, GeminiService } from "@/services/GeminiService";
+import {
+  GEMINI_FLASH_LITE_MODEL,
+  GeminiLive,
+  GeminiService,
+} from "@/services/GeminiService";
 import {
   embedText,
   fetchImageBase64,
@@ -55,7 +59,7 @@ const analyzeImageTags = (base64: string) =>
       required: ["style_tags"],
     };
 
-    const result = yield* gemini.generateContent("gemini-2.0-flash-lite", {
+    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
       contents: [
         {
           role: "user",
@@ -115,7 +119,7 @@ The description must be no more than ${ITEM_DESCRIPTION_WORD_LIMIT} words.
 Keep category short and specific.
 ${contextTags} ${contextCategory}`.trim();
 
-    const result = yield* gemini.generateContent("gemini-2.0-flash-lite", {
+    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
       contents: [
         {
           role: "user",
