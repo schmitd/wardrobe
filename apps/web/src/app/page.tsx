@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { SignInButton, SignedOut, useAuth } from '@clerk/nextjs';
+import { useAuth } from '@clerk/nextjs';
 import { Plus, Sparkles } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
@@ -276,35 +276,27 @@ export default function Home() {
         </section>
       </div>
 
-      <div className="fixed bottom-6 right-4 z-30 flex flex-col gap-3 sm:right-8">
-        <Button
-          type="button"
-          onClick={() => triggerInput(uploadInputId, 'rack-uploader')}
-          className="rack-fab rounded-none border-2 border-black"
-        >
-          <Plus className="h-4 w-4" />
-          <span>Add to closet</span>
-        </Button>
-        <Button
-          type="button"
-          onClick={() => triggerInput(isSignedIn ? compareInputId : uploadInputId, 'rack-uploader')}
-          variant="outline"
-          className="rack-fab rack-fab-secondary rounded-none border-2 border-black"
-        >
-          <Sparkles className="h-4 w-4" />
-          <span>{isSignedIn ? 'Check fit' : 'Try check'}</span>
-        </Button>
-      </div>
-
-      <SignedOut>
-        <div className="fixed bottom-6 left-4 z-30 sm:left-8">
-          <SignInButton mode="modal" forceRedirectUrl="/" fallbackRedirectUrl="/">
-            <Button className="rounded-full border-2 border-black bg-white px-4 py-2 text-xs font-black uppercase tracking-wide text-[#310A31] shadow-[4px_4px_0_#000]">
-              Sign in
-            </Button>
-          </SignInButton>
+      {isSignedIn && (
+        <div className="fixed bottom-6 right-4 z-30 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-3 sm:right-8">
+          <Button
+            type="button"
+            onClick={() => triggerInput(uploadInputId, 'rack-uploader')}
+            className="rack-fab rounded-none border-2 border-black"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Add to closet</span>
+          </Button>
+          <Button
+            type="button"
+            onClick={() => triggerInput(compareInputId, 'rack-uploader')}
+            variant="outline"
+            className="rack-fab rack-fab-secondary rounded-none border-2 border-black"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span>Check fit</span>
+          </Button>
         </div>
-      </SignedOut>
+      )}
     </main>
   );
 }

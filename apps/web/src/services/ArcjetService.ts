@@ -106,10 +106,6 @@ const make = Effect.gen(function* () {
   const guestBatchProtection = arcjet({
     key: arcjetKey,
     rules: [
-      detectBot({
-        mode: "LIVE",
-        allow: [],
-      }),
       fixedWindow({
         mode: "LIVE",
         max: GUEST_BATCH_UPLOAD_LIMIT,
@@ -117,7 +113,6 @@ const make = Effect.gen(function* () {
         characteristics: [
           "ip.src",
           'http.request.headers["user-agent"]',
-          'http.request.headers["accept-language"]',
         ],
       }),
     ],

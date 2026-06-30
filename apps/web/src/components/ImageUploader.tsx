@@ -131,7 +131,7 @@ export default function ImageUploader({
                     onChange={handleFileSelect}
                 />
 
-                <div className="flex flex-col items-center justify-center gap-4">
+                <div className="flex min-w-0 flex-col items-center justify-center gap-4">
                     <div className={`rounded-none border-2 border-black p-4 ${isDragging ? 'bg-white text-[#310A31]' : 'bg-[#9C92A3] text-white'}`}>
                         {uploading ? (
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
@@ -140,11 +140,11 @@ export default function ImageUploader({
                         )}
                     </div>
 
-                    <div>
-                        <h4 className="text-lg font-black uppercase tracking-wide text-[#310A31]">
+                    <div className="min-w-0 max-w-full">
+                        <h4 className="text-base font-black uppercase leading-snug tracking-wide text-[#310A31] sm:text-lg">
                             {uploading ? 'Uploading...' : displayLabel}
                         </h4>
-                        <p className="mt-1 text-sm font-medium text-slate-700">
+                        <p className="mt-1 text-sm font-medium leading-relaxed text-slate-700">
                             {uploading
                                 ? 'Please wait while we process your images'
                                 : (allowMultiple ? 'Click or drag photos to upload' : 'Click or drag one photo to upload')

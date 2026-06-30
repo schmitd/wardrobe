@@ -28,6 +28,7 @@ export default function RackItemCard({
 }: RackItemCardProps) {
   return (
     <article className={`rack-item-card ${className ?? ''}`.trim()}>
+      <div className="rack-item-hanger" aria-hidden="true" />
       <div className="rack-item-image-wrap relative">
         <Image
           src={imageUrl}
@@ -39,7 +40,6 @@ export default function RackItemCard({
       </div>
 
       <div className="rack-item-side">
-        <div className="rack-item-hanger" />
         <div className="rack-item-tag-wrap">
           <div className="rack-item-tag">
             <span>{(category ?? 'item').toUpperCase()}</span>

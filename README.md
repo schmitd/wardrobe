@@ -30,7 +30,7 @@ Wardrobe is a Turborepo monorepo for a virtual wardrobe stylist. The web app let
 
 ## Model Selection
 
-Use `gemini-2.5-flash` in Google AI Studio for the app's primary fit-checking feature. It supports multimodal text/image input, structured JSON outputs, URL context, function calling, and a large context window, which covers product-page interpretation, wardrobe context, and low-latency recommendations. Keep `gemini-2.5-pro` as an escalation model for deeper styling or profile-generation flows.
+Use `gemini-2.5-flash` in Google AI Studio for the app's primary fit-checking feature. It supports multimodal text/image input, structured JSON outputs, URL context, function calling, and a large context window, which covers product-page interpretation, wardrobe context, and low-latency recommendations. Use `gemini-2.5-flash-lite` for upload/image-analysis paths where free-tier availability and low latency matter more than deep reasoning. Use `gemini-embedding-2` with 768 output dimensions for wardrobe similarity embeddings so vectors match the Convex index. Keep `gemini-2.5-pro` as an escalation model for deeper styling or profile-generation flows.
 
 ## Setup
 

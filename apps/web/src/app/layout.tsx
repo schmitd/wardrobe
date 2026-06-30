@@ -30,6 +30,7 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider
+      clerkJSVersion="5.127.0"
       appearance={{
         variables: {
           colorPrimary: "#310A31",

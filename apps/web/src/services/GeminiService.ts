@@ -22,12 +22,33 @@ export class GeminiError extends Error {
 
 export type GeminiModelName =
   | "gemma-3-27b-it"
-  | "gemini-3.1-flash-lite"
   | "gemini-2.5-pro"
   | "gemini-2.5-flash"
   | "gemini-2.5-flash-lite";
 
-export const GEMINI_FLASH_LITE_MODEL = "gemini-3.1-flash-lite" satisfies GeminiModelName;
+export const GEMINI_FLASH_LITE_MODEL = "gemini-2.5-flash-lite" satisfies GeminiModelName;
+export const GEMINI_EMBEDDING_MODEL = "gemini-embedding-2";
+export const GEMINI_EMBEDDING_DIMENSIONS = 768;
+
+type EmbedContentRequestWithDimensions = {
+  content: {
+    role: string;
+    parts: Array<{ text: string }>;
+  };
+  output_dimensionality: typeof GEMINI_EMBEDDING_DIMENSIONS;
+};
+
+const isTemporaryModelCapacityError = (error: unknown) => {
+  const message =
+    typeof error === "object" && error !== null && "message" in error
+      ? String((error as { message: unknown }).message)
+      : String(error);
+
+  return (
+    message.includes("503") ||
+    /service unavailable|high demand|overloaded|temporarily unavailable/i.test(message)
+  );
+};
 
 export interface GeminiService {
   readonly generateContent: (
@@ -53,18 +74,15 @@ const make = Effect.gen(function* () {
   const genAI = new GoogleGenerativeAI(apiKey);
 
   const gemma27bModel = genAI.getGenerativeModel({ model: "gemma-3-27b-it" });
-  const flashLite31Model = genAI.getGenerativeModel({ model: GEMINI_FLASH_LITE_MODEL });
   const proModel = genAI.getGenerativeModel({ model: "gemini-2.5-pro" });
   const flashModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
   const flashLiteModel = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" });
-  const embeddingModel = genAI.getGenerativeModel({ model: "text-embedding-004" });
+  const embeddingModel = genAI.getGenerativeModel({ model: GEMINI_EMBEDDING_MODEL });
 
   const getModel = (name: GeminiModelName) => {
     switch (name) {
       case "gemma-3-27b-it":
         return gemma27bModel;
-      case "gemini-3.1-flash-lite":
-        return flashLite31Model;
       case "gemini-2.5-pro":
         return proModel;
       case "gemini-2.5-flash":
@@ -81,19 +99,42 @@ const make = Effect.gen(function* () {
       request: GenerateContentRequest | string | Array<string | Part>
     ) =>
       Effect.tryPromise({
-        try: () => getModel(modelName).generateContent(request),
+        try: async () => {
+          try {
+            return await getModel(modelName).generateContent(request);
+          } catch (error) {
+            if (modelName === GEMINI_FLASH_LITE_MODEL && isTemporaryModelCapacityError(error)) {
+              return flashModel.generateContent(request);
+            }
+            throw error;
+          }
+        },
         catch: (error) => new GeminiError(error),
       }).pipe(Effect.withSpan("gemini.generateContent", { attributes: { model: modelName } })),
 
     embedContent: (text: string) =>
       Effect.tryPromise({
-        try: () => embeddingModel.embedContent(text),
+        try: () => {
+          const request = {
+            content: { role: "user", parts: [{ text }] },
+            output_dimensionality: GEMINI_EMBEDDING_DIMENSIONS,
+          } satisfies EmbedContentRequestWithDimensions;
+          return embeddingModel.embedContent(
+            request as unknown as Parameters<typeof embeddingModel.embedContent>[0]
+          );
+        },
         catch: (error) => new GeminiError(error),
       }).pipe(Effect.withSpan("gemini.embedContent")),
 
     batchEmbedContents: (request: BatchEmbedContentsRequest) =>
       Effect.tryPromise({
-        try: () => embeddingModel.batchEmbedContents(request),
+        try: () =>
+          embeddingModel.batchEmbedContents({
+            requests: request.requests.map((embeddingRequest) => ({
+              ...embeddingRequest,
+              output_dimensionality: GEMINI_EMBEDDING_DIMENSIONS,
+            })),
+          } as BatchEmbedContentsRequest),
         catch: (error) => new GeminiError(error),
       }).pipe(Effect.withSpan("gemini.batchEmbedContents")),
   };

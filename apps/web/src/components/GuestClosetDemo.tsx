@@ -124,7 +124,10 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         setLimitMessage(`Demo capped at ${result.limit} photos. Create an account to continue.`);
       }
     } catch (uploadError) {
-      const message = uploadError instanceof Error ? uploadError.message : 'Demo analysis failed.';
+      const rawMessage = uploadError instanceof Error ? uploadError.message : 'Demo analysis failed.';
+      const message = /server components render|digest property/i.test(rawMessage)
+        ? 'Demo analysis is temporarily unavailable. Please try again with a different photo or create an account to continue.'
+        : rawMessage;
       setError(message);
       if (/sign in|create an account/i.test(message)) {
         setShowSignupPrompt(true);
@@ -185,12 +188,12 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
           type="button"
           onClick={() => fileInputRef.current?.click()}
           variant="secondary"
-          className="h-auto w-full rounded-none border-4 border-black bg-[#c6b9cd] px-6 py-8 text-left shadow-[8px_8px_0_#000] transition-transform hover:-translate-y-1 hover:bg-[#c6b9cd]/95"
+          className="flex h-auto w-full min-w-0 flex-col items-start whitespace-normal rounded-none border-4 border-black bg-[#c6b9cd] px-4 py-7 text-left shadow-[8px_8px_0_#000] transition-transform hover:-translate-y-1 hover:bg-[#c6b9cd]/95 sm:px-6 sm:py-8"
         >
-          <p className="text-lg font-black uppercase text-[#310A31]">
+          <p className="max-w-full text-base font-black uppercase leading-snug text-[#310A31] sm:text-lg">
             {isAnalyzing ? 'Analyzing your first batch...' : 'Upload photos from your closet'}
           </p>
-          <p className="mt-2 text-sm font-medium text-[#310A31]">
+          <p className="mt-2 max-w-full text-sm font-medium leading-relaxed text-[#310A31]">
             We analyze your first batch and prefill a style profile you can edit.
           </p>
         </Button>
