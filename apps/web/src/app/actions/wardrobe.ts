@@ -26,13 +26,10 @@ import {
   embedText,
   fetchImageBase64,
   parseJson,
-  toErrorMessage,
+  toInferenceFailure,
   withRetries,
 } from "@/server/inference/shared";
-import {
-  processWardrobeInference,
-  USER_SAFE_INFERENCE_ERROR,
-} from "@/server/wardrobeInference";
+import { processWardrobeInference } from "@/server/wardrobeInference";
 
 type UserTier = "free" | "pro";
 type AuthenticatedScope = "upload" | "check" | "inference";
@@ -408,11 +405,11 @@ export const seedWardrobeItemFromGuestAction = async (input: {
 
     return { success: true as const };
   } catch (error) {
-    const errorMessage = toErrorMessage(error);
+    const failure = toInferenceFailure(error);
     try {
       await fetchMutation(
         api.wardrobe.setAnalysisError,
-        { itemId: input.itemId as Id<"wardrobeItems">, error: errorMessage },
+        { itemId: input.itemId as Id<"wardrobeItems">, error: failure.userMessage },
         { token }
       );
     } catch {
@@ -422,9 +419,10 @@ export const seedWardrobeItemFromGuestAction = async (input: {
       traceId,
       traceparent,
       itemId: input.itemId,
-      message: errorMessage,
+      code: failure.code,
+      message: failure.message,
     });
-    return { success: false as const, error: USER_SAFE_INFERENCE_ERROR };
+    return { success: false as const, error: failure.userMessage };
   }
 };
 

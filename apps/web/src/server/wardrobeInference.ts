@@ -21,6 +21,7 @@ import {
   embedText,
   fetchImageBase64,
   parseJson,
+  toInferenceFailure,
   toErrorMessage,
   withRetries,
 } from "@/server/inference/shared";
@@ -261,18 +262,27 @@ export const processWardrobeInference = async ({
 
     return { success: true };
   } catch (error) {
-    const errorMessage = toErrorMessage(error);
+    const failure = toInferenceFailure(error);
 
     try {
       await fetchMutation(
         api.wardrobe.setAnalysisError,
-        { itemId: itemId as Id<"wardrobeItems">, error: errorMessage },
+        { itemId: itemId as Id<"wardrobeItems">, error: failure.userMessage },
         { token }
       );
     } catch {
       // ignore secondary failures
     }
 
-    return { success: false, error: USER_SAFE_INFERENCE_ERROR };
+    console.error("inference.process.failed", {
+      traceId,
+      traceparent,
+      itemId,
+      userId,
+      code: failure.code,
+      message: failure.message,
+    });
+
+    return { success: false, error: failure.userMessage };
   }
 };
