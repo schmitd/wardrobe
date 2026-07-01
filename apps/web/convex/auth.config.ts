@@ -5,7 +5,6 @@ const clerkAudience = process.env.CLERK_JWT_AUDIENCE || "convex";
 const clerkIssuers = [
   productionClerkIssuer,
   process.env.CLERK_JWT_ISSUER_DOMAIN,
-  ...(process.env.CLERK_ADDITIONAL_JWT_ISSUER_DOMAINS?.split(",") ?? []),
 ]
   .map((issuer) => issuer?.trim())
   .filter((issuer): issuer is string => Boolean(issuer));
