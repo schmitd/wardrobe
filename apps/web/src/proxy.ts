@@ -20,7 +20,10 @@ export default missingDevClerk ? devBypassMiddleware : clerkMiddleware(async (au
 
 export const config = {
     matcher: [
+        '/',
+        '/index',
         '/check/:path*',
         '/profile/:path*',
+        '/api/wardrobe/:path*',
     ],
 }
