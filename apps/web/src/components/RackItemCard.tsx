@@ -28,7 +28,12 @@ export default function RackItemCard({
 }: RackItemCardProps) {
   return (
     <article className={`rack-item-card ${className ?? ''}`.trim()}>
-      <div className="rack-item-hanger" aria-hidden="true" />
+      <svg className="rack-item-shape" viewBox="0 0 100 100" aria-hidden="true" preserveAspectRatio="none">
+        <polygon points="1.5,1.5 87.5,1.5 98.5,35 98.5,58 87.5,98.5 1.5,98.5" />
+      </svg>
+      <svg className="rack-item-hanger" viewBox="0 0 60 42" aria-hidden="true" preserveAspectRatio="none">
+        <path d="M1 21 H25 C25 33 40 37 51 26 C56 21 58 13 55 7" />
+      </svg>
       <div className="rack-item-image-wrap relative">
         <Image
           src={imageUrl}
@@ -42,6 +47,9 @@ export default function RackItemCard({
       <div className="rack-item-side">
         <div className="rack-item-tag-wrap">
           <div className="rack-item-tag">
+            <svg className="rack-item-tag-shape" viewBox="0 0 100 40" aria-hidden="true" preserveAspectRatio="none">
+              <polygon points="2,2 84,2 98,20 84,38 2,38" />
+            </svg>
             <span>{(category ?? 'item').toUpperCase()}</span>
           </div>
           <span className="rack-item-tag-dot" />

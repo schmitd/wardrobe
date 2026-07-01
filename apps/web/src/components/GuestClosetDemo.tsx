@@ -139,12 +139,10 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
 
   const rackCards = useMemo(
     () =>
-      items.map((item, index) => (
+      items.map((item) => (
         <div
-          key={`${item.fileName}-${index}`}
-          className={`transition-transform ${index % 2 === 0 ? 'md:translate-x-10' : 'md:-translate-x-10'} ${
-            index % 2 === 0 ? 'md:rotate-1' : 'md:-rotate-1'
-          }`}
+          key={item.id}
+          className="transition-transform"
         >
           <RackItemCard
             imageUrl={item.previewUrl}

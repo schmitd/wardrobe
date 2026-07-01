@@ -47,7 +47,7 @@ export default function WardrobeGrid({ items, optimisticItems = [] }: WardrobeGr
 
     return (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            {mergedItems.map((item, index) => {
+            {mergedItems.map((item) => {
                 const itemId = item.isOptimistic ? item.tempId : item.id;
                 const isPending = item.isOptimistic ? item.status !== "error" : item.analysisStatus !== "ready";
                 const isError = item.isOptimistic ? item.status === "error" : item.analysisStatus === "error";
@@ -55,7 +55,7 @@ export default function WardrobeGrid({ items, optimisticItems = [] }: WardrobeGr
                 return (
                     <div
                         key={itemId}
-                        className={`group relative transition-transform ${index % 2 === 0 ? "md:translate-x-10 md:rotate-[0.9deg]" : "md:-translate-x-10 md:-rotate-[0.9deg]"}`}
+                        className="group relative"
                     >
                     <div className="relative">
                         <RackItemCard
