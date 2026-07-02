@@ -20,6 +20,7 @@ interface ImageUploaderProps {
     inputId?: string;
     capture?: 'user' | 'environment';
     uploadLayer?: Layer.Layer<ImageUploadService>;
+    hiddenTriggerOnly?: boolean;
 }
 
 export default function ImageUploader({
@@ -30,6 +31,7 @@ export default function ImageUploader({
     inputId,
     capture,
     uploadLayer,
+    hiddenTriggerOnly = false,
 }: ImageUploaderProps) {
     const [isDragging, setIsDragging] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -106,6 +108,30 @@ export default function ImageUploader({
             }
         }
     };
+
+    if (hiddenTriggerOnly) {
+        return (
+            <>
+                <input
+                    type="file"
+                    id={inputId}
+                    ref={fileInputRef}
+                    className="hidden"
+                    multiple={allowMultiple}
+                    accept="image/*"
+                    capture={capture}
+                    onChange={handleFileSelect}
+                />
+
+                {error && (
+                    <div className="mt-4 flex items-center gap-2 border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">
+                        <AlertCircle size={16} />
+                        <span>{error}</span>
+                    </div>
+                )}
+            </>
+        );
+    }
 
     return (
         <div className="w-full">

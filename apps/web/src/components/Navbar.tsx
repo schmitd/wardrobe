@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SignInButton, SignedIn, SignedOut } from '@clerk/nextjs';
-import { Shirt, Sparkles, UserRound } from 'lucide-react';
+import { Shirt, UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -33,12 +33,6 @@ export default function Navbar() {
             </Link>
           </Button>
           <SignedIn>
-            <Button asChild variant="outline" className={navClass(pathname === '/check')}>
-              <Link href="/check">
-                <Sparkles className="h-3.5 w-3.5" />
-                <span>Compare</span>
-              </Link>
-            </Button>
             <Button asChild variant="outline" className={navClass(pathname === '/profile')}>
               <Link href="/profile">
                 <UserRound className="h-3.5 w-3.5" />

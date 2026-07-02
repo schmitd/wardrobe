@@ -42,7 +42,11 @@ export default function WardrobeGrid({ items, optimisticItems = [] }: WardrobeGr
     ];
 
     if (mergedItems.length === 0) {
-        return <div className="rack-panel text-center text-sm font-semibold uppercase tracking-wide text-slate-700">No pieces yet. Upload your first rack set.</div>;
+        return (
+            <p className="py-16 text-center text-sm font-medium text-slate-400">
+                Add items to your closet to get started
+            </p>
+        );
     }
 
     return (
