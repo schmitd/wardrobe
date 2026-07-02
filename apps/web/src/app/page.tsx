@@ -232,27 +232,27 @@ export default function Home() {
     <main className="relative min-h-screen pb-32">
       <div className="mx-auto w-full max-w-[1320px] space-y-6 px-6 pb-16 pt-10 sm:px-8 lg:px-10">
         <section className="space-y-6">
-          <Card className="rack-panel rounded-none py-0">
-            <CardHeader className="px-0">
-              <Badge
-                variant="outline"
-                className="w-fit rounded-none border-2 border-black bg-white px-2 py-0 text-[10px] font-bold tracking-[0.2em] text-[#9C92A3]"
-              >
-                Season Rack
-              </Badge>
-              <CardTitle className="mt-2 text-3xl font-black uppercase text-[#310A31] md:text-5xl">
-                {isSignedIn ? 'Your closet in motion' : 'Try your closet companion'}
-              </CardTitle>
-              <p className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-600">
-                {isSignedIn ? 'Signed in · your closet is saved' : 'Guest mode · first batch is free'}
-              </p>
-              <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-slate-800 md:text-base">
-                {isSignedIn
-                  ? 'Upload pieces, compare new finds, and keep your wardrobe aligned with your style goals.'
-                  : 'Upload your first batch of closet photos. We analyze the pieces, draft your style profile, and help you decide what to add next.'}
-              </p>
-            </CardHeader>
-          </Card>
+          {!isSignedIn && (
+            <Card className="rack-panel rounded-none py-0">
+              <CardHeader className="px-0">
+                <Badge
+                  variant="outline"
+                  className="w-fit rounded-none border-2 border-black bg-white px-2 py-0 text-[10px] font-bold tracking-[0.2em] text-[#9C92A3]"
+                >
+                  Season Rack
+                </Badge>
+                <CardTitle className="mt-2 text-3xl font-black uppercase text-[#310A31] md:text-5xl">
+                  Try your closet companion
+                </CardTitle>
+                <p className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-600">
+                  Guest mode · first batch is free
+                </p>
+                <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-slate-800 md:text-base">
+                  Upload your first batch of closet photos. We analyze the pieces, draft your style profile, and help you decide what to add next.
+                </p>
+              </CardHeader>
+            </Card>
+          )}
 
           {importStatus && (
             <div className="rack-panel rounded-none border-4 border-black bg-white px-5 py-4 text-sm font-semibold uppercase tracking-wide text-[#310A31]">

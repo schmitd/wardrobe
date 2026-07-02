@@ -6,7 +6,6 @@ import { Loader2 } from 'lucide-react';
 import type { OptimisticWardrobeItem } from '@/types/wardrobe';
 import { createTraceContext } from '@/lib/trace';
 import { createWardrobeItemAction } from '@/app/actions/wardrobe';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface AddItemSectionProps {
     onOptimisticAdd: (items: OptimisticWardrobeItem[]) => void;
@@ -206,32 +205,26 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                 <h2 className="text-2xl font-black uppercase tracking-tight text-[#310A31]">Closet Rack</h2>
             </div>
 
-            <Card className="rack-panel mb-6 rounded-none py-0">
-                <CardHeader className="px-0">
-                    <CardTitle className="mb-0 text-lg font-black uppercase tracking-wide text-[#310A31]">Add pieces</CardTitle>
-                </CardHeader>
-                <CardContent className="px-0">
-                <ImageUploader
-                    onUploadComplete={handleUpload}
-                    label="Upload Closet Photos"
-                    enablePreview
-                    inputId={uploaderInputId}
-                    capture="environment"
-                />
+            <ImageUploader
+                onUploadComplete={handleUpload}
+                label="Upload Closet Photos"
+                enablePreview
+                inputId={uploaderInputId}
+                capture="environment"
+                hiddenTriggerOnly
+            />
 
-                {isProcessing && (
-                    <div className="mt-4 flex items-center justify-center gap-2 text-[#310A31]">
-                        <Loader2 className="animate-spin" />
-                        <span>{status}</span>
-                    </div>
-                )}
-                {!isProcessing && status && (
-                    <div className={`mt-4 border-2 border-black p-3 text-center font-semibold ${status.startsWith('Error') ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'}`}>
-                        {status}
-                    </div>
-                )}
-                </CardContent>
-            </Card>
+            {isProcessing && (
+                <div className="mt-4 flex items-center justify-center gap-2 border-2 border-black bg-white p-3 text-[#310A31]">
+                    <Loader2 className="animate-spin" />
+                    <span>{status}</span>
+                </div>
+            )}
+            {!isProcessing && status && (
+                <div className={`mt-4 border-2 border-black p-3 text-center font-semibold ${status.startsWith('Error') ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'}`}>
+                    {status}
+                </div>
+            )}
         </div>
     );
 }
