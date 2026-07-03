@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import type { OptimisticWardrobeItem, WardrobeItem } from "@/types/wardrobe";
 import { deleteWardrobeItemAction } from "@/app/actions/wardrobe";
@@ -19,6 +19,23 @@ export default function WardrobeGrid({ items, optimisticItems = [] }: WardrobeGr
     const [reason, setReason] = useState("Disliked item style");
     const [showConfirm, setShowConfirm] = useState<string | null>(null); // ID of item to confirm delete
     const [activeActionsId, setActiveActionsId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!activeActionsId || showConfirm) return;
+
+        const handlePointerDown = (event: PointerEvent) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+
+            const activeItem = target.closest("[data-wardrobe-item-id]");
+            if (activeItem?.getAttribute("data-wardrobe-item-id") === activeActionsId) return;
+
+            setActiveActionsId(null);
+        };
+
+        document.addEventListener("pointerdown", handlePointerDown);
+        return () => document.removeEventListener("pointerdown", handlePointerDown);
+    }, [activeActionsId, showConfirm]);
 
     const handleDelete = async (id: string) => {
         setDeletingId(id);
@@ -62,11 +79,16 @@ export default function WardrobeGrid({ items, optimisticItems = [] }: WardrobeGr
                 return (
                     <div
                         key={itemId}
+                        data-wardrobe-item-id={itemId}
                         className="group relative focus-within:[&_.wardrobe-item-actions]:opacity-100"
                         onClick={() => {
                             if (!item.isOptimistic) {
                                 setActiveActionsId(item.id);
                             }
+                        }}
+                        onBlur={(event) => {
+                            if (showConfirm || event.currentTarget.contains(event.relatedTarget)) return;
+                            setActiveActionsId((current) => (current === itemId ? null : current));
                         }}
                     >
                     <div className="relative">
