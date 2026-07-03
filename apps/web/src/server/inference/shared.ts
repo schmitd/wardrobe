@@ -4,7 +4,14 @@ import { GeminiService } from "@/services/GeminiService";
 
 export const parseJson = <T>(text: string, label: string) =>
   Effect.try({
-    try: () => JSON.parse(text) as T,
+    try: () => {
+      const trimmed = text.trim();
+      if (!trimmed) {
+        throw new Error("empty response text");
+      }
+
+      return JSON.parse(trimmed) as T;
+    },
     catch: (error) => new Error(`${label} JSON parse failed: ${String(error)}`),
   });
 
