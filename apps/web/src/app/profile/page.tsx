@@ -1,10 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useClerk, useUser } from '@clerk/nextjs';
-import { useQuery } from 'convex/react';
+import { useConvex, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import Image from 'next/image';
 import { Sparkles } from 'lucide-react';
 import ImageUploader, { type UploadedFile } from '@/components/ImageUploader';
 import { analyzeSelfieAction, updateProfileBioAction } from '@/app/actions/wardrobe';
@@ -16,17 +15,19 @@ import { Textarea } from '@/components/ui/textarea';
 export default function ProfilePage() {
   const { isLoaded } = useUser();
   const clerk = useClerk();
+  const convex = useConvex();
   const profile = useQuery(api.profile.getProfile, isLoaded ? {} : 'skip');
-  const latestSelfie = useQuery(
-    api.storage.getLatestUploadByPurpose,
-    isLoaded ? { purpose: 'selfie' } : 'skip'
-  );
 
   const [bioDraft, setBioDraft] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'loading' | 'saving' | 'success' | 'error'>(
     'idle'
   );
   const [errorMessage, setErrorMessage] = useState('');
+  const [latestSelfie, setLatestSelfie] = useState<{
+    storageId: string;
+    url: string;
+    createdAt: number;
+  } | null>(null);
   const [analysisOverride, setAnalysisOverride] = useState<{
     skinTone: string;
     hairColor: string;
@@ -57,13 +58,46 @@ export default function ProfilePage() {
     }
   };
 
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    let isCurrent = true;
+
+    const loadLatestSelfie = async () => {
+      try {
+        const result = await convex.query(api.storage.getLatestUploadByPurpose, {
+          purpose: 'selfie',
+        });
+        if (isCurrent) setLatestSelfie(result);
+      } catch (error) {
+        console.warn('selfie.latest.load_failed', error);
+        if (isCurrent) setLatestSelfie(null);
+      }
+    };
+
+    void loadLatestSelfie();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [convex, isLoaded]);
+
   const handleSelfieUpload = async (uploads: UploadedFile[]) => {
     if (uploads.length === 0) return;
     setSaveStatus('loading');
     try {
+      const upload = uploads[0];
+      if (upload.previewUrl) {
+        setLatestSelfie({
+          storageId: upload.storageId,
+          url: upload.previewUrl,
+          createdAt: Date.now(),
+        });
+      }
+
       const trace = createTraceContext();
       const result = await analyzeSelfieAction({
-        storageId: uploads[0].storageId,
+        storageId: upload.storageId,
         ...trace,
       });
       setBioDraft(result.bio);
@@ -147,13 +181,10 @@ export default function ProfilePage() {
             <>
               <div className="border-4 border-black bg-white">
                 <div className="relative aspect-[4/5] w-full overflow-hidden bg-slate-100">
-                  <Image
+                  <img
                     src={latestSelfie.url}
                     alt="Most recently uploaded selfie"
-                    fill
-                    sizes="(max-width: 1024px) 100vw, 45vw"
-                    className="object-cover"
-                    priority
+                    className="h-full w-full object-cover"
                   />
                 </div>
               </div>
@@ -165,6 +196,7 @@ export default function ProfilePage() {
                   <ImageUploader
                     label="Upload Selfie"
                     allowMultiple={false}
+                    enablePreview
                     onUploadComplete={handleSelfieUpload}
                   />
                 </div>
@@ -174,6 +206,7 @@ export default function ProfilePage() {
             <ImageUploader
               label="Upload Selfie"
               allowMultiple={false}
+              enablePreview
               onUploadComplete={handleSelfieUpload}
             />
           )}
