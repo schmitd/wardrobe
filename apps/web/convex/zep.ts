@@ -1,6 +1,7 @@
 "use node";
 
-import { ZepClient } from "@getzep/zep-cloud";
+import { Zep, ZepClient } from "@getzep/zep-cloud";
+import { wardrobeEdgeTypes, wardrobeEntityTypes } from "./zepOntology";
 
 const apiKey = process.env.ZEP_KEY;
 const zepClient = apiKey ? new ZepClient({ apiKey }) : null;
@@ -10,6 +11,45 @@ const ensureClient = () => {
     throw new Error("ZEP_KEY is not set");
   }
   return zepClient;
+};
+
+const mainThreadId = (userId: string) => `session_${userId}_main`;
+
+const isNotFoundError = (error: unknown) => error instanceof Zep.NotFoundError;
+
+const ensureUser = async (client: ZepClient, userId: string, metadata?: Record<string, unknown>) => {
+  try {
+    const user = await client.user.get(userId);
+    if (metadata) {
+      return client.user.update(userId, { metadata });
+    }
+    return user;
+  } catch (error) {
+    if (!isNotFoundError(error)) throw error;
+    return client.user.add({ userId, metadata });
+  }
+};
+
+const ensureMainThread = async (client: ZepClient, userId: string) => {
+  const threadId = mainThreadId(userId);
+
+  try {
+    await client.thread.get(threadId, { limit: 1 });
+  } catch (error) {
+    if (!isNotFoundError(error)) throw error;
+    await client.thread.create({ threadId, userId });
+  }
+
+  return threadId;
+};
+
+const ensureUserAndMainThread = async (
+  client: ZepClient,
+  userId: string,
+  metadata?: Record<string, unknown>
+) => {
+  await ensureUser(client, userId, metadata);
+  return ensureMainThread(client, userId);
 };
 
 export const addWardrobeItemsMemory = async (
@@ -28,7 +68,8 @@ export const addWardrobeItemsMemory = async (
   const client = ensureClient();
 
   try {
-    await client.thread.addMessages(`session_${userId}_main`, {
+    const threadId = await ensureUserAndMainThread(client, userId);
+    await client.thread.addMessages(threadId, {
       messages: [
         {
           role: "user",
@@ -57,8 +98,9 @@ export const deleteWardrobeItemMemory = async (
 
   const client = ensureClient();
   const message = `I removed an item from my wardrobe: "${description}". Reason: ${reason}.`;
+  const threadId = await ensureUserAndMainThread(client, userId);
 
-  await client.thread.addMessages(`session_${userId}_main`, {
+  await client.thread.addMessages(threadId, {
     messages: [
       {
         role: "user",
@@ -83,7 +125,7 @@ export const updateProfileMemory = async (
     hair_color: profile.hairColor ?? undefined,
   };
 
-  const existingUser = await client.user.get(userId);
+  const existingUser = await ensureUser(client, userId);
   const previousMetadata =
     typeof existingUser === "object" &&
     existingUser !== null &&
@@ -93,16 +135,11 @@ export const updateProfileMemory = async (
       ? { ...existingUser.metadata }
       : {};
 
-  await client.user.update(userId, {
-    metadata: {
-      ...metadata,
-    },
-  });
-
   const message = `My profile details:\nBio: ${profile.bio ?? "N/A"}\nSkin Tone: ${profile.skinTone ?? "N/A"}\nHair Color: ${profile.hairColor ?? "N/A"}`;
 
   try {
-    await client.thread.addMessages(`session_${userId}_main`, {
+    const threadId = await ensureUserAndMainThread(client, userId, metadata);
+    await client.thread.addMessages(threadId, {
       messages: [
         {
           role: "user",
@@ -134,4 +171,11 @@ export const updateProfileMemory = async (
     });
     throw error;
   }
+};
+
+export const setWardrobeOntology = async (targets?: { userIds?: string[]; graphIds?: string[] }) => {
+  if (!apiKey) return;
+
+  const client = ensureClient();
+  await client.graph.setOntology(wardrobeEntityTypes, wardrobeEdgeTypes, targets);
 };
