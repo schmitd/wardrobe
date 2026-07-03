@@ -133,6 +133,7 @@ h4 {
 
 .rack-item-card {
   position: relative;
+  --rack-item-accent: #f0ffbd;
   display: grid;
   grid-template-columns: minmax(0, 66%) minmax(108px, 34%);
   align-items: center;
@@ -160,9 +161,9 @@ h4 {
 }
 
 .rack-item-shape polygon {
-  fill: #f0ffbd;
+  fill: var(--rack-item-accent);
   stroke: #000;
-  stroke-width: 1;
+  stroke-width: 2.15;
   vector-effect: non-scaling-stroke;
   stroke-linejoin: miter;
 }
@@ -202,7 +203,7 @@ h4 {
 .rack-item-hanger {
   position: absolute;
   z-index: -1;
-  right: -44px;
+  right: calc(5% - 59px);
   top: 50%;
   height: 42px;
   width: 60px;
@@ -214,7 +215,7 @@ h4 {
 .rack-item-hanger path {
   fill: none;
   stroke: #000;
-  stroke-width: 3.5;
+  stroke-width: 4.25;
   stroke-linecap: round;
   stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
@@ -224,8 +225,8 @@ h4 {
   display: inline-flex;
   align-items: center;
   align-self: center;
-  gap: 0.45rem;
   min-width: 0;
+  max-width: 100%;
   transform: rotate(-4deg);
 }
 
@@ -233,18 +234,37 @@ h4 {
   position: relative;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   min-height: 38px;
   max-width: 100%;
-  min-width: 108px;
-  padding: 0.1rem 1.55rem 0.1rem 0.9rem;
+  min-width: min(132px, 100%);
+  padding: 0.1rem 2.15rem 0.1rem 0.9rem;
   border: 0;
   background: transparent;
   color: #171717;
-  font-size: 0.82rem;
+  font-size: clamp(0.58rem, 1.1vw, 0.78rem);
   font-weight: 900;
   letter-spacing: 0;
   text-transform: uppercase;
+}
+
+.rack-item-tag-string {
+  position: absolute;
+  right: -3.75rem;
+  top: 0.32rem;
+  z-index: -1;
+  width: 4.25rem;
+  height: 1.05rem;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.rack-item-tag-string path {
+  fill: none;
+  stroke: #272727;
+  stroke-width: 1.45;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
 }
 
 .rack-item-tag-shape {
@@ -265,22 +285,22 @@ h4 {
   stroke-linejoin: miter;
 }
 
+.rack-item-tag-shape circle {
+  fill: var(--rack-item-accent);
+  stroke: #7c8270;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
 .rack-item-tag span {
   position: relative;
   z-index: 1;
+  display: block;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.rack-item-tag-dot {
-  position: relative;
-  right: 1.9rem;
-  height: 6px;
-  width: 6px;
-  border-radius: 999px;
-  background: #111;
-  flex: none;
 }
 
 .rack-item-badge {
@@ -342,21 +362,28 @@ h4 {
   }
 
   .rack-item-hanger {
-    right: -16px;
+    right: calc(5% - 33.5px);
     display: block;
     width: 34px;
     height: 28px;
   }
 
   .rack-item-hanger path {
-    stroke-width: 3;
+    stroke-width: 3.5;
   }
 
   .rack-item-tag {
-    min-width: 76px;
+    min-width: min(88px, 100%);
     min-height: 30px;
-    padding: 0.08rem 1.15rem 0.08rem 0.55rem;
+    padding: 0.08rem 1.5rem 0.08rem 0.58rem;
     font-size: 0.58rem;
+  }
+
+  .rack-item-tag-string {
+    right: -2.65rem;
+    top: 0.18rem;
+    width: 2.95rem;
+    height: 0.8rem;
   }
 
   .rack-item-side {
