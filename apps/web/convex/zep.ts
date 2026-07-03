@@ -52,6 +52,25 @@ const ensureUserAndMainThread = async (
   return ensureMainThread(client, userId);
 };
 
+const addUserGraphEpisode = async (
+  client: ZepClient,
+  userId: string,
+  input: {
+    data: unknown;
+    sourceDescription: string;
+    createdAt?: number;
+  }
+) => {
+  await ensureUser(client, userId);
+  await client.graph.add({
+    userId,
+    type: "json",
+    data: JSON.stringify(input.data),
+    sourceDescription: input.sourceDescription,
+    createdAt: new Date(input.createdAt ?? Date.now()).toISOString(),
+  });
+};
+
 export const addWardrobeItemsMemory = async (
   userId: string,
   items: { category?: string | null; description?: string | null; styleTags?: string[] | null }[]
@@ -68,6 +87,18 @@ export const addWardrobeItemsMemory = async (
   const client = ensureClient();
 
   try {
+    await addUserGraphEpisode(client, userId, {
+      sourceDescription: "Wardrobe item upload",
+      data: {
+        event: "wardrobe_items_added",
+        items: items.map((item) => ({
+          category: item.category ?? null,
+          description: item.description ?? null,
+          styleTags: item.styleTags ?? [],
+        })),
+      },
+    });
+
     const threadId = await ensureUserAndMainThread(client, userId);
     await client.thread.addMessages(threadId, {
       messages: [
@@ -98,6 +129,16 @@ export const deleteWardrobeItemMemory = async (
 
   const client = ensureClient();
   const message = `I removed an item from my wardrobe: "${description}". Reason: ${reason}.`;
+
+  await addUserGraphEpisode(client, userId, {
+    sourceDescription: "Wardrobe item deletion",
+    data: {
+      event: "wardrobe_item_removed",
+      description,
+      reason,
+    },
+  });
+
   const threadId = await ensureUserAndMainThread(client, userId);
 
   await client.thread.addMessages(threadId, {
@@ -138,6 +179,16 @@ export const updateProfileMemory = async (
   const message = `My profile details:\nBio: ${profile.bio ?? "N/A"}\nSkin Tone: ${profile.skinTone ?? "N/A"}\nHair Color: ${profile.hairColor ?? "N/A"}`;
 
   try {
+    await addUserGraphEpisode(client, userId, {
+      sourceDescription: "Wardrobe profile update",
+      data: {
+        event: "profile_updated",
+        bio: profile.bio ?? null,
+        skinTone: profile.skinTone ?? null,
+        hairColor: profile.hairColor ?? null,
+      },
+    });
+
     const threadId = await ensureUserAndMainThread(client, userId, metadata);
     await client.thread.addMessages(threadId, {
       messages: [
@@ -178,4 +229,20 @@ export const setWardrobeOntology = async (targets?: { userIds?: string[]; graphI
 
   const client = ensureClient();
   await client.graph.setOntology(wardrobeEntityTypes, wardrobeEdgeTypes, targets);
+};
+
+export const deleteUserMemory = async (userId: string) => {
+  if (!apiKey) return { deleted: false as const, skipped: "missing_api_key" as const };
+
+  const client = ensureClient();
+
+  try {
+    await client.user.delete(userId);
+    return { deleted: true as const };
+  } catch (error) {
+    if (isNotFoundError(error)) {
+      return { deleted: false as const, skipped: "not_found" as const };
+    }
+    throw error;
+  }
 };

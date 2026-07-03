@@ -6,6 +6,7 @@ import { internalAction } from "./_generated/server";
 import { ensureTraceContext } from "./trace";
 import {
   addWardrobeItemsMemory,
+  deleteUserMemory,
   deleteWardrobeItemMemory,
   updateProfileMemory,
 } from "./zep";
@@ -98,5 +99,23 @@ export const syncProfileUpdate = internalAction({
       skinTone: args.skinTone ?? null,
       hairColor: args.hairColor ?? null,
     });
+  },
+});
+
+export const deleteUserGraph = internalAction({
+  args: {
+    userId: v.string(),
+    traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const { traceId, traceparent } = ensureTraceContext(args);
+    console.info("zep.sync.user_delete", {
+      traceId,
+      traceparent,
+      userId: redactUserId(args.userId),
+    });
+
+    return deleteUserMemory(args.userId);
   },
 });
