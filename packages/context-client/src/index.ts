@@ -25,7 +25,15 @@ export const createWardrobeContextClient = ({
       });
 
       if (!response.ok) {
-        throw new Error(`Style fit check failed: ${response.status}`);
+        let detail = "";
+        try {
+          const body = (await response.json()) as { error?: string };
+          detail = body.error ? `: ${body.error}` : "";
+        } catch {
+          detail = "";
+        }
+
+        throw new Error(`Style fit check failed: ${response.status}${detail}`);
       }
 
       return response.json() as Promise<StyleFitResponse>;
