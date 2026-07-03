@@ -69,10 +69,12 @@ export default function WardrobeGrid({ items, optimisticItems = [] }: WardrobeGr
                             styleTags={item.styleTags ?? null}
                             badgeLabel={isPending ? "Processing" : undefined}
                         />
-                        {/* Delete Button (Visible on Hover or if Confirming) */}
+                        {/* Touch devices cannot rely on hover, so hide this only where hover is available. */}
                         {!item.isOptimistic && (
-                            <div className={`absolute top-2 right-2 ${showConfirm === item.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity`}>
+                            <div className={`absolute top-2 right-2 ${showConfirm === item.id ? 'opacity-100' : 'opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100'} transition-opacity`}>
                                 <button
+                                    type="button"
+                                    aria-label="Remove piece"
                                     onClick={() => setShowConfirm(item.id)}
                                     className="border-2 border-black bg-white p-2 text-red-600 shadow-[3px_3px_0_#000]"
                                 >
@@ -98,12 +100,14 @@ export default function WardrobeGrid({ items, optimisticItems = [] }: WardrobeGr
                             </select>
                             <div className="flex gap-2">
                                 <button
+                                    type="button"
                                     onClick={() => setShowConfirm(null)}
                                     className="border-2 border-black bg-white px-3 py-1 text-xs font-semibold uppercase"
                                 >
                                     Cancel
                                 </button>
                                 <button
+                                    type="button"
                                     onClick={() => handleDelete(item.id)}
                                     disabled={deletingId === item.id}
                                     className="border-2 border-black bg-[#310A31] px-3 py-1 text-xs font-black uppercase text-white shadow-[3px_3px_0_#000] disabled:opacity-50"
