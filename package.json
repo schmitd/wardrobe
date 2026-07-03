@@ -13,7 +13,8 @@
     "lint": "turbo lint",
     "test": "turbo test",
     "typecheck": "turbo typecheck",
-    "vercel-build": "turbo build --filter=@wardrobe/web"
+    "web-build": "turbo build --filter=@wardrobe/web",
+    "vercel-build": "bun run --cwd apps/web convex deploy --cmd \"cd ../.. && bun run web-build\""
   },
   "devDependencies": {
     "turbo": "^2.8.0",

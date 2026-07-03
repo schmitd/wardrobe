@@ -75,7 +75,7 @@ bun run lint
 bun run typecheck
 ```
 
-Vercel builds through `bun run vercel-build`, which runs `turbo build --filter=@wardrobe/web`. Convex deployment should be configured as a separate workflow with `CONVEX_DEPLOY_KEY` when production Convex deploys are intended.
+Vercel builds through `bun run vercel-build`, which runs the web workspace's Convex CLI with `convex deploy --cmd "cd ../.. && bun run web-build"`. Set `CONVEX_DEPLOY_KEY` in Vercel so each production or preview web deployment deploys the matching Convex functions and schema before the frontend build completes.
 
 Set `STYLE_FIT_API_TOKEN` on the web app to require `Authorization: Bearer <token>` for `/api/context/style-fit`. Companion apps can pass the token through their own runtime config (`WARDROBE_API_TOKEN` for the ChatGPT app, Chrome extension storage, or `EXPO_PUBLIC_WARDROBE_API_TOKEN` for Expo development builds).
 

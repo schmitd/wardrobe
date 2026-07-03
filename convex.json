@@ -1,5 +1,5 @@
 {
-  "functions": "convex/",
+  "functions": "apps/web/convex/",
   "node": {
     "externalPackages": [
       "@google/generative-ai",
