@@ -67,3 +67,32 @@ export const getStorageUrl = query({
     return ctx.storage.getUrl(storageId);
   },
 });
+
+export const getLatestUploadByPurpose = query({
+  args: {
+    purpose: v.string(),
+  },
+  handler: async (ctx, { purpose }) => {
+    const userId = await getUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const upload = await ctx.db
+      .query("uploads")
+      .withIndex("by_user_purpose_createdAt", (q) =>
+        q.eq("userId", userId).eq("purpose", purpose)
+      )
+      .order("desc")
+      .first();
+
+    if (!upload) return null;
+
+    const url = await ctx.storage.getUrl(upload.storageId);
+    if (!url) return null;
+
+    return {
+      storageId: upload.storageId,
+      url,
+      createdAt: upload.createdAt,
+    };
+  },
+});
