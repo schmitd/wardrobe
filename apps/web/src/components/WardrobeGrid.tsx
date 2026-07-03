@@ -18,6 +18,7 @@ export default function WardrobeGrid({ items, optimisticItems = [] }: WardrobeGr
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [reason, setReason] = useState("Disliked item style");
     const [showConfirm, setShowConfirm] = useState<string | null>(null); // ID of item to confirm delete
+    const [activeActionsId, setActiveActionsId] = useState<string | null>(null);
 
     const handleDelete = async (id: string) => {
         setDeletingId(id);
@@ -25,6 +26,7 @@ export default function WardrobeGrid({ items, optimisticItems = [] }: WardrobeGr
             const trace = createTraceContext();
             await deleteWardrobeItemAction({ itemId: id, reason, ...trace });
             setShowConfirm(null);
+            setActiveActionsId(null);
         } catch (error) {
             console.error('wardrobe.delete.failed', {
                 itemId: id,
@@ -55,11 +57,17 @@ export default function WardrobeGrid({ items, optimisticItems = [] }: WardrobeGr
                 const itemId = item.isOptimistic ? item.tempId : item.id;
                 const isPending = item.isOptimistic ? item.status !== "error" : item.analysisStatus !== "ready";
                 const isError = item.isOptimistic ? item.status === "error" : item.analysisStatus === "error";
+                const showActions = !item.isOptimistic && activeActionsId === item.id;
 
                 return (
                     <div
                         key={itemId}
-                        className="group relative"
+                        className="group relative focus-within:[&_.wardrobe-item-actions]:opacity-100"
+                        onClick={() => {
+                            if (!item.isOptimistic) {
+                                setActiveActionsId(item.id);
+                            }
+                        }}
                     >
                     <div className="relative">
                         <RackItemCard
@@ -69,13 +77,17 @@ export default function WardrobeGrid({ items, optimisticItems = [] }: WardrobeGr
                             styleTags={item.styleTags ?? null}
                             badgeLabel={isPending ? "Processing" : undefined}
                         />
-                        {/* Touch devices cannot rely on hover, so hide this only where hover is available. */}
+                        {/* Touch devices reveal actions after the card is tapped. */}
                         {!item.isOptimistic && (
-                            <div className={`absolute top-2 right-2 ${showConfirm === item.id ? 'opacity-100' : 'opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100'} transition-opacity`}>
+                            <div className={`wardrobe-item-actions absolute top-2 right-2 ${showConfirm === item.id || showActions ? 'opacity-100' : 'opacity-0 [@media(hover:hover)]:group-hover:opacity-100'} transition-opacity`}>
                                 <button
                                     type="button"
                                     aria-label="Remove piece"
-                                    onClick={() => setShowConfirm(item.id)}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        setShowConfirm(item.id);
+                                        setActiveActionsId(item.id);
+                                    }}
                                     className="border-2 border-black bg-white p-2 text-red-600 shadow-[3px_3px_0_#000]"
                                 >
                                     <Trash2 size={16} />
@@ -101,14 +113,21 @@ export default function WardrobeGrid({ items, optimisticItems = [] }: WardrobeGr
                             <div className="flex gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => setShowConfirm(null)}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        setShowConfirm(null);
+                                        setActiveActionsId(null);
+                                    }}
                                     className="border-2 border-black bg-white px-3 py-1 text-xs font-semibold uppercase"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => handleDelete(item.id)}
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        void handleDelete(item.id);
+                                    }}
                                     disabled={deletingId === item.id}
                                     className="border-2 border-black bg-[#310A31] px-3 py-1 text-xs font-black uppercase text-white shadow-[3px_3px_0_#000] disabled:opacity-50"
                                 >
