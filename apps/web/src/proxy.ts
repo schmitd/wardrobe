@@ -2,7 +2,6 @@ import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 
 const isProtectedRoute = createRouteMatcher([
-    '/check(.*)',
     '/profile(.*)',
     '/api/wardrobe(.*)',
 ])
@@ -21,7 +20,6 @@ export const config = {
     matcher: [
         '/',
         '/index',
-        '/check/:path*',
         '/profile/:path*',
         '/api/wardrobe/:path*',
     ],
