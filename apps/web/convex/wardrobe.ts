@@ -4,6 +4,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { ensureTraceContext } from "./trace";
 import { retrier } from "./retrier";
+import { getAuthenticatedUser, getAuthenticatedUserId } from "./authIdentity";
 
 const now = () => Date.now();
 const toErrorMessage = (error: unknown) =>
@@ -23,19 +24,14 @@ const normalizeSimilarityLimit = (limit?: number) => {
   return rounded;
 };
 
-const getUserId = async (ctx: { auth: { getUserIdentity: () => Promise<{ subject: string } | null> } }) => {
-  const identity = await ctx.auth.getUserIdentity();
-  return identity?.subject ?? null;
-};
-
 const getOwnedItem = async (
   ctx: {
     db: { get: (id: Id<"wardrobeItems">) => Promise<{ userId: string } | null> };
-    auth: { getUserIdentity: () => Promise<{ subject: string } | null> };
+    auth: { getUserIdentity: () => Promise<({ subject: string } & Record<string, unknown>) | null> };
   },
   itemId: Id<"wardrobeItems">
 ) => {
-  const userId = await getUserId(ctx);
+  const userId = await getAuthenticatedUserId(ctx);
   if (!userId) throw new Error("Unauthorized");
 
   const item = await ctx.db.get(itemId);
@@ -47,7 +43,7 @@ const getOwnedItem = async (
 export const listWardrobeItems = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getUserId(ctx);
+    const userId = await getAuthenticatedUserId(ctx);
     if (!userId) return [];
 
     const items = await ctx.db
@@ -76,7 +72,7 @@ export const listWardrobeItems = query({
 export const getUploadUrl = mutation({
   args: {},
   handler: async (ctx) => {
-    const userId = await getUserId(ctx);
+    const userId = await getAuthenticatedUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
     return ctx.storage.generateUploadUrl();
@@ -92,8 +88,9 @@ export const createWardrobeItem = mutation({
     traceparent: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const userId = await getUserId(ctx);
-    if (!userId) throw new Error("Unauthorized");
+    const user = await getAuthenticatedUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+    const userId = user.userId;
 
     const { traceId, traceparent } = ensureTraceContext({
       traceId: args.traceId,
@@ -117,6 +114,7 @@ export const createWardrobeItem = mutation({
     try {
       const runId = await retrier.run(ctx, internal.zepSync.syncWardrobeCreate, {
         userId,
+        user,
         itemId,
         traceId,
         traceparent,
@@ -150,8 +148,9 @@ export const deleteWardrobeItem = mutation({
     traceparent: v.optional(v.string()),
   },
   handler: async (ctx, { itemId, reason, traceId: argTraceId, traceparent: argTraceparent }) => {
-    const userId = await getUserId(ctx);
-    if (!userId) throw new Error("Unauthorized");
+    const user = await getAuthenticatedUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+    const userId = user.userId;
 
     const item = await ctx.db.get(itemId);
     if (!item || item.userId !== userId) throw new Error("Not found");
@@ -167,6 +166,7 @@ export const deleteWardrobeItem = mutation({
     try {
       const runId = await retrier.run(ctx, internal.zepSync.syncWardrobeDelete, {
         userId,
+        user,
         description,
         reason,
         traceId,
@@ -219,7 +219,7 @@ export const getWardrobeItemWithUrl = query({
     itemId: v.id("wardrobeItems"),
   },
   handler: async (ctx, { itemId }) => {
-    const userId = await getUserId(ctx);
+    const userId = await getAuthenticatedUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
     const item = await ctx.db.get(itemId);
@@ -244,7 +244,7 @@ export const getWardrobeItemsDisplayByIds = query({
     itemIds: v.array(v.id("wardrobeItems")),
   },
   handler: async (ctx, { itemIds }) => {
-    const userId = await getUserId(ctx);
+    const userId = await getAuthenticatedUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
     const uniqueIds = [...new Set(itemIds)];
@@ -283,7 +283,7 @@ export const searchSimilarItems = action({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, { embedding, limit }) => {
-    const userId = await getUserId(ctx);
+    const userId = await getAuthenticatedUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
     const results = await ctx.vectorSearch("wardrobeItems", "by_embedding", {
@@ -301,7 +301,7 @@ export const listItemsForSimilarity = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, { limit }) => {
-    const userId = await getUserId(ctx);
+    const userId = await getAuthenticatedUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
     const targetCount = normalizeSimilarityLimit(limit);
@@ -344,7 +344,7 @@ export const setAnalysisStatus = mutation({
     ),
   },
   handler: async (ctx, { itemId, status }) => {
-    const userId = await getUserId(ctx);
+    const userId = await getAuthenticatedUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
     const item = await ctx.db.get(itemId);
@@ -364,7 +364,7 @@ export const applyTags = mutation({
     styleTags: v.array(v.string()),
   },
   handler: async (ctx, { itemId, category, styleTags }) => {
-    const userId = await getUserId(ctx);
+    const userId = await getAuthenticatedUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
     const item = await ctx.db.get(itemId);
@@ -385,7 +385,7 @@ export const applyDescription = mutation({
     description: v.string(),
   },
   handler: async (ctx, { itemId, category, description }) => {
-    const userId = await getUserId(ctx);
+    const userId = await getAuthenticatedUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
     const item = await ctx.db.get(itemId);
@@ -405,7 +405,7 @@ export const applyEmbedding = mutation({
     embedding: v.array(v.float64()),
   },
   handler: async (ctx, { itemId, embedding }) => {
-    const userId = await getUserId(ctx);
+    const userId = await getAuthenticatedUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
     const item = await ctx.db.get(itemId);
@@ -429,8 +429,9 @@ export const applyFullAnalysis = mutation({
     traceparent: v.optional(v.string()),
   },
   handler: async (ctx, { itemId, category, description, styleTags, embedding, traceId: argTraceId, traceparent: argTraceparent }) => {
-    const userId = await getUserId(ctx);
-    if (!userId) throw new Error("Unauthorized");
+    const user = await getAuthenticatedUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+    const userId = user.userId;
 
     const item = await ctx.db.get(itemId);
     if (!item || item.userId !== userId) {
@@ -456,6 +457,7 @@ export const applyFullAnalysis = mutation({
     try {
       const runId = await retrier.run(ctx, internal.zepSync.syncWardrobeAdd, {
         userId,
+        user,
         itemId,
         traceId,
         traceparent,
@@ -487,7 +489,7 @@ export const setAnalysisError = mutation({
     error: v.string(),
   },
   handler: async (ctx, { itemId, error }) => {
-    const userId = await getUserId(ctx);
+    const userId = await getAuthenticatedUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
 
     const item = await ctx.db.get(itemId);
