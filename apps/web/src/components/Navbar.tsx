@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SignInButton, SignedIn, SignedOut } from '@clerk/nextjs';
-import { Shirt, UserRound } from 'lucide-react';
+import { Layers3, Sparkles, Shirt, UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -25,7 +25,7 @@ export default function Navbar() {
           <span className="text-sm font-extrabold text-[#241426]">Wardrobe</span>
         </Link>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <Button asChild variant="outline" className={navClass(pathname === '/')}>
             <Link href="/">
               <Shirt className="h-3.5 w-3.5" />
@@ -33,6 +33,18 @@ export default function Navbar() {
             </Link>
           </Button>
           <SignedIn>
+            <Button asChild variant="outline" className={navClass(pathname === '/fits')}>
+              <Link href="/fits">
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Fits</span>
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className={navClass(pathname === '/wardrobes')}>
+              <Link href="/wardrobes">
+                <Layers3 className="h-3.5 w-3.5" />
+                <span>Wardrobes</span>
+              </Link>
+            </Button>
             <Button asChild variant="outline" className={navClass(pathname === '/profile')}>
               <Link href="/profile">
                 <UserRound className="h-3.5 w-3.5" />

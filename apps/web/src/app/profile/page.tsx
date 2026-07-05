@@ -29,16 +29,20 @@ export default function ProfilePage() {
   const [errorMessage, setErrorMessage] = useState('');
   const [analysisOverride, setAnalysisOverride] = useState<{
     skinTone: string;
+    complexion?: string;
     hairColor: string;
+    colorSeason?: string;
   } | null>(null);
 
   const bio = useMemo(() => bioDraft ?? profile?.bio ?? '', [bioDraft, profile]);
   const analysisResult = useMemo(() => {
     if (analysisOverride) return analysisOverride;
-    if (profile?.skinTone || profile?.hairColor) {
+    if (profile?.skinTone || profile?.complexion || profile?.hairColor || profile?.colorSeason) {
       return {
         skinTone: profile.skinTone ?? 'Unknown',
+        complexion: profile.complexion ?? 'Unknown',
         hairColor: profile.hairColor ?? 'Unknown',
+        colorSeason: profile.colorSeason ?? 'Unknown',
       };
     }
     return null;
@@ -69,7 +73,9 @@ export default function ProfilePage() {
       setBioDraft(result.bio);
       setAnalysisOverride({
         skinTone: result.skin_tone,
+        complexion: result.complexion,
         hairColor: result.hair_color,
+        colorSeason: result.color_season,
       });
       setSaveStatus('success');
     } catch (error) {
@@ -202,11 +208,21 @@ export default function ProfilePage() {
                 </p>
               </div>
               <div>
-                <span className="text-xs font-semibold text-[#56345c]">
-                  Hair color
-                </span>
+                <span className="text-xs font-semibold text-[#56345c]">Complexion</span>
+                <p className="mt-1 text-sm font-extrabold text-[#241426]">
+                  {analysisResult.complexion}
+                </p>
+              </div>
+              <div>
+                <span className="text-xs font-semibold text-[#56345c]">Hair color</span>
                 <p className="mt-1 text-sm font-extrabold text-[#241426]">
                   {analysisResult.hairColor}
+                </p>
+              </div>
+              <div>
+                <span className="text-xs font-semibold text-[#56345c]">Color season</span>
+                <p className="mt-1 text-sm font-extrabold text-[#241426]">
+                  {analysisResult.colorSeason}
                 </p>
               </div>
             </div>
