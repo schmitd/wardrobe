@@ -28,6 +28,9 @@ const apiMock = {
     updateBio: {},
     updateProfileAttributes: {},
   },
+  zepSync: {
+    syncCandidateComparison: {},
+  },
 };
 
 mock.module("convex/nextjs", () => ({

@@ -48,7 +48,7 @@ export const wardrobeEntityTypes = {
   },
   ProfileAttribute: {
     description:
-      "A user style-profile attribute that can evolve over time, including color season, skin tone, hair color, style bio, proportions, fit preferences, lifestyle, and constraints.",
+      "A user style-profile attribute that can evolve over time, including color season, skin tone, complexion, hair color, style bio, proportions, fit preferences, lifestyle, and constraints.",
     fields: {
       attribute_kind: entityFields.text("Flexible attribute type such as color_season, skin_tone, hair_color, style_bio, fit_preference, lifestyle, sizing, or constraint."),
       value_text: entityFields.text("Current or observed value for the profile attribute."),
@@ -58,7 +58,7 @@ export const wardrobeEntityTypes = {
   },
   WearContext: {
     description:
-      "A real or planned context where clothing is worn or evaluated, including occasions, events, weather, locations, activities, dress codes, and daily outfit situations.",
+      "A real or planned context where clothing is worn or evaluated, including daily fit checks, try-ons, occasions, events, weather, locations, activities, dress codes, and daily outfit situations.",
     fields: {
       context_kind: entityFields.text("Flexible context type such as occasion, event, activity, weather, location, dress_code, mood, or day_plan."),
       description: entityFields.text("Natural-language description of the wear context."),
@@ -166,7 +166,7 @@ export const wardrobeEdgeTypes = {
   },
   WORN_FOR: {
     description:
-      "An item, candidate, or collection was worn, planned, recommended, or rejected for a wear context such as an event, daily outfit, weather, location, or dress code.",
+      "An item, candidate, or collection was worn, tried on, planned, recommended, or rejected for a wear context such as a daily fit check, try-on, event, daily outfit, weather, location, or dress code.",
     fields: {
       usage_kind: entityFields.text("How it was used, such as worn, planned, recommended, rejected, avoided, packed, or repeated."),
       feedback: entityFields.text("User or model feedback about how it worked in that context."),

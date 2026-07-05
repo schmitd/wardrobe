@@ -8,13 +8,18 @@
  * @module
  */
 
+import type * as account from "../account.js";
+import type * as authIdentity from "../authIdentity.js";
+import type * as fitChecks from "../fitChecks.js";
 import type * as http from "../http.js";
 import type * as profile from "../profile.js";
 import type * as retrier from "../retrier.js";
 import type * as storage from "../storage.js";
 import type * as trace from "../trace.js";
 import type * as wardrobe from "../wardrobe.js";
+import type * as wardrobes from "../wardrobes.js";
 import type * as zep from "../zep.js";
+import type * as zepOntology from "../zepOntology.js";
 import type * as zepSync from "../zepSync.js";
 
 import type {
@@ -24,13 +29,18 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  account: typeof account;
+  authIdentity: typeof authIdentity;
+  fitChecks: typeof fitChecks;
   http: typeof http;
   profile: typeof profile;
   retrier: typeof retrier;
   storage: typeof storage;
   trace: typeof trace;
   wardrobe: typeof wardrobe;
+  wardrobes: typeof wardrobes;
   zep: typeof zep;
+  zepOntology: typeof zepOntology;
   zepSync: typeof zepSync;
 }>;
 

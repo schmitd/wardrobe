@@ -33,6 +33,11 @@ import { processWardrobeInference } from "@/server/wardrobeInference";
 
 type UserTier = "free" | "pro";
 type AuthenticatedScope = "upload" | "check" | "inference";
+type ConvexAuthContext = {
+  userId: string;
+  token: string;
+  tier: UserTier;
+};
 
 const resolveUserTier = (has: Awaited<ReturnType<typeof auth>>["has"]): UserTier =>
   has?.({ permission: "compatibility_check" }) || has?.({ plan: "pro" }) ? "pro" : "free";
@@ -234,14 +239,16 @@ const analyzeSelfie = (base64: string) =>
       type: SchemaType.OBJECT,
       properties: {
         skin_tone: { type: SchemaType.STRING },
+        complexion: { type: SchemaType.STRING },
         hair_color: { type: SchemaType.STRING },
+        color_season: { type: SchemaType.STRING },
         bio: { type: SchemaType.STRING },
       },
-      required: ["skin_tone", "hair_color", "bio"],
+      required: ["skin_tone", "complexion", "hair_color", "color_season", "bio"],
     };
 
     const prompt =
-      "Analyze this selfie for fashion profiling. Extract approximate skin tone (e.g., Fair, Medium, Deep) and hair color. Also suggest a short professional style bio. Return JSON: { skin_tone, hair_color, bio }.";
+      "Analyze this selfie for fashion profiling. Extract approximate skin tone (e.g., Fair, Medium, Deep), complexion/undertone notes, hair color, and likely color season. Also suggest a short professional style bio. Return JSON: { skin_tone, complexion, hair_color, color_season, bio }.";
 
     const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
       contents: [
@@ -259,10 +266,141 @@ const analyzeSelfie = (base64: string) =>
       },
     });
 
-    return yield* parseJson<{ skin_tone: string; hair_color: string; bio: string }>(
+    return yield* parseJson<{
+      skin_tone: string;
+      complexion: string;
+      hair_color: string;
+      color_season: string;
+      bio: string;
+    }>(
       result.response.text(),
       "analyzeSelfie"
     );
+  }).pipe(withRetries);
+
+type FitCheckKind = "daily_fit_check" | "try_on";
+
+type DetectedFitCheckItem = {
+  category: string;
+  description: string;
+  style_tags: string[];
+  bounding_box?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  confidence?: number;
+};
+
+type RecordFitCheckItemInput = {
+  wardrobeItemId?: Id<"wardrobeItems">;
+  source: "matched_existing" | "created_from_fit_check";
+  category: string;
+  description: string;
+  styleTags: string[];
+  boundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  confidence?: number;
+  embedding?: number[];
+};
+
+const normalizeBoundingBox = (box: DetectedFitCheckItem["bounding_box"]) => {
+  if (!box) return undefined;
+  const clamp = (value: number) => Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
+  return {
+    x: clamp(box.x),
+    y: clamp(box.y),
+    width: clamp(box.width),
+    height: clamp(box.height),
+  };
+};
+
+const analyzeFitCheckPhoto = (base64: string, type: FitCheckKind) =>
+  Effect.gen(function* () {
+    const gemini = yield* GeminiService;
+    const schema: Schema = {
+      type: SchemaType.OBJECT,
+      properties: {
+        transcription: { type: SchemaType.STRING },
+        items: {
+          type: SchemaType.ARRAY,
+          items: {
+            type: SchemaType.OBJECT,
+            properties: {
+              category: { type: SchemaType.STRING },
+              description: { type: SchemaType.STRING },
+              style_tags: {
+                type: SchemaType.ARRAY,
+                items: { type: SchemaType.STRING },
+              },
+              bounding_box: {
+                type: SchemaType.OBJECT,
+                properties: {
+                  x: { type: SchemaType.NUMBER },
+                  y: { type: SchemaType.NUMBER },
+                  width: { type: SchemaType.NUMBER },
+                  height: { type: SchemaType.NUMBER },
+                },
+                required: ["x", "y", "width", "height"],
+              },
+              confidence: { type: SchemaType.NUMBER },
+            },
+            required: ["category", "description", "style_tags"],
+          },
+        },
+      },
+      required: ["transcription", "items"],
+    };
+
+    const prompt = `Analyze this full-body outfit photo for a ${type === "daily_fit_check" ? "daily fit check of what the user actually wore" : "try-on check of items the user tried on"}.
+Return JSON only.
+- transcription: one concise sentence describing the whole outfit.
+- items: each visible worn garment, shoe, bag, or accessory.
+- category: garment role such as top, bottom, outerwear, footwear, dress, accessory, bag, jewelry.
+- description: concise visual description with color, silhouette, material/pattern if visible.
+- style_tags: 3-5 concise tags, each at most 3 words.
+- bounding_box: normalized coordinates from 0 to 1 around just that item, as { x, y, width, height }.
+- confidence: 0 to 1.`;
+
+    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            { inlineData: { data: base64, mimeType: "image/jpeg" } },
+          ],
+        },
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: schema,
+      },
+    });
+
+    const parsed = yield* parseJson<{
+      transcription: string;
+      items: DetectedFitCheckItem[];
+    }>(result.response.text(), "analyzeFitCheckPhoto");
+
+    return {
+      transcription: truncateWords(parsed.transcription, 40),
+      items: parsed.items.slice(0, 12).map((item) => ({
+        category: truncateWords(item.category, 6),
+        description: truncateWords(item.description, ITEM_DESCRIPTION_WORD_LIMIT),
+        style_tags: sanitizeStyleTags(item.style_tags),
+        bounding_box: normalizeBoundingBox(item.bounding_box),
+        confidence:
+          typeof item.confidence === "number"
+            ? Math.max(0, Math.min(1, item.confidence))
+            : undefined,
+      })),
+    };
   }).pipe(withRetries);
 
 const generateClosetBio = (items: { category: string; description: string; style_tags: string[] }[]) =>
@@ -501,12 +639,14 @@ export const processWardrobeItemAction = async (input: {
   return result;
 };
 
-export const checkCompatibilityAction = async (input: {
+export const checkCompatibilityForAuth = async (
+  authContext: ConvexAuthContext,
+  input: {
   storageId: string;
   traceId?: string;
   traceparent?: string;
 }) => {
-  const { userId, token, tier } = await getConvexAuth();
+  const { userId, token, tier } = authContext;
   const { traceId, traceparent } = ensureTraceContext(input);
   await enforceAuthenticatedProtection({ scope: "check", tier, userId });
 
@@ -610,6 +750,33 @@ export const checkCompatibilityAction = async (input: {
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
   if (hydratedSimilar.length === 0 && hydratedDissimilar.length === 0) {
+    try {
+      await fetchAction(
+        api.zepSync.syncCandidateComparison,
+        {
+          candidate: {
+            category: candidate.category,
+            description: candidate.description,
+            styleTags: candidate.style_tags,
+          },
+          storageId: input.storageId,
+          evaluation: null,
+          similarItems: [],
+          dissimilarItems: [],
+          traceId,
+          traceparent,
+        },
+        { token }
+      );
+    } catch (error) {
+      console.warn("zep.sync.candidate_comparison.enqueue_failed", {
+        traceId,
+        traceparent,
+        userId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     return {
       candidate,
       similarItems: [],
@@ -636,6 +803,43 @@ export const checkCompatibilityAction = async (input: {
     }).pipe(Effect.provide(GeminiLive))
   );
 
+  try {
+    await fetchAction(
+      api.zepSync.syncCandidateComparison,
+      {
+        candidate: {
+          category: candidate.category,
+          description: candidate.description,
+          styleTags: candidate.style_tags,
+        },
+        storageId: input.storageId,
+        evaluation,
+        similarItems: hydratedSimilar.map((item) => ({
+          itemId: item.id,
+          category: item.category,
+          description: item.description,
+          styleTags: item.styleTags,
+        })),
+        dissimilarItems: hydratedDissimilar.map((item) => ({
+          itemId: item.id,
+          category: item.category,
+          description: item.description,
+          styleTags: item.styleTags,
+        })),
+        traceId,
+        traceparent,
+      },
+      { token }
+    );
+  } catch (error) {
+    console.warn("zep.sync.candidate_comparison.enqueue_failed", {
+      traceId,
+      traceparent,
+      userId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   return {
     candidate,
     similarItems: hydratedSimilar,
@@ -644,12 +848,20 @@ export const checkCompatibilityAction = async (input: {
   };
 };
 
-export const analyzeSelfieAction = async (input: {
+export const checkCompatibilityAction = async (input: {
+  storageId: string;
+  traceId?: string;
+  traceparent?: string;
+}) => checkCompatibilityForAuth(await getConvexAuth(), input);
+
+export const analyzeSelfieForAuth = async (
+  authContext: Pick<ConvexAuthContext, "userId" | "token">,
+  input: {
   storageId: string;
   traceId?: string;
   traceparent?: string;
 }) => {
-  const { userId, token } = await getConvexAuth();
+  const { userId, token } = authContext;
   const { traceId, traceparent } = ensureTraceContext(input);
 
   console.info("selfie.analyze.start", { traceId, traceparent, userId });
@@ -682,6 +894,8 @@ export const analyzeSelfieAction = async (input: {
       bio: analysis.bio,
       skinTone: analysis.skin_tone,
       hairColor: analysis.hair_color,
+      ...(analysis.complexion ? { complexion: analysis.complexion } : {}),
+      ...(analysis.color_season ? { colorSeason: analysis.color_season } : {}),
       traceId,
       traceparent,
     },
@@ -691,6 +905,123 @@ export const analyzeSelfieAction = async (input: {
   console.info("selfie.analyze.complete", { traceId, traceparent, userId });
   return analysis;
 };
+
+export const analyzeSelfieAction = async (input: {
+  storageId: string;
+  traceId?: string;
+  traceparent?: string;
+}) => analyzeSelfieForAuth(await getConvexAuth(), input);
+
+export const recordFitCheckForAuth = async (
+  authContext: Pick<ConvexAuthContext, "userId" | "token" | "tier">,
+  input: {
+    storageId: string;
+    type: FitCheckKind;
+    traceId?: string;
+    traceparent?: string;
+  }
+) => {
+  const { userId, token, tier } = authContext;
+  const { traceId, traceparent } = ensureTraceContext(input);
+  await enforceAuthenticatedProtection({ scope: "inference", tier, userId });
+
+  console.info("fit_check.analyze.start", { traceId, traceparent, userId, type: input.type });
+
+  await fetchMutation(
+    api.storage.registerUpload,
+    { storageId: input.storageId as Id<"_storage">, purpose: input.type },
+    { token }
+  );
+
+  const imageUrl = await fetchQuery(
+    api.storage.getStorageUrl,
+    { storageId: input.storageId as Id<"_storage"> },
+    { token }
+  );
+
+  if (!imageUrl) {
+    throw new Error("Uploaded file missing");
+  }
+
+  const base64 = await fetchImageBase64(imageUrl);
+  const analysis = await runServerAction(
+    analyzeFitCheckPhoto(base64, input.type).pipe(Effect.provide(GeminiLive))
+  );
+
+  const items: RecordFitCheckItemInput[] = [];
+  for (const item of analysis.items) {
+    const embedding = await runServerAction(
+      embedText(`${item.description} ${item.style_tags.join(" ")}`.trim()).pipe(
+        Effect.provide(GeminiLive)
+      )
+    );
+    const matches = await fetchAction(
+      api.wardrobe.searchSimilarItems,
+      { embedding, limit: 1 },
+      { token }
+    );
+    const bestMatch = matches[0];
+    const matchedExisting = bestMatch && bestMatch._score >= 0.78;
+
+    items.push({
+      source: matchedExisting ? ("matched_existing" as const) : ("created_from_fit_check" as const),
+      category: item.category,
+      description: item.description,
+      styleTags: item.style_tags,
+      ...(matchedExisting ? { wardrobeItemId: bestMatch._id } : {}),
+      ...(item.bounding_box ? { boundingBox: item.bounding_box } : {}),
+      ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
+      ...(matchedExisting ? {} : { embedding }),
+    });
+  }
+
+  const recorded = await fetchMutation(
+    api.fitChecks.recordFitCheck,
+    {
+      storageId: input.storageId as Id<"_storage">,
+      type: input.type,
+      transcription: analysis.transcription,
+      items,
+      traceId,
+      traceparent,
+    },
+    { token }
+  );
+
+  console.info("fit_check.analyze.complete", {
+    traceId,
+    traceparent,
+    userId,
+    type: input.type,
+    fitCheckId: recorded.id,
+    itemCount: recorded.items.length,
+  });
+
+  return {
+    ...recorded,
+    transcription: analysis.transcription,
+  };
+};
+
+export const recordDailyFitCheckAction = async (input: {
+  storageId: string;
+  traceId?: string;
+  traceparent?: string;
+}) =>
+  recordFitCheckForAuth(await getConvexAuth(), {
+    ...input,
+    type: "daily_fit_check",
+  });
+
+export const recordTryOnFitCheckAction = async (input: {
+  storageId: string;
+  traceId?: string;
+  traceparent?: string;
+}) =>
+  recordFitCheckForAuth(await getConvexAuth(), {
+    ...input,
+    type: "try_on",
+  });
 
 const GUEST_DEMO_ITEM_LIMIT = 4;
 const GUEST_DEMO_MAX_IMAGE_BYTES = 1_500_000;
