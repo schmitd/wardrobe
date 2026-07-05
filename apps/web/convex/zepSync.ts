@@ -5,6 +5,7 @@ import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 import { ensureTraceContext } from "./trace";
 import {
+  addWardrobeItemCreatedMemory,
   addWardrobeItemsMemory,
   deleteUserMemory,
   deleteWardrobeItemMemory,
@@ -51,6 +52,47 @@ export const syncWardrobeAdd = internalAction({
         styleTags: item.styleTags ?? null,
       },
     ]);
+
+    return { skipped: false as const };
+  },
+});
+
+export const syncWardrobeCreate = internalAction({
+  args: {
+    userId: v.string(),
+    itemId: v.id("wardrobeItems"),
+    traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { traceId, traceparent } = ensureTraceContext(args);
+    console.info("zep.sync.wardrobe_create", {
+      traceId,
+      traceparent,
+      userId: redactUserId(args.userId),
+      itemId: args.itemId,
+    });
+
+    const item = await ctx.runQuery(internal.wardrobe.getWardrobeItemInternal, {
+      itemId: args.itemId,
+    });
+
+    if (!item) {
+      console.info("zep.sync.wardrobe_create.skipped_missing_item", {
+        traceId,
+        traceparent,
+        userId: redactUserId(args.userId),
+        itemId: args.itemId,
+      });
+      return { skipped: true as const };
+    }
+
+    await addWardrobeItemCreatedMemory(args.userId, {
+      itemId: args.itemId,
+      clientFileName: item.clientFileName ?? null,
+      contentType: item.contentType ?? null,
+      createdAt: item.createdAt,
+    });
 
     return { skipped: false as const };
   },
