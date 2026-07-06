@@ -51,16 +51,14 @@ Use `gemini-2.5-flash` in Google AI Studio for the app's primary fit-checking fe
     NEXT_PUBLIC_CONVEX_URL=your_convex_url
     CLERK_SECRET_KEY=your_clerk_secret_key
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
-    CLERK_JWT_ISSUER_DOMAIN=your_clerk_jwt_issuer_domain
-    CLERK_JWT_AUDIENCE=convex
     CLERK_JWT_TEMPLATE=convex
     ZEP_KEY=your_zep_key
     AXIOM_TOKEN=your_axiom_token
     AXIOM_DATASET=your_axiom_dataset
     ```
     Notes:
-    - The production Clerk issuer (`https://clerk.wardrobe.davidcschmitt.com`) is trusted by Convex by default. Set `CLERK_JWT_ISSUER_DOMAIN` for local/dev Clerk.
-    - The Clerk JWT template must include the `aud` claim matching `CLERK_JWT_AUDIENCE` (default `convex`).
+    - Convex trusts the production Clerk issuer (`https://clerk.wardrobe.davidcschmitt.com`) and the project development issuer (`https://beloved-guppy-95.clerk.accounts.dev`) by default.
+    - The Clerk JWT template must include the `aud` claim set to `convex`.
     - Server actions export OTLP telemetry to Axiom via Effect runtime; enable Convex log streaming separately if you want Convex logs in Axiom.
 5.  **Run the app**:
     ```bash

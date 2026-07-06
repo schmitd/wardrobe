@@ -114,6 +114,30 @@ export const createWardrobeItem = mutation({
 
     console.info("wardrobe.create", { traceId, traceparent, itemId, userId });
 
+    try {
+      const runId = await retrier.run(ctx, internal.zepSync.syncWardrobeCreate, {
+        userId,
+        itemId,
+        traceId,
+        traceparent,
+      });
+      console.info("zep.sync.wardrobe_create.enqueued", {
+        traceId,
+        traceparent,
+        itemId,
+        userId,
+        runId,
+      });
+    } catch (error) {
+      console.warn("zep.sync.wardrobe_create.enqueue_failed", {
+        traceId,
+        traceparent,
+        itemId,
+        userId,
+        message: toErrorMessage(error),
+      });
+    }
+
     return { id: itemId };
   },
 });
@@ -409,7 +433,10 @@ export const applyFullAnalysis = mutation({
     if (!userId) throw new Error("Unauthorized");
 
     const item = await ctx.db.get(itemId);
-    if (!item || item.userId !== userId) throw new Error("Not found");
+    if (!item || item.userId !== userId) {
+      console.info("wardrobe.apply_full_analysis.skipped_missing_item", { itemId, userId });
+      return { skipped: true as const };
+    }
 
     const { traceId, traceparent } = ensureTraceContext({
       traceId: argTraceId ?? item.traceId,
@@ -449,6 +476,8 @@ export const applyFullAnalysis = mutation({
         message: toErrorMessage(error),
       });
     }
+
+    return { skipped: false as const };
   },
 });
 
@@ -462,12 +491,17 @@ export const setAnalysisError = mutation({
     if (!userId) throw new Error("Unauthorized");
 
     const item = await ctx.db.get(itemId);
-    if (!item || item.userId !== userId) throw new Error("Not found");
+    if (!item || item.userId !== userId) {
+      console.info("wardrobe.set_analysis_error.skipped_missing_item", { itemId, userId, error });
+      return { skipped: true as const };
+    }
 
     await ctx.db.patch(itemId, {
       analysisStatus: "error",
       analysisError: error,
       updatedAt: now(),
     });
+
+    return { skipped: false as const };
   },
 });

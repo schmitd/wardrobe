@@ -51,6 +51,7 @@ export default defineSchema({
     purpose: v.string(),
     createdAt: v.number(),
   })
+    .index("by_user", ["userId"])
     .index("by_user_storage", ["userId", "storageId"])
     .index("by_user_purpose_createdAt", ["userId", "purpose", "createdAt"])
     .index("by_storage", ["storageId"]),

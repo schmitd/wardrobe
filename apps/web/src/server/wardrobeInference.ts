@@ -169,6 +169,11 @@ type ProcessWardrobeInferenceInput = {
   onDescription?: (data: { category: string | null; description: string }) => void | Promise<void>;
 };
 
+type TagAnalysisResult = {
+  category?: string;
+  style_tags: string[];
+};
+
 export const processWardrobeInference = async ({
   itemId,
   userId,
@@ -211,14 +216,27 @@ export const processWardrobeInference = async ({
     });
 
     await onProgress?.("analyzing_tags");
-    const tagResult = await runServerAction(
-      analyzeImageTags(base64).pipe(
-        Effect.withSpan("inference.analyzeTags", {
-          attributes: { userId, itemId },
-        }),
-        Effect.provide(GeminiLive)
-      )
-    );
+    let tagResult: TagAnalysisResult;
+    try {
+      tagResult = await runServerAction(
+        analyzeImageTags(base64).pipe(
+          Effect.withSpan("inference.analyzeTags", {
+            attributes: { userId, itemId },
+          }),
+          Effect.provide(GeminiLive)
+        )
+      );
+    } catch (error) {
+      console.warn("inference.analyzeTags.fallback", {
+        traceId,
+        traceparent,
+        itemId,
+        userId,
+        message: toErrorMessage(error),
+      });
+      tagResult = { category: undefined, style_tags: [] };
+    }
+
     const resolvedCategory = tagResult.category ?? null;
     await onTags?.({
       category: resolvedCategory,
