@@ -2,10 +2,7 @@ import type { AuthConfig } from "convex/server";
 
 const productionClerkIssuer = "https://clerk.wardrobe.davidcschmitt.com";
 const clerkAudience = "convex";
-const clerkIssuers = [
-  productionClerkIssuer,
-  process.env.CLERK_JWT_ISSUER_DOMAIN,
-]
+const clerkIssuers = [productionClerkIssuer]
   .map((issuer) => issuer?.trim())
   .filter((issuer): issuer is string => Boolean(issuer));
 
