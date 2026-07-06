@@ -21,22 +21,8 @@ export const withRetries = <A, E, R>(effect: Effect.Effect<A, E, R>, attempts = 
 export const toErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
-export const isConvexAuthProviderMismatch = (error: unknown) => {
-  const message = toErrorMessage(error);
-  return message.includes('"code":"NoAuthProvider"') || message.includes("No auth provider found matching the given token");
-};
-
 export const toInferenceFailure = (error: unknown) => {
   const message = toErrorMessage(error);
-  if (isConvexAuthProviderMismatch(error)) {
-    return {
-      code: "convex_auth_provider_mismatch",
-      message,
-      userMessage:
-        "Your account token is not accepted by the wardrobe backend yet. Please try again after the auth configuration is refreshed.",
-    } as const;
-  }
-
   return {
     code: "inference_failed",
     message,

@@ -199,37 +199,6 @@ describe("wardrobe server actions", () => {
     expect(errorCalls.length).toBe(1);
   });
 
-  it("surfaces Convex auth provider mismatches as configuration errors", async () => {
-    fetchQueryMock.mockResolvedValue({
-      _id: "item_1",
-      userId: "user_123",
-      imageUrl: "https://example.com/item.jpg",
-    });
-
-    allowArcjet();
-    runServerActionMock.mockRejectedValueOnce(
-      new Error(
-        '{"code":"NoAuthProvider","message":"No auth provider found matching the given token."}'
-      )
-    );
-    fetchMutationMock.mockResolvedValue({ success: true });
-
-    const result = await actions.processWardrobeItemAction({ itemId: "item_1" });
-
-    expect(result.success).toBe(false);
-    if (!result.success) {
-      expect(result.error).toContain("auth configuration is refreshed");
-    }
-    expect(fetchMutationMock).toHaveBeenCalledWith(
-      api.wardrobe.setAnalysisError,
-      expect.objectContaining({
-        itemId: "item_1",
-        error: expect.stringContaining("auth configuration is refreshed"),
-      }),
-      expect.objectContaining({ token: "token_123" })
-    );
-  });
-
   it("checks compatibility using generated embeddings", async () => {
     fetchActionMock.mockResolvedValue([
       { _id: "item_1", _score: 0.98 },
