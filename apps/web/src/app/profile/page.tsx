@@ -14,12 +14,12 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 
 export default function ProfilePage() {
-  const { isLoaded } = useUser();
+  const { isLoaded, isSignedIn } = useUser();
   const clerk = useClerk();
-  const profile = useQuery(api.profile.getProfile, isLoaded ? {} : 'skip');
+  const profile = useQuery(api.profile.getProfile, isLoaded && isSignedIn ? {} : 'skip');
   const latestSelfie = useQuery(
     api.storage.getLatestUploadByPurpose,
-    isLoaded ? { purpose: 'selfie' } : 'skip'
+    isLoaded && isSignedIn ? { purpose: 'selfie' } : 'skip'
   );
 
   const [bioDraft, setBioDraft] = useState<string | null>(null);
@@ -81,6 +81,19 @@ export default function ProfilePage() {
 
   if (!isLoaded) {
     return <div className="p-8 text-sm font-semibold uppercase tracking-wide">Loading profile...</div>;
+  }
+
+  if (!isSignedIn) {
+    return (
+      <main className="mx-auto w-full max-w-[1320px] px-4 py-8 lg:px-8">
+        <Card className="rack-panel rounded-none py-0">
+          <CardContent className="px-0">
+            <h1 className="text-4xl font-black uppercase tracking-tight text-[#310A31]">Style profile</h1>
+            <p className="mt-3 text-sm font-medium text-slate-700">Sign in to manage your style profile.</p>
+          </CardContent>
+        </Card>
+      </main>
+    );
   }
 
   return (
