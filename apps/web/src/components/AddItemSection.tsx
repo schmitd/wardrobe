@@ -5,6 +5,7 @@ import ImageUploader, { type UploadedFile } from './ImageUploader';
 import { Loader2 } from 'lucide-react';
 import type { OptimisticWardrobeItem } from '@/types/wardrobe';
 import { createTraceContext } from '@/lib/trace';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { createWardrobeItemAction } from '@/app/actions/wardrobe';
 
 interface AddItemSectionProps {
@@ -139,7 +140,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                                 streamFailed = true;
                                 onOptimisticUpdate(tempId, {
                                     status: 'error',
-                                    error: event.error ?? 'Processing failed',
+                                    error: userFacingErrorMessage(event.error, 'Analysis failed'),
                                 });
                             } else if (event.type === 'complete') {
                                 streamCompleted = true;
@@ -153,7 +154,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                             streamFailed = true;
                             onOptimisticUpdate(tempId, {
                                 status: 'error',
-                                error: event.error ?? 'Processing failed',
+                                error: userFacingErrorMessage(event.error, 'Analysis failed'),
                             });
                         } else if (event?.type === 'complete') {
                             streamCompleted = true;
@@ -176,7 +177,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                     console.error('wardrobe.create.failed', error);
                     onOptimisticUpdate(tempId, {
                         status: 'error',
-                        error: error instanceof Error ? error.message : 'Failed to add item',
+                        error: userFacingErrorMessage(error, 'Analysis failed'),
                     });
                     failureCount += 1;
                 }
@@ -192,9 +193,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
             setTimeout(() => setStatus(null), 3000);
         } catch (e) {
             console.error("wardrobe.batch.failed", e);
-            setStatus(
-                `Error: ${e instanceof Error ? e.message : 'Unexpected upload failure. Please try again.'}`
-            );
+            setStatus(userFacingErrorMessage(e, 'Analysis failed'));
         }
         setIsProcessing(false);
     };
@@ -202,7 +201,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
     return (
         <div className="mb-8" id="rack-uploader">
             <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-2xl font-black uppercase tracking-tight text-[#310A31]">Closet Rack</h2>
+                <h2 className="text-2xl font-extrabold text-[#241426]">Closet rack</h2>
             </div>
 
             <ImageUploader
@@ -215,13 +214,13 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
             />
 
             {isProcessing && (
-                <div className="mt-4 flex items-center justify-center gap-2 border-2 border-black bg-white p-3 text-[#310A31]">
+                <div className="mt-4 flex items-center justify-center gap-2 border border-[var(--rack-line)] bg-white p-3 text-sm font-medium text-[#241426]">
                     <Loader2 className="animate-spin" />
                     <span>{status}</span>
                 </div>
             )}
             {!isProcessing && status && (
-                <div className={`mt-4 border-2 border-black p-3 text-center font-semibold ${status.startsWith('Error') ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'}`}>
+                <div className={`mt-4 border border-[var(--rack-line)] p-3 text-center font-semibold ${/fail|error/i.test(status) ? 'bg-[#f8e6ee] text-[#b93267]' : 'bg-[#e8f3ec] text-[#3f7c5d]'}`}>
                     {status}
                 </div>
             )}

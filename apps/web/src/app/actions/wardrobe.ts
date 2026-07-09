@@ -696,6 +696,7 @@ const GUEST_DEMO_ITEM_LIMIT = 4;
 const GUEST_DEMO_MAX_IMAGE_BYTES = 1_500_000;
 const GUEST_DEMO_MAX_TOTAL_BYTES = 4_000_000;
 const GUEST_DEMO_MAX_FILENAME_LENGTH = 140;
+const GUEST_DEMO_LIMIT_MESSAGE = "Demo paused at the free limit. Continue by signing up or signing in.";
 const GUEST_DEMO_ALLOWED_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -747,11 +748,25 @@ const validateGuestBatchItems = (items: { fileName: string; mimeType: string; ba
   });
 };
 
+export type GuestBatchAnalysisResult =
+  | {
+      kind: "ok";
+      items: { fileName: string; category: string; description: string; styleTags: string[] }[];
+      suggestedBio: string;
+      capped: boolean;
+      limit: number;
+    }
+  | {
+      kind: "limit";
+      message: string;
+      limit: number;
+    };
+
 export const analyzeGuestBatchAction = async (input: {
   items: { fileName: string; mimeType: string; base64: string }[];
   traceId?: string;
   traceparent?: string;
-}) => {
+}): Promise<GuestBatchAnalysisResult> => {
   const { traceId, traceparent } = ensureTraceContext(input);
   const cappedItems = input.items.slice(0, GUEST_DEMO_ITEM_LIMIT);
   const validatedItems = validateGuestBatchItems(cappedItems);
@@ -759,7 +774,16 @@ export const analyzeGuestBatchAction = async (input: {
   if (validatedItems.length === 0) {
     throw new Error("No images provided");
   }
-  await enforceGuestBatchProtection();
+  try {
+    await enforceGuestBatchProtection();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    return {
+      kind: "limit",
+      message: /automated traffic/i.test(message) ? message : GUEST_DEMO_LIMIT_MESSAGE,
+      limit: GUEST_DEMO_ITEM_LIMIT,
+    };
+  }
 
   const analyzed = [];
   for (const item of validatedItems) {
@@ -792,6 +816,7 @@ export const analyzeGuestBatchAction = async (input: {
   });
 
   return {
+    kind: "ok",
     items: analyzed,
     suggestedBio: summary.bio,
     capped: input.items.length > GUEST_DEMO_ITEM_LIMIT,

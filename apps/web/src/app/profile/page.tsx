@@ -80,16 +80,16 @@ export default function ProfilePage() {
   };
 
   if (!isLoaded) {
-    return <div className="p-8 text-sm font-semibold uppercase tracking-wide">Loading profile...</div>;
+    return <div className="p-8 text-sm font-semibold">Loading profile...</div>;
   }
 
   return (
     <main className="mx-auto grid w-full max-w-[1320px] gap-6 px-4 py-8 lg:grid-cols-[1.1fr_1fr] lg:px-8">
       <section className="space-y-6">
-        <Card className="rack-panel rounded-none py-0">
+        <Card className="rack-panel rack-panel--shell rounded-none py-0">
           <CardContent className="px-0">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#9C92A3]">Personalization</p>
-          <h1 className="mt-2 text-4xl font-black uppercase tracking-tight text-[#310A31]">
+          <p className="text-sm font-semibold text-[#56345c]">Personalization</p>
+          <h1 className="mt-2 text-4xl font-extrabold text-[#241426]">
             Style profile
           </h1>
           <p className="mt-3 text-sm font-medium text-slate-700">
@@ -98,26 +98,26 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        <Card className="rack-panel rounded-none py-0">
+        <Card className="rack-panel rack-panel--action rounded-none py-0">
           <CardContent className="px-0">
-          <label className="block text-xs font-black uppercase tracking-[0.16em] text-[#310A31]">
+          <label className="block text-sm font-semibold text-[#241426]">
             Style bio
           </label>
           <Textarea
             value={bio}
             onChange={(event) => setBioDraft(event.target.value)}
             placeholder="I build around neutral layers, tailored fits, and statement outerwear..."
-            className="mt-3 h-48 w-full resize-none rounded-none border-4 border-black bg-white p-4 text-sm font-medium leading-relaxed text-slate-900"
+            className="mt-3 h-48 w-full resize-none rounded-none border border-[var(--rack-line)] bg-white p-4 text-sm font-medium leading-relaxed text-slate-900"
           />
 
           {saveStatus === 'error' && (
-            <p className="mt-4 border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">
+            <p className="mt-4 border border-[var(--rack-line)] bg-[#f8e6ee] p-3 text-sm font-semibold text-[#b93267]">
               {errorMessage}
             </p>
           )}
 
           {saveStatus === 'success' && (
-            <p className="mt-4 border-2 border-black bg-emerald-100 p-3 text-sm font-semibold text-emerald-900">
+            <p className="mt-4 border border-[var(--rack-line)] bg-[#e8f3ec] p-3 text-sm font-semibold text-[#3f7c5d]">
               Profile updated.
             </p>
           )}
@@ -126,18 +126,18 @@ export default function ProfilePage() {
             type="button"
             onClick={handleSave}
             disabled={saveStatus === 'saving'}
-            className="mt-4 h-auto rounded-none border-4 border-black bg-[#310A31] px-5 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[6px_6px_0_#000] disabled:opacity-60"
+            className="mt-4 h-auto rounded-none border border-[var(--rack-line)] bg-[#DCE66E] px-5 py-3 text-sm font-extrabold text-[#241426] shadow-[3px_3px_0_var(--rack-panel-shadow)] disabled:opacity-60"
           >
             {saveStatus === 'saving' ? 'Saving...' : 'Save profile'}
           </Button>
           </CardContent>
         </Card>
 
-        <Card className="rack-panel rounded-none py-0">
+        <Card className="rack-panel rack-panel--shell rounded-none py-0">
           <CardContent className="px-0">
-          <div className="mb-4 flex items-center gap-2 text-[#310A31]">
+          <div className="mb-4 flex items-center gap-2 text-[#241426]">
             <Sparkles className="h-4 w-4" />
-            <h2 className="text-lg font-black uppercase tracking-wide">Color and fit profile</h2>
+            <h2 className="text-lg font-extrabold">Color and fit profile</h2>
           </div>
           <p className="mb-4 text-sm font-medium text-slate-700">
             Upload a selfie to refresh your tone profile and style summary.
@@ -145,7 +145,7 @@ export default function ProfilePage() {
 
           {latestSelfie?.url ? (
             <>
-              <div className="border-4 border-black bg-white">
+              <div className="border border-[var(--rack-line)] bg-white">
                 <div className="relative aspect-[4/5] w-full overflow-hidden bg-slate-100">
                   <Image
                     src={latestSelfie.url}
@@ -158,7 +158,7 @@ export default function ProfilePage() {
                 </div>
               </div>
               <details className="mt-4">
-                <summary className="inline-flex cursor-pointer border-4 border-black bg-white px-4 py-3 text-xs font-black uppercase tracking-wide text-[#310A31] shadow-[6px_6px_0_#000]">
+                <summary className="inline-flex cursor-pointer border border-[var(--rack-line)] bg-white px-4 py-3 text-sm font-semibold text-[#241426] shadow-[3px_3px_0_var(--rack-panel-shadow)]">
                   Replace selfie
                 </summary>
                 <div className="mt-4">
@@ -179,20 +179,20 @@ export default function ProfilePage() {
           )}
 
           {analysisResult && (
-            <div className="mt-4 grid grid-cols-2 gap-3 border-2 border-black bg-white p-4">
+            <div className="mt-4 grid grid-cols-2 gap-3 border border-[var(--rack-line)] bg-white p-4">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                <span className="text-xs font-semibold text-[#56345c]">
                   Skin tone
                 </span>
-                <p className="mt-1 text-sm font-black uppercase text-[#310A31]">
+                <p className="mt-1 text-sm font-extrabold text-[#241426]">
                   {analysisResult.skinTone}
                 </p>
               </div>
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">
+                <span className="text-xs font-semibold text-[#56345c]">
                   Hair color
                 </span>
-                <p className="mt-1 text-sm font-black uppercase text-[#310A31]">
+                <p className="mt-1 text-sm font-extrabold text-[#241426]">
                   {analysisResult.hairColor}
                 </p>
               </div>
@@ -204,7 +204,7 @@ export default function ProfilePage() {
 
       <Card className="rack-panel rounded-none py-0">
         <CardContent className="px-0">
-          <h2 className="text-lg font-black uppercase tracking-wide text-[#310A31]">Account settings</h2>
+          <h2 className="text-lg font-extrabold text-[#241426]">Account settings</h2>
           <p className="mt-2 text-sm font-medium text-slate-700">
             Manage account details, authentication methods, and security settings.
           </p>
@@ -213,7 +213,7 @@ export default function ProfilePage() {
             <Button
               type="button"
               onClick={() => clerk.openUserProfile()}
-              className="h-auto rounded-none border-4 border-black bg-[#310A31] px-5 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[6px_6px_0_#000]"
+              className="h-auto rounded-none border border-[var(--rack-line)] bg-[#DCE66E] px-5 py-3 text-sm font-extrabold text-[#241426] shadow-[3px_3px_0_var(--rack-panel-shadow)]"
             >
               Manage account
             </Button>
@@ -221,7 +221,7 @@ export default function ProfilePage() {
               type="button"
               variant="outline"
               onClick={() => clerk.signOut({ redirectUrl: '/' })}
-              className="h-auto rounded-none border-4 border-black bg-white px-5 py-3 text-xs font-black uppercase tracking-wide text-[#310A31] shadow-[6px_6px_0_#000]"
+              className="h-auto rounded-none border border-[var(--rack-line)] bg-white px-5 py-3 text-sm font-semibold text-[#241426] shadow-[3px_3px_0_var(--rack-panel-shadow)]"
             >
               Sign out
             </Button>

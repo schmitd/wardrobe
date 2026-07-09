@@ -2,8 +2,9 @@
 
 import { useState, useRef } from 'react';
 import { Effect, Layer } from 'effect';
-import { CloudUpload, AlertCircle } from 'lucide-react';
+import { CloudUpload, AlertCircle, Loader2 } from 'lucide-react';
 import { getUploadUrlAction } from '@/app/actions/wardrobe';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { ImageUploadService, makeImageUploadLayer } from '@/services/ImageUploadService';
 
 export interface UploadedFile {
@@ -100,7 +101,7 @@ export default function ImageUploader({
 
         } catch (e) {
             console.error("Upload error:", e);
-            setError(e instanceof Error ? e.message : "Upload failed");
+            setError(userFacingErrorMessage(e, "Upload failed"));
         } finally {
             setUploading(false);
             if (fileInputRef.current) {
@@ -124,7 +125,7 @@ export default function ImageUploader({
                 />
 
                 {error && (
-                    <div className="mt-4 flex items-center gap-2 border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">
+                    <div className="mt-4 flex items-center gap-2 border border-[var(--rack-line)] bg-[#f8e6ee] p-3 text-sm font-semibold text-[#b93267]">
                         <AlertCircle size={16} />
                         <span>{error}</span>
                     </div>
@@ -136,10 +137,10 @@ export default function ImageUploader({
     return (
         <div className="w-full">
             <div
-                className={`relative cursor-pointer border-4 border-black p-8 text-center transition-all duration-200 ease-in-out ${
+                className={`relative cursor-pointer border border-[var(--rack-line)] p-8 text-center transition-all duration-200 ease-in-out ${
                     isDragging
-                        ? 'bg-[#c6b9cd]'
-                        : 'bg-white hover:-translate-y-1 hover:shadow-[8px_8px_0_#000]'
+                        ? 'bg-[var(--rack-success-wash)]'
+                        : 'bg-white hover:-translate-y-1 hover:shadow-[3px_3px_0_var(--rack-panel-shadow)]'
                 }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
@@ -158,16 +159,16 @@ export default function ImageUploader({
                 />
 
                 <div className="flex min-w-0 flex-col items-center justify-center gap-4">
-                    <div className={`rounded-none border-2 border-black p-4 ${isDragging ? 'bg-white text-[#310A31]' : 'bg-[#9C92A3] text-white'}`}>
+                    <div className={`rounded-none border border-[var(--rack-line)] p-4 ${isDragging ? 'bg-white text-[var(--rack-success)]' : 'bg-[var(--rack-wash)] text-[var(--rack-ink)]'}`}>
                         {uploading ? (
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
+                            <Loader2 className="h-8 w-8 animate-spin" />
                         ) : (
                             <CloudUpload size={32} />
                         )}
                     </div>
 
                     <div className="min-w-0 max-w-full">
-                        <h4 className="text-base font-black uppercase leading-snug tracking-wide text-[#310A31] sm:text-lg">
+                        <h4 className="text-base font-extrabold leading-snug text-[var(--rack-ink)] sm:text-lg">
                             {uploading ? 'Uploading...' : displayLabel}
                         </h4>
                         <p className="mt-1 text-sm font-medium leading-relaxed text-slate-700">
@@ -187,7 +188,7 @@ export default function ImageUploader({
             </div>
 
             {error && (
-                <div className="mt-4 flex items-center gap-2 border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">
+                <div className="mt-4 flex items-center gap-2 border border-[var(--rack-line)] bg-[#f8e6ee] p-3 text-sm font-semibold text-[#b93267]">
                     <AlertCircle size={16} />
                     <span>{error}</span>
                 </div>

@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { Loader2, Ticket } from 'lucide-react';
 import ImageUploader, { type UploadedFile } from './ImageUploader';
 import { useCompatibilityCheck } from '@/hooks/useCompatibilityCheck';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 
 export default function CompatibilityChecker() {
   const { result, isProcessing, status, runCompatibilityCheck } = useCompatibilityCheck();
@@ -20,8 +21,8 @@ export default function CompatibilityChecker() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
-      <div id="rack-uploader" className="rack-panel">
-        <h2 className="text-3xl font-black uppercase tracking-tight text-[#310A31]">
+      <div id="rack-uploader" className="rack-panel rack-panel--action">
+        <h2 className="text-3xl font-extrabold text-[#241426]">
           Does this fit your closet?
         </h2>
         <p className="mt-2 text-sm font-medium text-slate-700">
@@ -36,14 +37,14 @@ export default function CompatibilityChecker() {
         </div>
 
         {isProcessing && (
-          <div className="mt-5 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[#310A31]">
+          <div className="mt-5 flex items-center gap-2 text-sm font-semibold text-[#241426]">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>{status}</span>
           </div>
         )}
 
         {status && !isProcessing && !result && (
-          <div className="mt-5 border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">
+          <div className="mt-5 border border-[var(--rack-line)] bg-[#f8e6ee] p-3 text-sm font-semibold text-[#b93267]">
             {status}
           </div>
         )}
@@ -53,41 +54,39 @@ export default function CompatibilityChecker() {
         <>
           {result.evaluation ? (
             <section className="space-y-7">
-              <article className="rack-panel">
+              <article className="rack-panel rack-panel--shell">
                 <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-600">
+                    <p className="text-sm font-semibold text-[#56345c]">
                       Compatibility Score
                     </p>
-                    <p className="mt-1 text-6xl font-black text-[#310A31]">{result.evaluation.score}%</p>
+                    <p className="mt-1 text-6xl font-black text-[#241426]">{result.evaluation.score}%</p>
                   </div>
-                  <div className="max-w-2xl border-2 border-black bg-white p-4">
+                  <div className="max-w-2xl border border-[var(--rack-line)] bg-white p-4">
                     <p className="text-sm font-medium leading-relaxed text-slate-800">
                       {result.evaluation.explanation}
                     </p>
                   </div>
                 </div>
 
-                <div className="mt-5 border-2 border-black bg-[#c6b9cd] p-4 text-[#310A31]">
-                  <p className="text-xs font-bold uppercase tracking-[0.2em]">Candidate piece</p>
+                <div className="mt-5 border border-[var(--rack-line)] bg-[#DCE66E] p-4 text-[#241426]">
+                  <p className="text-sm font-semibold">Candidate piece</p>
                   <p className="mt-2 text-sm font-semibold">{result.candidate.description}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {result.candidate.style_tags.map((tag) => (
-                      <span key={tag} className="rack-item-chip">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
+                  {result.candidate.style_tags.length > 0 && (
+                    <p className="mt-3 text-sm font-semibold text-[#363240]">
+                      {result.candidate.style_tags.slice(0, 4).join(' / ')}
+                    </p>
+                  )}
                 </div>
               </article>
 
-              <article className="rack-panel">
-                <h3 className="text-xl font-black uppercase tracking-tight text-[#310A31]">Best matches</h3>
+              <article className="rack-panel rack-panel--success">
+                <h3 className="text-xl font-extrabold text-[#241426]">Best matches</h3>
                 {result.similarItems.length > 0 ? (
                   <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
                     {result.similarItems.map((item) => (
-                      <div key={item.id} className="border-2 border-black bg-white p-3">
-                        <div className="relative h-56 w-full border-2 border-black">
+                      <div key={item.id} className="border border-[var(--rack-line)] bg-white p-3">
+                        <div className="relative h-56 w-full border border-[var(--rack-line)]">
                           <Image
                             src={item.imageUrl ?? ''}
                             alt={item.description ?? 'Closet item'}
@@ -96,8 +95,8 @@ export default function CompatibilityChecker() {
                             className="object-cover"
                           />
                         </div>
-                        <p className="mt-2 text-sm font-black uppercase text-[#310A31]">{item.category}</p>
-                        <p className="text-xs font-semibold text-emerald-800">
+                        <p className="mt-2 text-sm font-extrabold text-[#241426]">{item.category}</p>
+                        <p className="text-xs font-semibold text-[#3f7c5d]">
                           Match {Math.round(item.similarity * 100)}%
                         </p>
                       </div>
@@ -111,14 +110,14 @@ export default function CompatibilityChecker() {
               </article>
 
               {result.dissimilarItems.length > 0 && (
-                <article className="rack-panel">
-                  <h3 className="text-xl font-black uppercase tracking-tight text-[#310A31]">
+                <article className="rack-panel rack-panel--danger">
+                  <h3 className="text-xl font-extrabold text-[#241426]">
                     Potential clashes
                   </h3>
                   <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
                     {result.dissimilarItems.map((item) => (
-                      <div key={item.id} className="border-2 border-black bg-white p-3">
-                        <div className="relative h-56 w-full border-2 border-black">
+                      <div key={item.id} className="border border-[var(--rack-line)] bg-white p-3">
+                        <div className="relative h-56 w-full border border-[var(--rack-line)]">
                           <Image
                             src={item.imageUrl ?? ''}
                             alt={item.description ?? 'Closet item'}
@@ -127,8 +126,8 @@ export default function CompatibilityChecker() {
                             className="object-cover"
                           />
                         </div>
-                        <p className="mt-2 text-sm font-black uppercase text-[#310A31]">{item.category}</p>
-                        <p className="text-xs font-semibold text-rose-700">
+                        <p className="mt-2 text-sm font-extrabold text-[#241426]">{item.category}</p>
+                        <p className="text-xs font-semibold text-[#b93267]">
                           Clash {Math.round(item.similarity * 100)}%
                         </p>
                       </div>
@@ -139,9 +138,9 @@ export default function CompatibilityChecker() {
             </section>
           ) : (
             <div className="rack-panel">
-              <div className="flex items-center gap-2 text-[#310A31]">
+              <div className="flex items-center gap-2 text-[#241426]">
                 <Ticket className="h-5 w-5" />
-                <p className="text-sm font-semibold">{result.message}</p>
+                <p className="text-sm font-semibold">{userFacingErrorMessage(result.message, 'Compatibility check failed')}</p>
               </div>
             </div>
           )}

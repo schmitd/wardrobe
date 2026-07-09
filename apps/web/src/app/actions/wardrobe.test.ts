@@ -344,6 +344,7 @@ describe("wardrobe server actions", () => {
       ],
     });
 
+    expect(result.kind).toBe("ok");
     expect(result.limit).toBe(4);
     expect(result.capped).toBe(true);
     expect(result.items).toHaveLength(4);

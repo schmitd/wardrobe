@@ -1,15 +1,14 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { SignUpButton } from '@clerk/nextjs';
+import { SignInButton, SignUpButton } from '@clerk/nextjs';
 import { Loader2, Sparkles } from 'lucide-react';
-import { analyzeGuestBatchAction } from '@/app/actions/wardrobe';
+import { analyzeGuestBatchAction, type GuestBatchAnalysisResult } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
 import { loadGuestSnapshot, saveGuestSnapshot } from '@/lib/guestSnapshot';
 import { downscaleToJpegDataUrl } from '@/lib/imageClient';
-import { Badge } from '@/components/ui/badge';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import RackItemCard from './RackItemCard';
 
@@ -36,6 +35,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
   const [showSignupPrompt, setShowSignupPrompt] = useState(false);
   const [items, setItems] = useState<GuestDemoItem[]>([]);
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
+  const hasGeneratedBio = demoComplete && bio.trim().length > 0;
 
   useEffect(() => {
     const snapshot = loadGuestSnapshot();
@@ -98,7 +98,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       );
 
       const trace = createTraceContext();
-      const result = await analyzeGuestBatchAction({
+      const result: GuestBatchAnalysisResult = await analyzeGuestBatchAction({
         items: payload.map((entry) => ({
           fileName: entry.fileName,
           mimeType: entry.mimeType,
@@ -106,6 +106,12 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         })),
         ...trace,
       });
+
+      if (result.kind === 'limit') {
+        setLimitMessage(result.message);
+        setShowSignupPrompt(true);
+        return;
+      }
 
       setItems(
         result.items.map((entry, index) => ({
@@ -120,14 +126,8 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       );
       setBio(result.suggestedBio);
       setDemoComplete(true);
-      if (result.capped) {
-        setLimitMessage(`Demo capped at ${result.limit} photos. Create an account to continue.`);
-      }
     } catch (uploadError) {
-      const rawMessage = uploadError instanceof Error ? uploadError.message : 'Demo analysis failed.';
-      const message = /server components render|digest property/i.test(rawMessage)
-        ? 'Demo analysis is temporarily unavailable. Please try again with a different photo or create an account to continue.'
-        : rawMessage;
+      const message = userFacingErrorMessage(uploadError, 'Analysis failed');
       setError(message);
       if (/sign in|create an account/i.test(message)) {
         setShowSignupPrompt(true);
@@ -158,18 +158,52 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
 
   return (
     <section className="space-y-6">
-      <Card id="rack-uploader" className="rack-panel rounded-none py-0">
-        <CardHeader className="mb-4 flex-row items-start justify-between gap-4 px-0">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-600">Guest Demo</p>
-            <CardTitle className="text-3xl font-black uppercase text-slate-950">
-              Build your closet snapshot
-            </CardTitle>
+      <section className="rack-panel rack-panel--shell" aria-labelledby="guest-style-bio-title">
+        <div className="max-w-2xl">
+          <h1 id="guest-style-bio-title" className="text-3xl font-extrabold leading-tight text-[var(--rack-ink)] md:text-5xl">
+            Build a closet bio from real clothes
+          </h1>
+          <p className="mt-3 max-w-xl text-sm font-medium leading-relaxed text-[var(--rack-ink-soft)] md:text-base">
+            Start with a few clear garment photos. Wardrobe drafts the bio and turns the pieces into rack cards you can save after signup.
+          </p>
+        </div>
+
+        {hasGeneratedBio && (
+          <div className="mt-6">
+            <div className="mb-3 flex items-center gap-2">
+              <Sparkles className="h-4 w-4" />
+              <p className="text-sm font-semibold text-[var(--rack-ink)]">Your closet bio</p>
+            </div>
+            <Textarea
+              value={bio}
+              onChange={(event) => setBio(event.target.value)}
+              className="h-36 w-full resize-none rounded-none border border-[var(--rack-line)] bg-white p-4 text-sm font-medium leading-relaxed text-[var(--rack-ink)]"
+            />
+            <p className="mt-3 text-sm font-medium text-[var(--rack-ink-soft)]">
+              Edit the bio after analysis, then save it to your account.
+            </p>
           </div>
-          <Badge className="rounded-full border-2 border-black bg-white px-3 py-1 text-xs font-bold uppercase text-[#310A31]">
-            First Batch Free
-          </Badge>
-        </CardHeader>
+        )}
+      </section>
+
+      <section id="rack-uploader" className="rack-panel rack-panel--action" aria-labelledby="guest-upload-title">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 id="guest-upload-title" className="text-xl font-extrabold text-[var(--rack-ink)]">
+              Add clothes to the demo rack
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-[var(--rack-ink-soft)]">
+              Choose photos where each item fills the frame. The first batch becomes rack cards below.
+            </p>
+          </div>
+          <Button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="h-auto w-full rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)] sm:w-auto"
+          >
+            Add Clothes
+          </Button>
+        </div>
 
         <input
           id={uploaderInputId}
@@ -182,72 +216,71 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
           onChange={(event) => handleFiles(Array.from(event.target.files ?? []))}
         />
 
-        <Button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          variant="secondary"
-          className="flex h-auto w-full min-w-0 flex-col items-start whitespace-normal rounded-none border-4 border-black bg-[#c6b9cd] px-4 py-7 text-left shadow-[8px_8px_0_#000] transition-transform hover:-translate-y-1 hover:bg-[#c6b9cd]/95 sm:px-6 sm:py-8"
-        >
-          <p className="max-w-full text-base font-black uppercase leading-snug text-[#310A31] sm:text-lg">
-            {isAnalyzing ? 'Analyzing your first batch...' : 'Upload photos from your closet'}
-          </p>
-          <p className="mt-2 max-w-full text-sm font-medium leading-relaxed text-[#310A31]">
-            We analyze your first batch and prefill a style profile you can edit.
-          </p>
-        </Button>
-
         {isAnalyzing && (
-          <div className="mt-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[#310A31]">
+          <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-[var(--rack-ink)]">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>Reading textures, palettes, and silhouettes...</span>
           </div>
         )}
 
-        {error && <p className="mt-4 border-2 border-black bg-rose-100 p-3 text-sm font-semibold">{error}</p>}
-        {limitMessage && <p className="mt-4 border-2 border-black bg-amber-100 p-3 text-sm font-semibold">{limitMessage}</p>}
-      </Card>
+        {error && <p className="mt-4 border border-[var(--rack-line)] bg-[var(--rack-danger-wash)] p-3 text-sm font-semibold text-[var(--rack-danger)]">{error}</p>}
+      </section>
 
-      {items.length > 0 && <div className="space-y-8">{rackCards}</div>}
+      {items.length > 0 && <div className="guest-rack-grid">{rackCards}</div>}
 
-      {demoComplete && (
-        <Card className="rack-panel rounded-none py-0">
-          <CardContent className="px-0">
-          <div className="mb-3 flex items-center gap-2">
-            <Sparkles className="h-4 w-4" />
-            <p className="text-xs font-bold uppercase tracking-[0.18em]">Suggested Style Profile</p>
-          </div>
-          <Textarea
-            value={bio}
-            onChange={(event) => setBio(event.target.value)}
-            className="h-40 w-full resize-none rounded-none border-4 border-black bg-white p-4 text-sm leading-relaxed text-slate-900"
-          />
-          <p className="mt-3 text-xs font-medium uppercase tracking-wide text-slate-600">
-            Edit this profile, then save it to your account.
+      {limitMessage && (
+        <section className="rack-panel rack-panel--shell" aria-label="Demo limit reached">
+          <p className="text-sm font-semibold text-[var(--rack-ink)]">{limitMessage}</p>
+          <p className="mt-2 text-sm font-medium text-[var(--rack-ink-soft)]">
+            Sign up or sign in to continue adding clothes and save the rack you&apos;ve built so far.
           </p>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <SignUpButton mode="modal" forceRedirectUrl="/" fallbackRedirectUrl="/">
+              <Button
+                type="button"
+                className="h-auto w-full rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)] sm:w-auto"
+              >
+                Sign up
+              </Button>
+            </SignUpButton>
+            <SignInButton mode="modal">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-auto w-full rounded-none border border-[var(--rack-line)] bg-white px-5 py-3 text-sm font-semibold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] sm:w-auto"
+              >
+                Sign in
+              </Button>
+            </SignInButton>
+          </div>
+        </section>
+      )}
 
-          <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {demoComplete && !limitMessage && (
+        <section className="rack-panel" aria-label="Save demo profile">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <Button
               type="button"
               onClick={() => setShowSignupPrompt(true)}
-              className="h-auto w-full rounded-none border-4 border-black bg-[#310A31] px-5 py-3 text-sm font-black uppercase tracking-wide text-white shadow-[6px_6px_0_#000] sm:w-auto"
+              className="h-auto w-full rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)] sm:w-auto"
             >
               Save my style profile
             </Button>
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-700">
+            <p className="text-sm font-medium text-[var(--rack-ink-soft)]">
               Includes compatibility checks and deeper personalization.
             </p>
           </div>
 
           {showSignupPrompt && (
-            <div className="mt-4 border-4 border-black bg-[#9C92A3] p-4">
-              <p className="text-sm font-semibold text-white">
+            <div className="mt-4 border border-[var(--rack-line)] bg-[var(--rack-wash)] p-4">
+              <p className="text-sm font-semibold text-[var(--rack-ink)]">
                 Create your free account to save this closet profile, track your wardrobe, and continue comparisons.
               </p>
               <div className="mt-3">
                 <SignUpButton mode="modal" forceRedirectUrl="/" fallbackRedirectUrl="/">
                   <Button
                     variant="outline"
-                    className="rounded-none border-2 border-black bg-white px-4 py-2 text-xs font-black uppercase tracking-wide text-[#310A31]"
+                    className="rounded-none border border-[var(--rack-line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--rack-ink)]"
                   >
                     Create free account
                   </Button>
@@ -255,8 +288,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
               </div>
             </div>
           )}
-          </CardContent>
-        </Card>
+        </section>
       )}
     </section>
   );

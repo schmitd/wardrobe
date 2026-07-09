@@ -33,21 +33,21 @@ export default function RootLayout({
       clerkJSVersion="5.127.0"
       appearance={{
         variables: {
-          colorPrimary: "#310A31",
-          colorBackground: "#f6f1f8",
+          colorPrimary: "#241426",
+          colorBackground: "#D8C9DC",
           colorInputBackground: "#ffffff",
-          colorText: "#1e293b",
-          colorNeutral: "#9C92A3",
+          colorText: "#241426",
+          colorNeutral: "#D8C9DC",
           borderRadius: "0px",
           fontFamily: "var(--font-body)",
         },
         elements: {
           modalBackdrop: "bg-black/60",
-          modalContent: "rounded-none border-4 border-black shadow-[10px_10px_0_#000]",
-          card: "rounded-none border-2 border-black shadow-none",
-          formFieldInput: "rounded-none border-2 border-black shadow-none",
+          modalContent: "rounded-none border border-[var(--rack-line)] shadow-[3px_3px_0_var(--rack-panel-shadow)]",
+          card: "rounded-none border border-[var(--rack-line)] shadow-none",
+          formFieldInput: "rounded-none border border-[var(--rack-line)] shadow-none",
           formButtonPrimary:
-            "rounded-none border-2 border-black bg-[#310A31] text-white shadow-[3px_3px_0_#000]",
+            "rounded-none border border-[var(--rack-line)] bg-[#DCE66E] text-[#241426] shadow-[2px_2px_0_var(--rack-panel-shadow)]",
           footer: "hidden",
         },
       }}
