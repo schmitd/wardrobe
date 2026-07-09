@@ -20,7 +20,6 @@ import {
 import {
   embedText,
   fetchImageBase64,
-  isConvexAuthProviderMismatch,
   parseJson,
   toInferenceFailure,
   toErrorMessage,
@@ -228,9 +227,6 @@ export const processWardrobeInference = async ({
         )
       );
     } catch (error) {
-      if (isConvexAuthProviderMismatch(error)) {
-        throw error;
-      }
       console.warn("inference.analyzeTags.fallback", {
         traceId,
         traceparent,
