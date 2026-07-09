@@ -125,7 +125,7 @@ export default function ImageUploader({
                 />
 
                 {error && (
-                    <div className="mt-4 flex items-center gap-2 border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">
+                    <div className="mt-4 flex items-center gap-2 border-2 border-black bg-[#fbe6f0] p-3 text-sm font-semibold text-[#8f1f50]">
                         <AlertCircle size={16} />
                         <span>{error}</span>
                     </div>
@@ -188,7 +188,7 @@ export default function ImageUploader({
             </div>
 
             {error && (
-                <div className="mt-4 flex items-center gap-2 border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">
+                <div className="mt-4 flex items-center gap-2 border-2 border-black bg-[#fbe6f0] p-3 text-sm font-semibold text-[#8f1f50]">
                     <AlertCircle size={16} />
                     <span>{error}</span>
                 </div>

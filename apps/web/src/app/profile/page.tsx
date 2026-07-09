@@ -111,13 +111,13 @@ export default function ProfilePage() {
           />
 
           {saveStatus === 'error' && (
-            <p className="mt-4 border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">
+            <p className="mt-4 border-2 border-black bg-[#fbe6f0] p-3 text-sm font-semibold text-[#8f1f50]">
               {errorMessage}
             </p>
           )}
 
           {saveStatus === 'success' && (
-            <p className="mt-4 border-2 border-black bg-emerald-100 p-3 text-sm font-semibold text-emerald-900">
+            <p className="mt-4 border-2 border-black bg-[#e6f5ee] p-3 text-sm font-semibold text-[#1d5c42]">
               Profile updated.
             </p>
           )}
@@ -133,7 +133,7 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        <Card className="rack-panel rack-panel--mint rounded-none py-0">
+        <Card className="rack-panel rack-panel--sky rounded-none py-0">
           <CardContent className="px-0">
           <div className="mb-4 flex items-center gap-2 text-[#310A31]">
             <Sparkles className="h-4 w-4" />
@@ -202,7 +202,7 @@ export default function ProfilePage() {
         </Card>
       </section>
 
-      <Card className="rack-panel rack-panel--pink rounded-none py-0">
+      <Card className="rack-panel rounded-none py-0">
         <CardContent className="px-0">
           <h2 className="text-lg font-black uppercase tracking-wide text-[#310A31]">Account settings</h2>
           <p className="mt-2 text-sm font-medium text-slate-700">

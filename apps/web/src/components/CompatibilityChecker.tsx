@@ -44,7 +44,7 @@ export default function CompatibilityChecker() {
         )}
 
         {status && !isProcessing && !result && (
-          <div className="mt-5 border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">
+          <div className="mt-5 border-2 border-black bg-[#fbe6f0] p-3 text-sm font-semibold text-[#8f1f50]">
             {status}
           </div>
         )}
@@ -80,7 +80,7 @@ export default function CompatibilityChecker() {
                 </div>
               </article>
 
-              <article className="rack-panel rack-panel--mint">
+              <article className="rack-panel rack-panel--success">
                 <h3 className="text-xl font-black uppercase tracking-tight text-[#310A31]">Best matches</h3>
                 {result.similarItems.length > 0 ? (
                   <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -96,7 +96,7 @@ export default function CompatibilityChecker() {
                           />
                         </div>
                         <p className="mt-2 text-sm font-black uppercase text-[#310A31]">{item.category}</p>
-                        <p className="text-xs font-semibold text-emerald-800">
+                        <p className="text-xs font-semibold text-[#1d5c42]">
                           Match {Math.round(item.similarity * 100)}%
                         </p>
                       </div>
@@ -110,7 +110,7 @@ export default function CompatibilityChecker() {
               </article>
 
               {result.dissimilarItems.length > 0 && (
-                <article className="rack-panel rack-panel--pink">
+                <article className="rack-panel rack-panel--danger">
                   <h3 className="text-xl font-black uppercase tracking-tight text-[#310A31]">
                     Potential clashes
                   </h3>
@@ -127,7 +127,7 @@ export default function CompatibilityChecker() {
                           />
                         </div>
                         <p className="mt-2 text-sm font-black uppercase text-[#310A31]">{item.category}</p>
-                        <p className="text-xs font-semibold text-rose-700">
+                        <p className="text-xs font-semibold text-[#8f1f50]">
                           Clash {Math.round(item.similarity * 100)}%
                         </p>
                       </div>

@@ -11,9 +11,13 @@
   --rack-blush: #c6b9cd;
   --rack-paper: #f6f1f8;
   --rack-sky: #b5cede;
-  --rack-mint: #96cfb7;
-  --rack-pink: #d43a7b;
+  --rack-success: #96cfb7;
+  --rack-danger: #d43a7b;
   --rack-amber: #eac99a;
+  --rack-sky-wash: #edf5f9;
+  --rack-amber-wash: #fbf1dc;
+  --rack-success-wash: #e6f5ee;
+  --rack-danger-wash: #fbe6f0;
   --rack-panel-shadow: rgb(0 0 0 / 0.18);
   --radius: 0rem;
   --background: #f6f1f8;
@@ -24,11 +28,11 @@
   --popover-foreground: #310a31;
   --primary: #310a31;
   --primary-foreground: #ffffff;
-  --secondary: #b5cede;
+  --secondary: #edf5f9;
   --secondary-foreground: #310a31;
-  --muted: #e7f0eb;
+  --muted: #f1edf4;
   --muted-foreground: #4e1e51;
-  --accent: #eac99a;
+  --accent: #fbf1dc;
   --accent-foreground: #310a31;
   --destructive: #d43a7b;
   --border: #000000;
@@ -110,25 +114,25 @@ h4 {
 
 .rack-panel {
   border: 2px solid #000;
-  background: linear-gradient(180deg, #ffffff 0%, #f9f4fb 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #faf7fb 100%);
   box-shadow: 5px 5px 0 var(--rack-panel-shadow);
   padding: 1.25rem;
 }
 
 .rack-panel--sky {
-  background: linear-gradient(180deg, #f9fcfd 0%, var(--rack-sky) 100%);
-}
-
-.rack-panel--mint {
-  background: linear-gradient(180deg, #fbfffd 0%, #d7eee4 100%);
+  background: linear-gradient(180deg, #ffffff 0%, var(--rack-sky-wash) 100%);
 }
 
 .rack-panel--amber {
-  background: linear-gradient(180deg, #fffdf9 0%, #f4dfbc 100%);
+  background: linear-gradient(180deg, #ffffff 0%, var(--rack-amber-wash) 100%);
 }
 
-.rack-panel--pink {
-  background: linear-gradient(180deg, #fff8fb 0%, #f3bdd4 100%);
+.rack-panel--success {
+  background: linear-gradient(180deg, #ffffff 0%, var(--rack-success-wash) 100%);
+}
+
+.rack-panel--danger {
+  background: linear-gradient(180deg, #ffffff 0%, var(--rack-danger-wash) 100%);
 }
 
 .rack-nav-link {
@@ -369,7 +373,7 @@ h4 {
 
 .rack-empty-state {
   border: 2px solid #000;
-  background: linear-gradient(135deg, #ffffff 0%, #d7eee4 58%, #f4dfbc 100%);
+  background: linear-gradient(135deg, #ffffff 0%, var(--rack-sky-wash) 55%, var(--rack-amber-wash) 100%);
   box-shadow: 5px 5px 0 var(--rack-panel-shadow);
   padding: clamp(1.25rem, 3vw, 2rem);
 }
@@ -385,8 +389,8 @@ h4 {
   align-items: center;
   justify-content: center;
   border: 2px solid #000;
-  background: #fff8fb;
-  color: #b42318;
+  background: var(--rack-danger-wash);
+  color: #8f1f50;
   box-shadow: 3px 3px 0 var(--rack-panel-shadow);
   transition: transform 160ms ease-out, box-shadow 160ms ease-out;
 }
@@ -419,7 +423,7 @@ h4 {
   align-items: stretch;
   gap: 0.65rem;
   border: 3px solid #000;
-  background: #b5cede;
+  background: var(--rack-sky-wash);
   box-shadow: 5px 5px 0 var(--rack-panel-shadow);
   padding: 0.5rem;
 }
@@ -515,6 +519,6 @@ h4 {
   body {
     @apply text-foreground;
     background:
-      linear-gradient(145deg, #f7f2f8 0%, #eef6f3 38%, #f8ead0 72%, #edf5f9 100%);
+      linear-gradient(145deg, #f7f2f8 0%, #f7f4f8 44%, #edf5f9 100%);
   }
 }

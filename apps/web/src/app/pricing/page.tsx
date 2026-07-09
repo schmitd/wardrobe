@@ -14,7 +14,7 @@ export default function PricingPage() {
                 </p>
             </div>
 
-            <div className="rack-panel rack-panel--mint mx-auto w-full max-w-4xl p-2">
+            <div className="rack-panel rack-panel--sky mx-auto w-full max-w-4xl p-2">
                 <PricingTable />
             </div>
         </div>

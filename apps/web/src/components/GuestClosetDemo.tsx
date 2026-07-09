@@ -166,7 +166,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
               Upload a first batch of closet photos. We analyze the pieces, draft a style profile, and show the first rack cards before you create an account.
             </p>
           </div>
-          <p className="w-fit border-2 border-[#D43A7B] bg-white px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-[#310A31]">
+          <p className="w-fit border-2 border-black bg-white px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-[#310A31]">
             First batch free
           </p>
         </div>
@@ -186,7 +186,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
           type="button"
           onClick={() => fileInputRef.current?.click()}
           variant="secondary"
-          className="flex h-auto w-full min-w-0 flex-col items-start whitespace-normal rounded-none border-2 border-black bg-[#96CFB7] px-4 py-7 text-left shadow-[5px_5px_0_rgb(0_0_0_/_0.18)] transition-transform hover:-translate-y-1 hover:bg-[#A7D9C5] sm:px-6 sm:py-8"
+          className="flex h-auto w-full min-w-0 flex-col items-start whitespace-normal rounded-none border-2 border-black bg-[#EAC99A] px-4 py-7 text-left shadow-[5px_5px_0_rgb(0_0_0_/_0.18)] transition-transform hover:-translate-y-1 hover:bg-[#F1D7AD] sm:px-6 sm:py-8"
         >
           <p className="max-w-full text-base font-black uppercase leading-snug text-[#310A31] sm:text-lg">
             {isAnalyzing ? 'Analyzing your first batch...' : 'Upload photos from your closet'}
@@ -203,7 +203,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
           </div>
         )}
 
-        {error && <p className="mt-4 border-2 border-black bg-rose-100 p-3 text-sm font-semibold">{error}</p>}
+        {error && <p className="mt-4 border-2 border-black bg-[#fbe6f0] p-3 text-sm font-semibold text-[#8f1f50]">{error}</p>}
         {limitMessage && <p className="mt-4 border-2 border-black bg-amber-100 p-3 text-sm font-semibold">{limitMessage}</p>}
       </Card>
 

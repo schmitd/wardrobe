@@ -99,7 +99,7 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
       />
 
       {showPanel && (
-        <Card id="rack-compare-result" className="rack-panel rack-panel--mint rounded-none py-0">
+        <Card id="rack-compare-result" className="rack-panel rack-panel--sky rounded-none py-0">
           <CardContent className="px-0">
           <div className="flex items-center gap-2 text-[#310A31]">
             <Sparkles className="h-4 w-4" />
@@ -125,7 +125,7 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
                   className="h-44 w-full border-2 border-black object-cover"
                 />
               )}
-              <div className="border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">
+              <div className="border-2 border-black bg-[#fbe6f0] p-3 text-sm font-semibold text-[#8f1f50]">
                 <p>{status}</p>
                 {lastStorageId && (
                   <Button

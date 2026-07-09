@@ -37,7 +37,7 @@ export default function RootLayout({
           colorBackground: "#B5CEDE",
           colorInputBackground: "#ffffff",
           colorText: "#310A31",
-          colorNeutral: "#96CFB7",
+          colorNeutral: "#B5CEDE",
           borderRadius: "0px",
           fontFamily: "var(--font-body)",
         },

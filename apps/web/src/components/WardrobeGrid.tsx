@@ -98,7 +98,7 @@ export default function WardrobeGrid({
                 <div
                     role="status"
                     className={`border-2 border-black p-3 text-sm font-semibold ${
-                        actionError ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-800"
+                        actionError ? "bg-[#fbe6f0] text-[#8f1f50]" : "bg-[#e6f5ee] text-[#1d5c42]"
                     }`}
                 >
                     {actionError ?? notice}
