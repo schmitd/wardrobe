@@ -161,10 +161,10 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       <section className="rack-panel rack-panel--shell" aria-labelledby="guest-style-bio-title">
         <div className="max-w-2xl">
           <h1 id="guest-style-bio-title" className="text-3xl font-extrabold leading-tight text-[var(--rack-ink)] md:text-5xl">
-            Build a closet bio from real clothes
+            Create your dream wardrobe
           </h1>
           <p className="mt-3 max-w-xl text-sm font-medium leading-relaxed text-[var(--rack-ink-soft)] md:text-base">
-            Start with a few clear garment photos. Wardrobe drafts the bio and turns the pieces into rack cards you can save after signup.
+            Find your style based on your existing clothing. Once we define your look, you can modify it and we will help you find more clothes to perfect your wardrobe.
           </p>
         </div>
 
@@ -201,7 +201,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
             onClick={() => fileInputRef.current?.click()}
             className="h-auto w-full rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)] sm:w-auto"
           >
-            Add Clothes
+            Start building your closet
           </Button>
         </div>
 
