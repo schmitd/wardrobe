@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { SignUpButton } from '@clerk/nextjs';
+import { SignInButton, SignUpButton } from '@clerk/nextjs';
 import { Loader2, Sparkles } from 'lucide-react';
 import { analyzeGuestBatchAction } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
@@ -121,7 +121,8 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       setBio(result.suggestedBio);
       setDemoComplete(true);
       if (result.capped) {
-        setLimitMessage(`Demo capped at ${result.limit} photos. Create an account to continue.`);
+        setLimitMessage('Demo paused at the free limit. Continue by signing up or signing in.');
+        setShowSignupPrompt(true);
       }
     } catch (uploadError) {
       const message = userFacingErrorMessage(uploadError, 'Analysis failed');
@@ -221,12 +222,39 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         )}
 
         {error && <p className="mt-4 border border-[var(--rack-line)] bg-[var(--rack-danger-wash)] p-3 text-sm font-semibold text-[var(--rack-danger)]">{error}</p>}
-        {limitMessage && <p className="mt-4 border border-[var(--rack-line)] bg-[var(--rack-action-wash)] p-3 text-sm font-semibold text-[var(--rack-ink)]">{limitMessage}</p>}
       </section>
 
       {items.length > 0 && <div className="guest-rack-grid">{rackCards}</div>}
 
-      {demoComplete && (
+      {limitMessage && (
+        <section className="rack-panel rack-panel--shell" aria-label="Demo limit reached">
+          <p className="text-sm font-semibold text-[var(--rack-ink)]">{limitMessage}</p>
+          <p className="mt-2 text-sm font-medium text-[var(--rack-ink-soft)]">
+            Sign up or sign in to continue adding clothes and save the rack you&apos;ve built so far.
+          </p>
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+            <SignUpButton mode="modal" forceRedirectUrl="/" fallbackRedirectUrl="/">
+              <Button
+                type="button"
+                className="h-auto w-full rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)] sm:w-auto"
+              >
+                Sign up
+              </Button>
+            </SignUpButton>
+            <SignInButton mode="modal">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-auto w-full rounded-none border border-[var(--rack-line)] bg-white px-5 py-3 text-sm font-semibold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] sm:w-auto"
+              >
+                Sign in
+              </Button>
+            </SignInButton>
+          </div>
+        </section>
+      )}
+
+      {demoComplete && !limitMessage && (
         <section className="rack-panel" aria-label="Save demo profile">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <Button

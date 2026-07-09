@@ -48,6 +48,8 @@ Buttons remain square and direct. Primary non-destructive actions use citron wit
 
 The guest demo starts with the closet bio concept, not a generic landing hero. Upload instructions sit as normal document structure, followed by a single clear `Add Clothes` button. Do not show an empty bio textarea before analysis; the editable bio appears only after the analysis has produced a draft.
 
+If the guest demo hits its free limit, interrupt the flow with a clear blocking panel. The panel should explain that the demo is paused and offer both `Sign up` and `Sign in` actions so the user can continue without hunting for the next step.
+
 The bottom rack action stack should float above content like app controls, but should not obscure the rack. It should feel like a tool dock, not a marketing CTA cluster.
 
 ## Accessibility
