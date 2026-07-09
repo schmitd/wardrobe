@@ -193,13 +193,13 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
               First, add a few items that are quintessentially &quot;you&quot;
             </h2>
             <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-[var(--rack-ink-soft)]">
-              Choose photos where each item fills the frame. The first batch becomes rack cards below.
+              Press Start Building Your Closet to take photos or add them from your camera roll
             </p>
           </div>
           <Button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="h-auto w-full rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)] sm:w-auto"
+            className="h-auto w-fit self-start rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)]"
           >
             Start building your closet
           </Button>
