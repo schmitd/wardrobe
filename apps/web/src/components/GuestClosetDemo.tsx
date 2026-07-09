@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SignInButton, SignUpButton } from '@clerk/nextjs';
 import { Loader2, Sparkles } from 'lucide-react';
-import { analyzeGuestBatchAction } from '@/app/actions/wardrobe';
+import { analyzeGuestBatchAction, type GuestBatchAnalysisResult } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
 import { loadGuestSnapshot, saveGuestSnapshot } from '@/lib/guestSnapshot';
 import { downscaleToJpegDataUrl } from '@/lib/imageClient';
@@ -98,7 +98,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       );
 
       const trace = createTraceContext();
-      const result = await analyzeGuestBatchAction({
+      const result: GuestBatchAnalysisResult = await analyzeGuestBatchAction({
         items: payload.map((entry) => ({
           fileName: entry.fileName,
           mimeType: entry.mimeType,
@@ -106,6 +106,12 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         })),
         ...trace,
       });
+
+      if (result.kind === 'limit') {
+        setLimitMessage(result.message);
+        setShowSignupPrompt(true);
+        return;
+      }
 
       setItems(
         result.items.map((entry, index) => ({
@@ -120,10 +126,6 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       );
       setBio(result.suggestedBio);
       setDemoComplete(true);
-      if (result.capped) {
-        setLimitMessage('Demo paused at the free limit. Continue by signing up or signing in.');
-        setShowSignupPrompt(true);
-      }
     } catch (uploadError) {
       const message = userFacingErrorMessage(uploadError, 'Analysis failed');
       setError(message);
