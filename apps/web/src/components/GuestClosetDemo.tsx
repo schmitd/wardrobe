@@ -190,7 +190,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 id="guest-upload-title" className="text-xl font-extrabold text-[var(--rack-ink)]">
-              Add clothes to the demo rack
+              First, add a few items that are quintessentially &quot;you&quot;
             </h2>
             <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-[var(--rack-ink-soft)]">
               Choose photos where each item fills the frame. The first batch becomes rack cards below.
