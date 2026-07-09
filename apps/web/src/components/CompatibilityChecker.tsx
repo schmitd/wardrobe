@@ -71,13 +71,11 @@ export default function CompatibilityChecker() {
                 <div className="mt-5 border-2 border-black bg-[#c6b9cd] p-4 text-[#310A31]">
                   <p className="text-xs font-bold uppercase tracking-[0.2em]">Candidate piece</p>
                   <p className="mt-2 text-sm font-semibold">{result.candidate.description}</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {result.candidate.style_tags.map((tag) => (
-                      <span key={tag} className="rack-item-chip">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
+                  {result.candidate.style_tags.length > 0 && (
+                    <p className="mt-3 text-xs font-black uppercase tracking-[0.08em] text-[#363240]">
+                      {result.candidate.style_tags.slice(0, 4).join(' / ')}
+                    </p>
+                  )}
                 </div>
               </article>
 

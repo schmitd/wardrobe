@@ -1,9 +1,11 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Loader2, Sparkles, Ticket } from 'lucide-react';
 import { getUploadUrlAction } from '@/app/actions/wardrobe';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { useCompatibilityCheck } from '@/hooks/useCompatibilityCheck';
 
 interface QuickCompareActionProps {
@@ -13,6 +15,7 @@ interface QuickCompareActionProps {
 export default function QuickCompareAction({ inputId }: QuickCompareActionProps) {
   const previewUrlRef = useRef<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [lastStorageId, setLastStorageId] = useState<string | null>(null);
   const { result, isProcessing, status, setStatus, reset, runCompatibilityCheck } =
     useCompatibilityCheck();
 
@@ -38,6 +41,7 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
     if (!file) return;
 
     reset();
+    setLastStorageId(null);
 
     if (!file.type.startsWith('image/')) {
       setStatus('Only image files are supported for quick compare.');
@@ -62,6 +66,7 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
         throw new Error('Upload response missing storageId.');
       }
 
+      setLastStorageId(payload.storageId);
       await runCompatibilityCheck(payload.storageId, {
         startMessage: 'Comparing this piece with your closet...',
         fallbackErrorMessage: 'Quick compare failed.',
@@ -69,6 +74,14 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Quick compare failed.');
     }
+  };
+
+  const retryLastCompare = async () => {
+    if (!lastStorageId) return;
+    await runCompatibilityCheck(lastStorageId, {
+      startMessage: 'Comparing this piece with your closet again...',
+      fallbackErrorMessage: 'Quick compare failed.',
+    });
   };
 
   const showPanel = isProcessing || Boolean(status) || Boolean(result);
@@ -100,19 +113,43 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
           )}
 
           {!isProcessing && status && (
-            <div className="mt-4 border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">
-              {status}
+            <div className="mt-4 grid gap-4 md:grid-cols-[180px_1fr]">
+              {previewUrl && (
+                <Image
+                  src={previewUrl}
+                  alt="Candidate item"
+                  width={360}
+                  height={360}
+                  unoptimized
+                  className="h-44 w-full border-2 border-black object-cover"
+                />
+              )}
+              <div className="border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">
+                <p>{status}</p>
+                {lastStorageId && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={retryLastCompare}
+                    className="mt-3 h-auto rounded-none border-2 border-black bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#310A31]"
+                  >
+                    Try compare again
+                  </Button>
+                )}
+              </div>
             </div>
           )}
 
           {result && (
             <div className="mt-4 grid gap-4 md:grid-cols-[220px_1fr]">
               {previewUrl && (
-                <img
+                <Image
                   src={previewUrl}
                   alt="Candidate item"
+                  width={440}
+                  height={440}
+                  unoptimized
                   className="h-56 w-full border-2 border-black object-cover"
-                  loading="lazy"
                 />
               )}
               <div className="space-y-3">

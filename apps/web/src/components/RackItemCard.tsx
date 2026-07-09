@@ -2,7 +2,6 @@
 
 import Image from 'next/image';
 import { useEffect, useState, type CSSProperties } from 'react';
-import { Badge } from '@/components/ui/badge';
 
 interface RackItemCardProps {
   imageUrl: string;
@@ -109,7 +108,7 @@ export default function RackItemCard({
         />
       </div>
 
-      <div className="rack-item-side">
+        <div className="rack-item-side">
         <div className="rack-item-tag-wrap">
           <div className="rack-item-tag">
             <svg className="rack-item-tag-string" viewBox="0 0 74 20" aria-hidden="true" preserveAspectRatio="none">
@@ -123,18 +122,16 @@ export default function RackItemCard({
           </div>
         </div>
         {badgeLabel && (
-          <Badge variant="outline" className="rack-item-badge rounded-none border-2 border-black">
+          <span className="rack-item-badge">
             {badgeLabel}
-          </Badge>
+          </span>
         )}
         <p className="rack-item-description">{compactDescription(description, 104)}</p>
-        <div className="rack-item-meta">
-          {(styleTags ?? []).slice(0, 3).map((tag) => (
-            <Badge key={tag} variant="outline" className="rack-item-chip rounded-none border-2 border-black">
-              {tag}
-            </Badge>
-          ))}
-        </div>
+        {(styleTags ?? []).length > 0 && (
+          <p className="rack-item-meta" aria-label="Style notes">
+            {(styleTags ?? []).slice(0, 3).join(' / ')}
+          </p>
+        )}
       </div>
     </article>
   );

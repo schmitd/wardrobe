@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react';
 import { Effect, Layer } from 'effect';
-import { CloudUpload, AlertCircle } from 'lucide-react';
+import { CloudUpload, AlertCircle, Loader2 } from 'lucide-react';
 import { getUploadUrlAction } from '@/app/actions/wardrobe';
 import { ImageUploadService, makeImageUploadLayer } from '@/services/ImageUploadService';
 
@@ -160,7 +160,7 @@ export default function ImageUploader({
                 <div className="flex min-w-0 flex-col items-center justify-center gap-4">
                     <div className={`rounded-none border-2 border-black p-4 ${isDragging ? 'bg-white text-[#310A31]' : 'bg-[#9C92A3] text-white'}`}>
                         {uploading ? (
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-current"></div>
+                            <Loader2 className="h-8 w-8 animate-spin" />
                         ) : (
                             <CloudUpload size={32} />
                         )}

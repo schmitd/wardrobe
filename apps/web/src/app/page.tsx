@@ -18,9 +18,7 @@ import {
 import { createTraceContext } from '@/lib/trace';
 import { loadGuestSnapshot, removeGuestSnapshotItem, updateGuestSnapshotItem } from '@/lib/guestSnapshot';
 import { dataUrlToFile } from '@/lib/imageClient';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import type { OptimisticWardrobeItem, WardrobeItem } from '@/types/wardrobe';
 
 export default function Home() {
@@ -199,6 +197,16 @@ export default function Home() {
     );
   };
 
+  const handleRemoveOptimistic = (tempId: string) => {
+    setOptimisticItems((prev) => {
+      const item = prev.find((entry) => entry.tempId === tempId);
+      if (item?.imageUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(item.imageUrl);
+      }
+      return prev.filter((entry) => entry.tempId !== tempId);
+    });
+  };
+
   const displayItems = useMemo<WardrobeItem[]>(
     () =>
       (items ?? [])
@@ -229,31 +237,9 @@ export default function Home() {
   };
 
   return (
-    <main className="relative min-h-screen pb-32">
+    <main className="relative min-h-screen pb-44">
       <div className="mx-auto w-full max-w-[1320px] space-y-6 px-6 pb-16 pt-10 sm:px-8 lg:px-10">
         <section className="space-y-6">
-          {!isSignedIn && (
-            <Card className="rack-panel rounded-none py-0">
-              <CardHeader className="px-0">
-                <Badge
-                  variant="outline"
-                  className="w-fit rounded-none border-2 border-black bg-white px-2 py-0 text-[10px] font-bold tracking-[0.2em] text-[#9C92A3]"
-                >
-                  Season Rack
-                </Badge>
-                <CardTitle className="mt-2 text-3xl font-black uppercase text-[#310A31] md:text-5xl">
-                  Try your closet companion
-                </CardTitle>
-                <p className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-slate-600">
-                  Guest mode · first batch is free
-                </p>
-                <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-slate-800 md:text-base">
-                  Upload your first batch of closet photos. We analyze the pieces, draft your style profile, and help you decide what to add next.
-                </p>
-              </CardHeader>
-            </Card>
-          )}
-
           {importStatus && (
             <div className="rack-panel rounded-none border-4 border-black bg-white px-5 py-4 text-sm font-semibold uppercase tracking-wide text-[#310A31]">
               {importStatus}
@@ -267,7 +253,12 @@ export default function Home() {
                 onOptimisticUpdate={handleOptimisticUpdate}
                 uploaderInputId={uploadInputId}
               />
-              <WardrobeGrid items={displayItems} optimisticItems={filteredOptimisticItems} />
+              <WardrobeGrid
+                items={displayItems}
+                optimisticItems={filteredOptimisticItems}
+                onAddPiece={() => triggerInput(uploadInputId, 'rack-uploader')}
+                onRemoveOptimistic={handleRemoveOptimistic}
+              />
               <QuickCompareAction inputId={compareInputId} />
             </>
           ) : (
@@ -277,25 +268,27 @@ export default function Home() {
       </div>
 
       {isSignedIn && (
-        <div className="fixed bottom-6 right-4 z-30 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-3 sm:right-8">
-          <Button
-            type="button"
-            onClick={() => triggerInput(uploadInputId, 'rack-uploader')}
-            className="rack-fab rounded-none border-2 border-black"
-          >
-            <Plus className="h-4 w-4" />
-            <span>Add to closet</span>
-          </Button>
-          <Button
-            type="button"
-            onClick={() => triggerInput(compareInputId, 'rack-uploader')}
-            variant="outline"
-            className="rack-fab rack-fab-secondary rounded-none border-2 border-black"
-          >
-            <Sparkles className="h-4 w-4" />
-            <span>Check fit</span>
-          </Button>
-        </div>
+        <nav aria-label="Rack actions" className="rack-action-stack">
+          <div className="rack-action-stack-inner">
+            <Button
+              type="button"
+              onClick={() => triggerInput(uploadInputId, 'rack-uploader')}
+              className="rack-action-button rack-action-button-primary rounded-none border-2 border-black"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Add piece</span>
+            </Button>
+            <Button
+              type="button"
+              onClick={() => triggerInput(compareInputId, 'rack-uploader')}
+              variant="outline"
+              className="rack-action-button rounded-none border-2 border-black"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span>Check fit</span>
+            </Button>
+          </div>
+        </nav>
       )}
     </main>
   );
