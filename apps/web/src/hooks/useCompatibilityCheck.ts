@@ -3,6 +3,7 @@
 import { useCallback, useState } from 'react';
 import { checkCompatibilityAction } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 
 export type CompatibilityCheckResult = Awaited<ReturnType<typeof checkCompatibilityAction>>;
 
@@ -34,10 +35,10 @@ export function useCompatibilityCheck() {
         setStatus(null);
         return response;
       } catch (error) {
-        const message =
-          error instanceof Error
-            ? error.message
-            : options?.fallbackErrorMessage ?? 'Compatibility check failed.';
+        const message = userFacingErrorMessage(
+          error,
+          options?.fallbackErrorMessage ?? 'Compatibility check failed.'
+        );
         setStatus(message);
         return null;
       } finally {

@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { Loader2, Ticket } from 'lucide-react';
 import ImageUploader, { type UploadedFile } from './ImageUploader';
 import { useCompatibilityCheck } from '@/hooks/useCompatibilityCheck';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 
 export default function CompatibilityChecker() {
   const { result, isProcessing, status, runCompatibilityCheck } = useCompatibilityCheck();
@@ -139,7 +140,7 @@ export default function CompatibilityChecker() {
             <div className="rack-panel">
               <div className="flex items-center gap-2 text-[#310A31]">
                 <Ticket className="h-5 w-5" />
-                <p className="text-sm font-semibold">{result.message}</p>
+                <p className="text-sm font-semibold">{userFacingErrorMessage(result.message, 'Compatibility check failed')}</p>
               </div>
             </div>
           )}

@@ -18,6 +18,7 @@ import {
 import { createTraceContext } from '@/lib/trace';
 import { loadGuestSnapshot, removeGuestSnapshotItem, updateGuestSnapshotItem } from '@/lib/guestSnapshot';
 import { dataUrlToFile } from '@/lib/imageClient';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { Button } from '@/components/ui/button';
 import type { OptimisticWardrobeItem, WardrobeItem } from '@/types/wardrobe';
 
@@ -161,7 +162,7 @@ export default function Home() {
           if (!seeded.success) {
             patchOptimisticItem(tempId, {
               status: 'error',
-              error: seeded.error ?? 'Processing failed',
+              error: userFacingErrorMessage(seeded.error, 'Analysis failed'),
             });
             continue;
           }
@@ -172,7 +173,7 @@ export default function Home() {
         } catch (error) {
           patchOptimisticItem(tempId, {
             status: 'error',
-            error: error instanceof Error ? error.message : 'Import failed',
+            error: userFacingErrorMessage(error, 'Import failed'),
           });
         }
       }

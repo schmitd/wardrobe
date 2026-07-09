@@ -7,6 +7,7 @@ import { getUploadUrlAction } from '@/app/actions/wardrobe';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useCompatibilityCheck } from '@/hooks/useCompatibilityCheck';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 
 interface QuickCompareActionProps {
   inputId: string;
@@ -72,7 +73,7 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
         fallbackErrorMessage: 'Quick compare failed.',
       });
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'Quick compare failed.');
+      setStatus(userFacingErrorMessage(error, 'Quick compare failed'));
     }
   };
 
@@ -166,7 +167,7 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
                 ) : (
                   <div className="flex items-center gap-2 border-2 border-black bg-white p-3 text-sm font-semibold text-[#310A31]">
                     <Ticket className="h-4 w-4" />
-                    <span>{result.message}</span>
+                    <span>{userFacingErrorMessage(result.message, 'Quick compare failed')}</span>
                   </div>
                 )}
               </div>

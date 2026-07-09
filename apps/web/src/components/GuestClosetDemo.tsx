@@ -7,6 +7,7 @@ import { analyzeGuestBatchAction } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
 import { loadGuestSnapshot, saveGuestSnapshot } from '@/lib/guestSnapshot';
 import { downscaleToJpegDataUrl } from '@/lib/imageClient';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -123,10 +124,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         setLimitMessage(`Demo capped at ${result.limit} photos. Create an account to continue.`);
       }
     } catch (uploadError) {
-      const rawMessage = uploadError instanceof Error ? uploadError.message : 'Demo analysis failed.';
-      const message = /server components render|digest property/i.test(rawMessage)
-        ? 'Demo analysis is temporarily unavailable. Please try again with a different photo or create an account to continue.'
-        : rawMessage;
+      const message = userFacingErrorMessage(uploadError, 'Analysis failed');
       setError(message);
       if (/sign in|create an account/i.test(message)) {
         setShowSignupPrompt(true);

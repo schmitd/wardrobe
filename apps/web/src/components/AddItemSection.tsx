@@ -5,6 +5,7 @@ import ImageUploader, { type UploadedFile } from './ImageUploader';
 import { Loader2 } from 'lucide-react';
 import type { OptimisticWardrobeItem } from '@/types/wardrobe';
 import { createTraceContext } from '@/lib/trace';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { createWardrobeItemAction } from '@/app/actions/wardrobe';
 
 interface AddItemSectionProps {
@@ -139,7 +140,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                                 streamFailed = true;
                                 onOptimisticUpdate(tempId, {
                                     status: 'error',
-                                    error: event.error ?? 'Processing failed',
+                                    error: userFacingErrorMessage(event.error, 'Analysis failed'),
                                 });
                             } else if (event.type === 'complete') {
                                 streamCompleted = true;
@@ -153,7 +154,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                             streamFailed = true;
                             onOptimisticUpdate(tempId, {
                                 status: 'error',
-                                error: event.error ?? 'Processing failed',
+                                error: userFacingErrorMessage(event.error, 'Analysis failed'),
                             });
                         } else if (event?.type === 'complete') {
                             streamCompleted = true;
@@ -176,7 +177,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                     console.error('wardrobe.create.failed', error);
                     onOptimisticUpdate(tempId, {
                         status: 'error',
-                        error: error instanceof Error ? error.message : 'Failed to add item',
+                        error: userFacingErrorMessage(error, 'Analysis failed'),
                     });
                     failureCount += 1;
                 }
@@ -192,9 +193,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
             setTimeout(() => setStatus(null), 3000);
         } catch (e) {
             console.error("wardrobe.batch.failed", e);
-            setStatus(
-                `Error: ${e instanceof Error ? e.message : 'Unexpected upload failure. Please try again.'}`
-            );
+            setStatus(userFacingErrorMessage(e, 'Analysis failed'));
         }
         setIsProcessing(false);
     };
@@ -221,7 +220,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                 </div>
             )}
             {!isProcessing && status && (
-                <div className={`mt-4 border-2 border-black p-3 text-center font-semibold ${status.startsWith('Error') ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'}`}>
+                <div className={`mt-4 border-2 border-black p-3 text-center font-semibold ${/fail|error/i.test(status) ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'}`}>
                     {status}
                 </div>
             )}

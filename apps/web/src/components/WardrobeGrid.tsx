@@ -5,6 +5,7 @@ import { Trash2, X } from "lucide-react";
 import type { OptimisticWardrobeItem, WardrobeItem } from "@/types/wardrobe";
 import { deleteWardrobeItemAction } from "@/app/actions/wardrobe";
 import { createTraceContext } from "@/lib/trace";
+import { userFacingErrorMessage } from "@/lib/userFacingError";
 import { Button } from "@/components/ui/button";
 import RackItemCard from "./RackItemCard";
 
@@ -57,7 +58,7 @@ export default function WardrobeGrid({
                 itemId: id,
                 message: error instanceof Error ? error.message : 'Unknown error',
             });
-            setActionError(error instanceof Error ? error.message : "Could not remove this piece. Try again.");
+            setActionError(userFacingErrorMessage(error, "Could not remove this piece. Try again."));
         } finally {
             setDeletingId(null);
         }
@@ -109,7 +110,10 @@ export default function WardrobeGrid({
                     const itemId = item.isOptimistic ? item.tempId : item.id;
                     const isPending = item.isOptimistic ? item.status !== "error" : item.analysisStatus !== "ready";
                     const isError = item.isOptimistic ? item.status === "error" : item.analysisStatus === "error";
-                    const errorMessage = item.isOptimistic ? item.error : item.analysisError;
+                    const errorMessage = userFacingErrorMessage(
+                        item.isOptimistic ? item.error : item.analysisError,
+                        "Analysis failed"
+                    );
 
                     return (
                         <article

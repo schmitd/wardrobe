@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { Effect, Layer } from 'effect';
 import { CloudUpload, AlertCircle, Loader2 } from 'lucide-react';
 import { getUploadUrlAction } from '@/app/actions/wardrobe';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { ImageUploadService, makeImageUploadLayer } from '@/services/ImageUploadService';
 
 export interface UploadedFile {
@@ -100,7 +101,7 @@ export default function ImageUploader({
 
         } catch (e) {
             console.error("Upload error:", e);
-            setError(e instanceof Error ? e.message : "Upload failed");
+            setError(userFacingErrorMessage(e, "Upload failed"));
         } finally {
             setUploading(false);
             if (fileInputRef.current) {
