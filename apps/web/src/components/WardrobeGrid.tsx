@@ -119,7 +119,10 @@ export default function WardrobeGrid({
                         <article
                             key={itemId}
                             data-wardrobe-item-id={itemId}
-                            className="relative"
+                            tabIndex={0}
+                            role="group"
+                            aria-label={item.category ?? "Wardrobe item"}
+                            className="group relative outline-none focus-visible:ring-2 focus-visible:ring-[var(--rack-line)] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
                         >
                             <RackItemCard
                                 imageUrl={item.imageUrl}
@@ -138,7 +141,7 @@ export default function WardrobeGrid({
                                         setShowConfirm(item.id);
                                         setActionError(null);
                                     }}
-                                    className="wardrobe-item-action-button"
+                                    className="wardrobe-item-action-button opacity-0 translate-y-1 pointer-events-none transition-[opacity,transform] duration-150 ease-out group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:translate-y-0 group-focus-within:pointer-events-auto focus-visible:opacity-100 focus-visible:translate-y-0 focus-visible:pointer-events-auto"
                                 >
                                     <Trash2 size={16} />
                                 </button>
