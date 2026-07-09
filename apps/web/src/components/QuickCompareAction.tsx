@@ -99,15 +99,15 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
       />
 
       {showPanel && (
-        <Card id="rack-compare-result" className="rack-panel rack-panel--sky rounded-none py-0">
+        <Card id="rack-compare-result" className="rack-panel rack-panel--shell rounded-none py-0">
           <CardContent className="px-0">
-          <div className="flex items-center gap-2 text-[#310A31]">
+          <div className="flex items-center gap-2 text-[#241426]">
             <Sparkles className="h-4 w-4" />
             <h3 className="text-base font-black uppercase tracking-[0.12em]">Quick compare result</h3>
           </div>
 
           {isProcessing && (
-            <div className="mt-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[#310A31]">
+            <div className="mt-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-[#241426]">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>{status}</span>
             </div>
@@ -125,14 +125,14 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
                   className="h-44 w-full border-2 border-black object-cover"
                 />
               )}
-              <div className="border-2 border-black bg-[#fbe6f0] p-3 text-sm font-semibold text-[#8f1f50]">
+              <div className="border-2 border-black bg-[#f8e6ee] p-3 text-sm font-semibold text-[#b93267]">
                 <p>{status}</p>
                 {lastStorageId && (
                   <Button
                     type="button"
                     variant="outline"
                     onClick={retryLastCompare}
-                    className="mt-3 h-auto rounded-none border-2 border-black bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#310A31]"
+                    className="mt-3 h-auto rounded-none border-2 border-black bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#241426]"
                   >
                     Try compare again
                   </Button>
@@ -159,13 +159,13 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
                     <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-600">
                       Compatibility score
                     </p>
-                    <p className="text-5xl font-black text-[#310A31]">{result.evaluation.score}%</p>
+                    <p className="text-5xl font-black text-[#241426]">{result.evaluation.score}%</p>
                     <p className="border-2 border-black bg-white p-3 text-sm font-medium text-slate-800">
                       {result.evaluation.explanation}
                     </p>
                   </>
                 ) : (
-                  <div className="flex items-center gap-2 border-2 border-black bg-white p-3 text-sm font-semibold text-[#310A31]">
+                  <div className="flex items-center gap-2 border-2 border-black bg-white p-3 text-sm font-semibold text-[#241426]">
                     <Ticket className="h-4 w-4" />
                     <span>{userFacingErrorMessage(result.message, 'Quick compare failed')}</span>
                   </div>

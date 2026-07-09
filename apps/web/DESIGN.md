@@ -4,27 +4,31 @@
 
 Wardrobe is a product UI with a playful closet metaphor. The rack item card is the expressive centerpiece: its shirt-on-hanger shape, physical hang tag, and photo-derived accent color should remain the most colorful and idiosyncratic object on the screen. Surrounding app chrome should support that metaphor with restraint.
 
-The previous color pass went wrong by treating every supplied color as decorative. In product UI, color carries meaning. Green and pink/red read as state, so using them for ordinary panels made the interface feel incoherent and louder than the workflow required.
+The previous color passes went wrong in two ways. First, the supplied green and red/pink were treated as decoration even though users read them as state. Second, the blue/orange shell started to feel like a generic product palette laid over the rack metaphor. The app palette now starts from wardrobe materials: aubergine ink, chalk paper, mauve shell surfaces, and a sharp citron action color. Semantic green and danger pink remain available only when the interface is communicating state.
 
 ## Color Roles
 
-Primary ink: `#310A31`
+Primary ink: `#241426`
 - Main text, active navigation, high-contrast structural anchors.
 - Use for readable type on pale surfaces.
 
-Shell blue: `#B5CEDE`
+Chalk paper: `#F7F3F5`
+- Page background and quiet product surfaces.
+- Use as the dominant neutral so rack item photo accents stay visually important.
+
+Mauve shell: `#CBB7CF`
 - App shell, navigation, low-emphasis support panels, neutral preview surfaces.
 - Use as the main non-rack color family when the app needs personality before uploads.
 
-Warm amber: `#EAC99A`
+Citron action: `#DCE66E`
 - Primary action surfaces, upload prompts, onboarding emphasis, and inviting empty states.
 - Use for calls to action when the action is not destructive or error-related.
 
-Success green: `#96CFB7`
+Success green: `#3F7C5D`
 - Success states, positive compatibility matches, valid/active input affordances, completed work.
 - Do not use as a generic decorative panel color.
 
-Danger pink: `#D43A7B`
+Danger pink: `#B93267`
 - Errors, destructive actions, clashes, failed analysis, urgent recovery.
 - Do not use as a promotional accent or general account/settings surface.
 
@@ -36,11 +40,13 @@ Rack item accents:
 
 Use square, light app panels with `2px` black borders and a soft offset shadow around `5px 5px 0 rgb(0 0 0 / 0.18)`. Avoid the earlier heavy `4px` borders and hard `8px` black shadows except where a component is intentionally imitating physical rack material.
 
-Default panels are white to pale lilac. Support panels use sky or amber washes. Green and pink washes are reserved for semantic success/danger areas only.
+Default panels are white to chalk. Support panels use mauve or citron washes. Green and pink washes are reserved for semantic success/danger areas only.
 
 ## Components
 
-Buttons remain square and direct. Primary non-destructive actions use amber with ink text. Destructive actions use ink or danger treatment with clear destructive copy. Avoid pill badges; metadata should read as compact garment notes, labels, or physical hang tags.
+Buttons remain square and direct. Primary non-destructive actions use citron with ink text. Destructive actions use ink or danger treatment with clear destructive copy. Avoid pill badges; metadata should read as compact garment notes, labels, or physical hang tags.
+
+The guest demo starts with the closet bio, not a generic landing hero. Upload instructions sit as normal document structure, followed by a single clear `Add Clothes` button. The upload affordance should not be a large nested card or a disguised dropzone inside the hero.
 
 The bottom rack action stack should float above content like app controls, but should not obscure the rack. It should feel like a tool dock, not a marketing CTA cluster.
 

@@ -72,18 +72,18 @@ export default function WardrobeGrid({
     if (mergedItems.length === 0) {
         return (
             <section className="rack-empty-state" aria-labelledby="empty-rack-title">
-                <p className="text-xs font-black uppercase tracking-[0.14em] text-[#4e1e51]">Closet Rack</p>
-                <h3 id="empty-rack-title" className="mt-2 text-2xl font-black uppercase text-[#310A31]">
+                <p className="text-xs font-black uppercase tracking-[0.14em] text-[#56345c]">Closet Rack</p>
+                <h3 id="empty-rack-title" className="mt-2 text-2xl font-black uppercase text-[#241426]">
                     Start with a few clear pieces
                 </h3>
-                <p className="mt-3 max-w-xl text-sm font-medium leading-relaxed text-[#4e1e51]">
+                <p className="mt-3 max-w-xl text-sm font-medium leading-relaxed text-[#56345c]">
                     Upload 3-6 closet photos with good light. Each analyzed piece appears here as a rack card with a category tag, notes, and compatibility context.
                 </p>
                 {onAddPiece && (
                     <Button
                         type="button"
                         onClick={onAddPiece}
-                        className="mt-5 h-auto rounded-none border-2 border-black bg-[#EAC99A] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#310A31] shadow-[4px_4px_0_rgb(0_0_0_/_0.18)]"
+                        className="mt-5 h-auto rounded-none border-2 border-black bg-[#DCE66E] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#241426] shadow-[4px_4px_0_rgb(0_0_0_/_0.18)]"
                     >
                         Add first piece
                     </Button>
@@ -98,7 +98,7 @@ export default function WardrobeGrid({
                 <div
                     role="status"
                     className={`border-2 border-black p-3 text-sm font-semibold ${
-                        actionError ? "bg-[#fbe6f0] text-[#8f1f50]" : "bg-[#e6f5ee] text-[#1d5c42]"
+                        actionError ? "bg-[#f8e6ee] text-[#b93267]" : "bg-[#e8f3ec] text-[#3f7c5d]"
                     }`}
                 >
                     {actionError ?? notice}
@@ -158,11 +158,11 @@ export default function WardrobeGrid({
                                             setShowConfirm(null);
                                             setActionError(null);
                                         }}
-                                        className="absolute right-2 top-2 border-2 border-black bg-white p-1 text-[#310A31]"
+                                        className="absolute right-2 top-2 border-2 border-black bg-white p-1 text-[#241426]"
                                     >
                                         <X size={14} />
                                     </button>
-                                    <h4 id={`remove-title-${item.id}`} className="mb-2 text-sm font-black uppercase tracking-wide text-[#310A31]">
+                                    <h4 id={`remove-title-${item.id}`} className="mb-2 text-sm font-black uppercase tracking-wide text-[#241426]">
                                         Remove piece?
                                     </h4>
                                     <label htmlFor={`remove-reason-${item.id}`} className="sr-only">
@@ -194,7 +194,7 @@ export default function WardrobeGrid({
                                             type="button"
                                             onClick={() => void handleDelete(item.id)}
                                             disabled={deletingId === item.id}
-                                            className="border-2 border-black bg-[#310A31] px-3 py-2 text-xs font-black uppercase text-white shadow-[3px_3px_0_rgb(0_0_0_/_0.18)] disabled:opacity-50"
+                                            className="border-2 border-black bg-[#241426] px-3 py-2 text-xs font-black uppercase text-white shadow-[3px_3px_0_rgb(0_0_0_/_0.18)] disabled:opacity-50"
                                         >
                                             {deletingId === item.id ? "Removing..." : "Remove"}
                                         </button>
@@ -203,22 +203,22 @@ export default function WardrobeGrid({
                             )}
 
                             {isPending && !isError && showConfirm !== itemId && (
-                                <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/65 text-xs font-black uppercase tracking-[0.14em] text-[#310A31]">
+                                <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-white/65 text-xs font-black uppercase tracking-[0.14em] text-[#241426]">
                                     Processing
                                 </div>
                             )}
 
                             {isError && showConfirm !== itemId && (
                                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white/90 p-4 text-center">
-                                    <p className="text-xs font-black uppercase tracking-[0.14em] text-[#310A31]">Analysis needs another pass</p>
-                                    <p className="max-w-xs text-xs font-semibold leading-relaxed text-[#4e1e51]">
+                                    <p className="text-xs font-black uppercase tracking-[0.14em] text-[#241426]">Analysis needs another pass</p>
+                                    <p className="max-w-xs text-xs font-semibold leading-relaxed text-[#56345c]">
                                         {errorMessage ?? "This item could not be analyzed. Try a clearer photo with the garment filling the frame."}
                                     </p>
                                     {item.isOptimistic && onRemoveOptimistic && (
                                         <button
                                             type="button"
                                             onClick={() => onRemoveOptimistic(item.tempId)}
-                                            className="border-2 border-black bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#310A31]"
+                                            className="border-2 border-black bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#241426]"
                                         >
                                             Dismiss failed photo
                                         </button>
@@ -230,7 +230,7 @@ export default function WardrobeGrid({
                                                 setShowConfirm(item.id);
                                                 setActionError(null);
                                             }}
-                                            className="border-2 border-black bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#310A31]"
+                                            className="border-2 border-black bg-white px-3 py-2 text-xs font-black uppercase tracking-[0.08em] text-[#241426]"
                                         >
                                             Remove from rack
                                         </button>

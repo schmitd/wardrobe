@@ -125,7 +125,7 @@ export default function ImageUploader({
                 />
 
                 {error && (
-                    <div className="mt-4 flex items-center gap-2 border-2 border-black bg-[#fbe6f0] p-3 text-sm font-semibold text-[#8f1f50]">
+                    <div className="mt-4 flex items-center gap-2 border-2 border-black bg-[#f8e6ee] p-3 text-sm font-semibold text-[#b93267]">
                         <AlertCircle size={16} />
                         <span>{error}</span>
                     </div>
@@ -139,8 +139,8 @@ export default function ImageUploader({
             <div
                 className={`relative cursor-pointer border-2 border-black p-8 text-center transition-all duration-200 ease-in-out ${
                     isDragging
-                        ? 'bg-[#96CFB7]'
-                        : 'bg-[#FFFDF8] hover:-translate-y-1 hover:shadow-[5px_5px_0_rgb(0_0_0_/_0.18)]'
+                        ? 'bg-[var(--rack-success-wash)]'
+                        : 'bg-white hover:-translate-y-1 hover:shadow-[5px_5px_0_rgb(0_0_0_/_0.18)]'
                 }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
@@ -159,7 +159,7 @@ export default function ImageUploader({
                 />
 
                 <div className="flex min-w-0 flex-col items-center justify-center gap-4">
-                    <div className={`rounded-none border-2 border-black p-4 ${isDragging ? 'bg-white text-[#310A31]' : 'bg-[#B5CEDE] text-[#310A31]'}`}>
+                    <div className={`rounded-none border-2 border-black p-4 ${isDragging ? 'bg-white text-[var(--rack-success)]' : 'bg-[var(--rack-wash)] text-[var(--rack-ink)]'}`}>
                         {uploading ? (
                             <Loader2 className="h-8 w-8 animate-spin" />
                         ) : (
@@ -168,7 +168,7 @@ export default function ImageUploader({
                     </div>
 
                     <div className="min-w-0 max-w-full">
-                        <h4 className="text-base font-black uppercase leading-snug tracking-wide text-[#310A31] sm:text-lg">
+                        <h4 className="text-base font-black uppercase leading-snug tracking-wide text-[var(--rack-ink)] sm:text-lg">
                             {uploading ? 'Uploading...' : displayLabel}
                         </h4>
                         <p className="mt-1 text-sm font-medium leading-relaxed text-slate-700">
@@ -188,7 +188,7 @@ export default function ImageUploader({
             </div>
 
             {error && (
-                <div className="mt-4 flex items-center gap-2 border-2 border-black bg-[#fbe6f0] p-3 text-sm font-semibold text-[#8f1f50]">
+                <div className="mt-4 flex items-center gap-2 border-2 border-black bg-[#f8e6ee] p-3 text-sm font-semibold text-[#b93267]">
                     <AlertCircle size={16} />
                     <span>{error}</span>
                 </div>

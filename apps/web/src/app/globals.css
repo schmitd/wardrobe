@@ -5,52 +5,52 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --rack-ink: #310a31;
-  --rack-ink-soft: #4e1e51;
-  --rack-lilac: #9c92a3;
-  --rack-blush: #c6b9cd;
-  --rack-paper: #f6f1f8;
-  --rack-sky: #b5cede;
-  --rack-success: #96cfb7;
-  --rack-danger: #d43a7b;
-  --rack-amber: #eac99a;
-  --rack-sky-wash: #edf5f9;
-  --rack-amber-wash: #fbf1dc;
-  --rack-success-wash: #e6f5ee;
-  --rack-danger-wash: #fbe6f0;
+  --rack-ink: #241426;
+  --rack-ink-soft: #56345c;
+  --rack-shell: #cbb7cf;
+  --rack-shell-deep: #8f6f96;
+  --rack-paper: #f7f3f5;
+  --rack-action: #dce66e;
+  --rack-action-hover: #e7ef86;
+  --rack-wash: #eee7f1;
+  --rack-action-wash: #f5f7da;
+  --rack-success: #3f7c5d;
+  --rack-danger: #b93267;
+  --rack-success-wash: #e8f3ec;
+  --rack-danger-wash: #f8e6ee;
   --rack-panel-shadow: rgb(0 0 0 / 0.18);
   --radius: 0rem;
-  --background: #f6f1f8;
-  --foreground: #310a31;
+  --background: #f7f3f5;
+  --foreground: #241426;
   --card: #ffffff;
-  --card-foreground: #310a31;
+  --card-foreground: #241426;
   --popover: #ffffff;
-  --popover-foreground: #310a31;
-  --primary: #310a31;
+  --popover-foreground: #241426;
+  --primary: #241426;
   --primary-foreground: #ffffff;
-  --secondary: #edf5f9;
-  --secondary-foreground: #310a31;
-  --muted: #f1edf4;
-  --muted-foreground: #4e1e51;
-  --accent: #fbf1dc;
-  --accent-foreground: #310a31;
-  --destructive: #d43a7b;
+  --secondary: #eee7f1;
+  --secondary-foreground: #241426;
+  --muted: #eee7f1;
+  --muted-foreground: #56345c;
+  --accent: #f5f7da;
+  --accent-foreground: #241426;
+  --destructive: #b93267;
   --border: #000000;
   --input: #000000;
-  --ring: #310a31;
-  --chart-1: #310a31;
-  --chart-2: #b5cede;
-  --chart-3: #96cfb7;
-  --chart-4: #4e1e51;
-  --chart-5: #eac99a;
-  --sidebar: #f6f1f8;
-  --sidebar-foreground: #310a31;
-  --sidebar-primary: #310a31;
+  --ring: #241426;
+  --chart-1: #241426;
+  --chart-2: #cbb7cf;
+  --chart-3: #3f7c5d;
+  --chart-4: #56345c;
+  --chart-5: #dce66e;
+  --sidebar: #f7f3f5;
+  --sidebar-foreground: #241426;
+  --sidebar-primary: #241426;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #ece4f0;
-  --sidebar-accent-foreground: #310a31;
+  --sidebar-accent: #eee7f1;
+  --sidebar-accent-foreground: #241426;
   --sidebar-border: #000000;
-  --sidebar-ring: #310a31;
+  --sidebar-ring: #241426;
 }
 
 @theme inline {
@@ -114,17 +114,17 @@ h4 {
 
 .rack-panel {
   border: 2px solid #000;
-  background: linear-gradient(180deg, #ffffff 0%, #faf7fb 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #fbf8fb 100%);
   box-shadow: 5px 5px 0 var(--rack-panel-shadow);
   padding: 1.25rem;
 }
 
-.rack-panel--sky {
-  background: linear-gradient(180deg, #ffffff 0%, var(--rack-sky-wash) 100%);
+.rack-panel--shell {
+  background: linear-gradient(180deg, #ffffff 0%, var(--rack-wash) 100%);
 }
 
-.rack-panel--amber {
-  background: linear-gradient(180deg, #ffffff 0%, var(--rack-amber-wash) 100%);
+.rack-panel--action {
+  background: linear-gradient(180deg, #ffffff 0%, var(--rack-action-wash) 100%);
 }
 
 .rack-panel--success {
@@ -373,7 +373,7 @@ h4 {
 
 .rack-empty-state {
   border: 2px solid #000;
-  background: linear-gradient(135deg, #ffffff 0%, var(--rack-sky-wash) 55%, var(--rack-amber-wash) 100%);
+  background: linear-gradient(135deg, #ffffff 0%, var(--rack-wash) 58%, var(--rack-action-wash) 100%);
   box-shadow: 5px 5px 0 var(--rack-panel-shadow);
   padding: clamp(1.25rem, 3vw, 2rem);
 }
@@ -390,7 +390,7 @@ h4 {
   justify-content: center;
   border: 2px solid #000;
   background: var(--rack-danger-wash);
-  color: #8f1f50;
+  color: var(--rack-danger);
   box-shadow: 3px 3px 0 var(--rack-panel-shadow);
   transition: transform 160ms ease-out, box-shadow 160ms ease-out;
 }
@@ -423,7 +423,7 @@ h4 {
   align-items: stretch;
   gap: 0.65rem;
   border: 3px solid #000;
-  background: var(--rack-sky-wash);
+  background: var(--rack-wash);
   box-shadow: 5px 5px 0 var(--rack-panel-shadow);
   padding: 0.5rem;
 }
@@ -432,7 +432,7 @@ h4 {
   min-height: 3.25rem;
   flex: 1 1 0;
   justify-content: center;
-  background: #fffdf8;
+  background: #fff;
   color: var(--rack-ink);
   font-size: 0.7rem;
   font-weight: 900;
@@ -441,7 +441,7 @@ h4 {
 }
 
 .rack-action-button-primary {
-  background: var(--rack-amber);
+  background: var(--rack-action);
   color: var(--rack-ink);
 }
 
@@ -519,6 +519,18 @@ h4 {
   body {
     @apply text-foreground;
     background:
-      linear-gradient(145deg, #f7f2f8 0%, #f7f4f8 44%, #edf5f9 100%);
+      linear-gradient(145deg, #f7f3f5 0%, #f5f1f6 52%, #eee7f1 100%);
   }
+}
+
+.guest-rack-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr));
+  gap: clamp(1rem, 2vw, 1.5rem);
+  align-items: start;
+}
+
+.guest-rack-grid .rack-item-card {
+  width: 100%;
+  max-width: 640px;
 }
