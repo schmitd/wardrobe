@@ -86,9 +86,9 @@ export default function ProfilePage() {
   return (
     <main className="mx-auto grid w-full max-w-[1320px] gap-6 px-4 py-8 lg:grid-cols-[1.1fr_1fr] lg:px-8">
       <section className="space-y-6">
-        <Card className="rack-panel rounded-none py-0">
+        <Card className="rack-panel rack-panel--sky rounded-none py-0">
           <CardContent className="px-0">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#9C92A3]">Personalization</p>
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#4e1e51]">Personalization</p>
           <h1 className="mt-2 text-4xl font-black uppercase tracking-tight text-[#310A31]">
             Style profile
           </h1>
@@ -98,7 +98,7 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        <Card className="rack-panel rounded-none py-0">
+        <Card className="rack-panel rack-panel--amber rounded-none py-0">
           <CardContent className="px-0">
           <label className="block text-xs font-black uppercase tracking-[0.16em] text-[#310A31]">
             Style bio
@@ -107,7 +107,7 @@ export default function ProfilePage() {
             value={bio}
             onChange={(event) => setBioDraft(event.target.value)}
             placeholder="I build around neutral layers, tailored fits, and statement outerwear..."
-            className="mt-3 h-48 w-full resize-none rounded-none border-4 border-black bg-white p-4 text-sm font-medium leading-relaxed text-slate-900"
+            className="mt-3 h-48 w-full resize-none rounded-none border-2 border-black bg-white p-4 text-sm font-medium leading-relaxed text-slate-900"
           />
 
           {saveStatus === 'error' && (
@@ -126,14 +126,14 @@ export default function ProfilePage() {
             type="button"
             onClick={handleSave}
             disabled={saveStatus === 'saving'}
-            className="mt-4 h-auto rounded-none border-4 border-black bg-[#310A31] px-5 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[6px_6px_0_#000] disabled:opacity-60"
+            className="mt-4 h-auto rounded-none border-2 border-black bg-[#EAC99A] px-5 py-3 text-xs font-black uppercase tracking-wide text-[#310A31] shadow-[4px_4px_0_rgb(0_0_0_/_0.18)] disabled:opacity-60"
           >
             {saveStatus === 'saving' ? 'Saving...' : 'Save profile'}
           </Button>
           </CardContent>
         </Card>
 
-        <Card className="rack-panel rounded-none py-0">
+        <Card className="rack-panel rack-panel--mint rounded-none py-0">
           <CardContent className="px-0">
           <div className="mb-4 flex items-center gap-2 text-[#310A31]">
             <Sparkles className="h-4 w-4" />
@@ -145,7 +145,7 @@ export default function ProfilePage() {
 
           {latestSelfie?.url ? (
             <>
-              <div className="border-4 border-black bg-white">
+              <div className="border-2 border-black bg-white">
                 <div className="relative aspect-[4/5] w-full overflow-hidden bg-slate-100">
                   <Image
                     src={latestSelfie.url}
@@ -158,7 +158,7 @@ export default function ProfilePage() {
                 </div>
               </div>
               <details className="mt-4">
-                <summary className="inline-flex cursor-pointer border-4 border-black bg-white px-4 py-3 text-xs font-black uppercase tracking-wide text-[#310A31] shadow-[6px_6px_0_#000]">
+                <summary className="inline-flex cursor-pointer border-2 border-black bg-white px-4 py-3 text-xs font-black uppercase tracking-wide text-[#310A31] shadow-[4px_4px_0_rgb(0_0_0_/_0.18)]">
                   Replace selfie
                 </summary>
                 <div className="mt-4">
@@ -202,7 +202,7 @@ export default function ProfilePage() {
         </Card>
       </section>
 
-      <Card className="rack-panel rounded-none py-0">
+      <Card className="rack-panel rack-panel--pink rounded-none py-0">
         <CardContent className="px-0">
           <h2 className="text-lg font-black uppercase tracking-wide text-[#310A31]">Account settings</h2>
           <p className="mt-2 text-sm font-medium text-slate-700">
@@ -213,7 +213,7 @@ export default function ProfilePage() {
             <Button
               type="button"
               onClick={() => clerk.openUserProfile()}
-              className="h-auto rounded-none border-4 border-black bg-[#310A31] px-5 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[6px_6px_0_#000]"
+              className="h-auto rounded-none border-2 border-black bg-[#EAC99A] px-5 py-3 text-xs font-black uppercase tracking-wide text-[#310A31] shadow-[4px_4px_0_rgb(0_0_0_/_0.18)]"
             >
               Manage account
             </Button>
@@ -221,7 +221,7 @@ export default function ProfilePage() {
               type="button"
               variant="outline"
               onClick={() => clerk.signOut({ redirectUrl: '/' })}
-              className="h-auto rounded-none border-4 border-black bg-white px-5 py-3 text-xs font-black uppercase tracking-wide text-[#310A31] shadow-[6px_6px_0_#000]"
+              className="h-auto rounded-none border-2 border-black bg-white px-5 py-3 text-xs font-black uppercase tracking-wide text-[#310A31] shadow-[4px_4px_0_rgb(0_0_0_/_0.18)]"
             >
               Sign out
             </Button>

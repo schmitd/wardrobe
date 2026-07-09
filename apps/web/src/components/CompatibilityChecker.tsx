@@ -21,7 +21,7 @@ export default function CompatibilityChecker() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
-      <div id="rack-uploader" className="rack-panel">
+      <div id="rack-uploader" className="rack-panel rack-panel--amber">
         <h2 className="text-3xl font-black uppercase tracking-tight text-[#310A31]">
           Does this fit your closet?
         </h2>
@@ -54,7 +54,7 @@ export default function CompatibilityChecker() {
         <>
           {result.evaluation ? (
             <section className="space-y-7">
-              <article className="rack-panel">
+              <article className="rack-panel rack-panel--sky">
                 <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                   <div>
                     <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-600">
@@ -69,7 +69,7 @@ export default function CompatibilityChecker() {
                   </div>
                 </div>
 
-                <div className="mt-5 border-2 border-black bg-[#c6b9cd] p-4 text-[#310A31]">
+                <div className="mt-5 border-2 border-black bg-[#EAC99A] p-4 text-[#310A31]">
                   <p className="text-xs font-bold uppercase tracking-[0.2em]">Candidate piece</p>
                   <p className="mt-2 text-sm font-semibold">{result.candidate.description}</p>
                   {result.candidate.style_tags.length > 0 && (
@@ -80,7 +80,7 @@ export default function CompatibilityChecker() {
                 </div>
               </article>
 
-              <article className="rack-panel">
+              <article className="rack-panel rack-panel--mint">
                 <h3 className="text-xl font-black uppercase tracking-tight text-[#310A31]">Best matches</h3>
                 {result.similarItems.length > 0 ? (
                   <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -110,7 +110,7 @@ export default function CompatibilityChecker() {
               </article>
 
               {result.dissimilarItems.length > 0 && (
-                <article className="rack-panel">
+                <article className="rack-panel rack-panel--pink">
                   <h3 className="text-xl font-black uppercase tracking-tight text-[#310A31]">
                     Potential clashes
                   </h3>

@@ -155,7 +155,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
 
   return (
     <section className="space-y-6">
-      <Card id="rack-uploader" className="rack-panel rounded-none py-0">
+      <Card id="rack-uploader" className="rack-panel rack-panel--amber rounded-none py-0">
         <div className="mb-5 flex flex-col gap-3 px-0 md:flex-row md:items-end md:justify-between">
           <div className="max-w-3xl">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#4e1e51]">Season Rack</p>
@@ -166,7 +166,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
               Upload a first batch of closet photos. We analyze the pieces, draft a style profile, and show the first rack cards before you create an account.
             </p>
           </div>
-          <p className="w-fit border-2 border-black bg-white px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-[#310A31]">
+          <p className="w-fit border-2 border-[#D43A7B] bg-white px-3 py-1 text-xs font-black uppercase tracking-[0.12em] text-[#310A31]">
             First batch free
           </p>
         </div>
@@ -186,7 +186,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
           type="button"
           onClick={() => fileInputRef.current?.click()}
           variant="secondary"
-          className="flex h-auto w-full min-w-0 flex-col items-start whitespace-normal rounded-none border-4 border-black bg-[#c6b9cd] px-4 py-7 text-left shadow-[8px_8px_0_#000] transition-transform hover:-translate-y-1 hover:bg-[#c6b9cd]/95 sm:px-6 sm:py-8"
+          className="flex h-auto w-full min-w-0 flex-col items-start whitespace-normal rounded-none border-2 border-black bg-[#96CFB7] px-4 py-7 text-left shadow-[5px_5px_0_rgb(0_0_0_/_0.18)] transition-transform hover:-translate-y-1 hover:bg-[#A7D9C5] sm:px-6 sm:py-8"
         >
           <p className="max-w-full text-base font-black uppercase leading-snug text-[#310A31] sm:text-lg">
             {isAnalyzing ? 'Analyzing your first batch...' : 'Upload photos from your closet'}
@@ -210,7 +210,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       {items.length > 0 && <div className="space-y-8">{rackCards}</div>}
 
       {demoComplete && (
-        <Card className="rack-panel rounded-none py-0">
+        <Card className="rack-panel rack-panel--sky rounded-none py-0">
           <CardContent className="px-0">
             <div className="mb-3 flex items-center gap-2">
               <Sparkles className="h-4 w-4" />
@@ -219,7 +219,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
             <Textarea
               value={bio}
               onChange={(event) => setBio(event.target.value)}
-              className="h-40 w-full resize-none rounded-none border-4 border-black bg-white p-4 text-sm leading-relaxed text-slate-900"
+              className="h-40 w-full resize-none rounded-none border-2 border-black bg-white p-4 text-sm leading-relaxed text-slate-900"
             />
             <p className="mt-3 text-xs font-medium uppercase tracking-wide text-slate-600">
               Edit this profile, then save it to your account.
@@ -229,7 +229,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
               <Button
                 type="button"
                 onClick={() => setShowSignupPrompt(true)}
-                className="h-auto w-full rounded-none border-4 border-black bg-[#310A31] px-5 py-3 text-sm font-black uppercase tracking-wide text-white shadow-[6px_6px_0_#000] sm:w-auto"
+                className="h-auto w-full rounded-none border-2 border-black bg-[#EAC99A] px-5 py-3 text-sm font-black uppercase tracking-wide text-[#310A31] shadow-[4px_4px_0_rgb(0_0_0_/_0.18)] sm:w-auto"
               >
                 Save my style profile
               </Button>
@@ -239,8 +239,8 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
             </div>
 
             {showSignupPrompt && (
-              <div className="mt-4 border-4 border-black bg-[#9C92A3] p-4">
-                <p className="text-sm font-semibold text-white">
+              <div className="mt-4 border-2 border-black bg-[#B5CEDE] p-4">
+                <p className="text-sm font-semibold text-[#310A31]">
                   Create your free account to save this closet profile, track your wardrobe, and continue comparisons.
                 </p>
                 <div className="mt-3">

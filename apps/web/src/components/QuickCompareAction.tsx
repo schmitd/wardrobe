@@ -99,7 +99,7 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
       />
 
       {showPanel && (
-        <Card id="rack-compare-result" className="rack-panel rounded-none py-0">
+        <Card id="rack-compare-result" className="rack-panel rack-panel--mint rounded-none py-0">
           <CardContent className="px-0">
           <div className="flex items-center gap-2 text-[#310A31]">
             <Sparkles className="h-4 w-4" />

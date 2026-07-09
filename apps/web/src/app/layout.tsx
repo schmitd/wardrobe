@@ -34,20 +34,20 @@ export default function RootLayout({
       appearance={{
         variables: {
           colorPrimary: "#310A31",
-          colorBackground: "#f6f1f8",
+          colorBackground: "#B5CEDE",
           colorInputBackground: "#ffffff",
-          colorText: "#1e293b",
-          colorNeutral: "#9C92A3",
+          colorText: "#310A31",
+          colorNeutral: "#96CFB7",
           borderRadius: "0px",
           fontFamily: "var(--font-body)",
         },
         elements: {
           modalBackdrop: "bg-black/60",
-          modalContent: "rounded-none border-4 border-black shadow-[10px_10px_0_#000]",
+          modalContent: "rounded-none border-2 border-black shadow-[5px_5px_0_rgb(0_0_0_/_0.18)]",
           card: "rounded-none border-2 border-black shadow-none",
           formFieldInput: "rounded-none border-2 border-black shadow-none",
           formButtonPrimary:
-            "rounded-none border-2 border-black bg-[#310A31] text-white shadow-[3px_3px_0_#000]",
+            "rounded-none border-2 border-black bg-[#EAC99A] text-[#310A31] shadow-[3px_3px_0_rgb(0_0_0_/_0.18)]",
           footer: "hidden",
         },
       }}

@@ -242,7 +242,7 @@ export default function Home() {
       <div className="mx-auto w-full max-w-[1320px] space-y-6 px-6 pb-16 pt-10 sm:px-8 lg:px-10">
         <section className="space-y-6">
           {importStatus && (
-            <div className="rack-panel rounded-none border-4 border-black bg-white px-5 py-4 text-sm font-semibold uppercase tracking-wide text-[#310A31]">
+            <div className="rack-panel rack-panel--sky rounded-none px-5 py-4 text-sm font-semibold uppercase tracking-wide text-[#310A31]">
               {importStatus}
             </div>
           )}

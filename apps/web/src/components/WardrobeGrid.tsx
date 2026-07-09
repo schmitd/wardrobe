@@ -83,7 +83,7 @@ export default function WardrobeGrid({
                     <Button
                         type="button"
                         onClick={onAddPiece}
-                        className="mt-5 h-auto rounded-none border-2 border-black bg-[#310A31] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-white shadow-[4px_4px_0_#000]"
+                        className="mt-5 h-auto rounded-none border-2 border-black bg-[#EAC99A] px-4 py-3 text-xs font-black uppercase tracking-[0.12em] text-[#310A31] shadow-[4px_4px_0_rgb(0_0_0_/_0.18)]"
                     >
                         Add first piece
                     </Button>
@@ -194,7 +194,7 @@ export default function WardrobeGrid({
                                             type="button"
                                             onClick={() => void handleDelete(item.id)}
                                             disabled={deletingId === item.id}
-                                            className="border-2 border-black bg-[#310A31] px-3 py-2 text-xs font-black uppercase text-white shadow-[3px_3px_0_#000] disabled:opacity-50"
+                                            className="border-2 border-black bg-[#310A31] px-3 py-2 text-xs font-black uppercase text-white shadow-[3px_3px_0_rgb(0_0_0_/_0.18)] disabled:opacity-50"
                                         >
                                             {deletingId === item.id ? "Removing..." : "Remove"}
                                         </button>

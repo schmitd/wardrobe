@@ -137,10 +137,10 @@ export default function ImageUploader({
     return (
         <div className="w-full">
             <div
-                className={`relative cursor-pointer border-4 border-black p-8 text-center transition-all duration-200 ease-in-out ${
+                className={`relative cursor-pointer border-2 border-black p-8 text-center transition-all duration-200 ease-in-out ${
                     isDragging
-                        ? 'bg-[#c6b9cd]'
-                        : 'bg-white hover:-translate-y-1 hover:shadow-[8px_8px_0_#000]'
+                        ? 'bg-[#96CFB7]'
+                        : 'bg-[#FFFDF8] hover:-translate-y-1 hover:shadow-[5px_5px_0_rgb(0_0_0_/_0.18)]'
                 }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
@@ -159,7 +159,7 @@ export default function ImageUploader({
                 />
 
                 <div className="flex min-w-0 flex-col items-center justify-center gap-4">
-                    <div className={`rounded-none border-2 border-black p-4 ${isDragging ? 'bg-white text-[#310A31]' : 'bg-[#9C92A3] text-white'}`}>
+                    <div className={`rounded-none border-2 border-black p-4 ${isDragging ? 'bg-white text-[#310A31]' : 'bg-[#B5CEDE] text-[#310A31]'}`}>
                         {uploading ? (
                             <Loader2 className="h-8 w-8 animate-spin" />
                         ) : (

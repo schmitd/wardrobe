@@ -10,6 +10,11 @@
   --rack-lilac: #9c92a3;
   --rack-blush: #c6b9cd;
   --rack-paper: #f6f1f8;
+  --rack-sky: #b5cede;
+  --rack-mint: #96cfb7;
+  --rack-pink: #d43a7b;
+  --rack-amber: #eac99a;
+  --rack-panel-shadow: rgb(0 0 0 / 0.18);
   --radius: 0rem;
   --background: #f6f1f8;
   --foreground: #310a31;
@@ -19,21 +24,21 @@
   --popover-foreground: #310a31;
   --primary: #310a31;
   --primary-foreground: #ffffff;
-  --secondary: #c6b9cd;
+  --secondary: #b5cede;
   --secondary-foreground: #310a31;
-  --muted: #ece4f0;
+  --muted: #e7f0eb;
   --muted-foreground: #4e1e51;
-  --accent: #e6dcec;
+  --accent: #eac99a;
   --accent-foreground: #310a31;
-  --destructive: #b42318;
+  --destructive: #d43a7b;
   --border: #000000;
   --input: #000000;
   --ring: #310a31;
   --chart-1: #310a31;
-  --chart-2: #9c92a3;
-  --chart-3: #c6b9cd;
+  --chart-2: #b5cede;
+  --chart-3: #96cfb7;
   --chart-4: #4e1e51;
-  --chart-5: #dccfdf;
+  --chart-5: #eac99a;
   --sidebar: #f6f1f8;
   --sidebar-foreground: #310a31;
   --sidebar-primary: #310a31;
@@ -104,10 +109,26 @@ h4 {
 }
 
 .rack-panel {
-  border: 4px solid #000;
-  background: linear-gradient(180deg, #ffffff 0%, #f8f2fb 100%);
-  box-shadow: 8px 8px 0 #000;
+  border: 2px solid #000;
+  background: linear-gradient(180deg, #ffffff 0%, #f9f4fb 100%);
+  box-shadow: 5px 5px 0 var(--rack-panel-shadow);
   padding: 1.25rem;
+}
+
+.rack-panel--sky {
+  background: linear-gradient(180deg, #f9fcfd 0%, var(--rack-sky) 100%);
+}
+
+.rack-panel--mint {
+  background: linear-gradient(180deg, #fbfffd 0%, #d7eee4 100%);
+}
+
+.rack-panel--amber {
+  background: linear-gradient(180deg, #fffdf9 0%, #f4dfbc 100%);
+}
+
+.rack-panel--pink {
+  background: linear-gradient(180deg, #fff8fb 0%, #f3bdd4 100%);
 }
 
 .rack-nav-link {
@@ -347,9 +368,9 @@ h4 {
 }
 
 .rack-empty-state {
-  border: 4px solid #000;
-  background: #fff;
-  box-shadow: 6px 6px 0 #000;
+  border: 2px solid #000;
+  background: linear-gradient(135deg, #ffffff 0%, #d7eee4 58%, #f4dfbc 100%);
+  box-shadow: 5px 5px 0 var(--rack-panel-shadow);
   padding: clamp(1.25rem, 3vw, 2rem);
 }
 
@@ -364,15 +385,15 @@ h4 {
   align-items: center;
   justify-content: center;
   border: 2px solid #000;
-  background: #fff;
+  background: #fff8fb;
   color: #b42318;
-  box-shadow: 3px 3px 0 #000;
+  box-shadow: 3px 3px 0 var(--rack-panel-shadow);
   transition: transform 160ms ease-out, box-shadow 160ms ease-out;
 }
 
 .wardrobe-item-action-button:hover {
   transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0 #000;
+  box-shadow: 4px 4px 0 var(--rack-panel-shadow);
 }
 
 .wardrobe-item-action-button:focus-visible {
@@ -398,8 +419,8 @@ h4 {
   align-items: stretch;
   gap: 0.65rem;
   border: 3px solid #000;
-  background: rgb(255 255 255 / 0.96);
-  box-shadow: 6px 6px 0 #000;
+  background: #b5cede;
+  box-shadow: 5px 5px 0 var(--rack-panel-shadow);
   padding: 0.5rem;
 }
 
@@ -407,7 +428,7 @@ h4 {
   min-height: 3.25rem;
   flex: 1 1 0;
   justify-content: center;
-  background: #fff;
+  background: #fffdf8;
   color: var(--rack-ink);
   font-size: 0.7rem;
   font-weight: 900;
@@ -416,8 +437,8 @@ h4 {
 }
 
 .rack-action-button-primary {
-  background: var(--rack-ink);
-  color: #fff;
+  background: var(--rack-amber);
+  color: var(--rack-ink);
 }
 
 .rack-action-button:hover {
@@ -493,6 +514,7 @@ h4 {
   }
   body {
     @apply text-foreground;
-    background: linear-gradient(165deg, #f7f2f8 0%, #efe8f3 100%);
+    background:
+      linear-gradient(145deg, #f7f2f8 0%, #eef6f3 38%, #f8ead0 72%, #edf5f9 100%);
   }
 }
