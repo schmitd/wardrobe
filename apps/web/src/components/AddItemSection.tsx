@@ -220,7 +220,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                 </div>
             )}
             {!isProcessing && status && (
-                <div className={`mt-4 border-2 border-black p-3 text-center font-semibold ${/fail|error/i.test(status) ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-800'}`}>
+                <div className={`mt-4 border-2 border-black p-3 text-center font-semibold ${/fail|error/i.test(status) ? 'bg-[#fbe6f0] text-[#8f1f50]' : 'bg-[#e6f5ee] text-[#1d5c42]'}`}>
                     {status}
                 </div>
             )}
