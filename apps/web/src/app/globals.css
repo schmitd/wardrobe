@@ -7,20 +7,21 @@
 :root {
   --rack-ink: #241426;
   --rack-ink-soft: #56345c;
-  --rack-shell: #cbb7cf;
-  --rack-shell-deep: #8f6f96;
-  --rack-paper: #f7f3f5;
+  --rack-shell: #d8c9dc;
+  --rack-shell-deep: #9d83a5;
+  --rack-paper: #fbf9fa;
   --rack-action: #dce66e;
   --rack-action-hover: #e7ef86;
-  --rack-wash: #eee7f1;
-  --rack-action-wash: #f5f7da;
+  --rack-wash: #f4eff6;
+  --rack-action-wash: #fafbe8;
   --rack-success: #3f7c5d;
   --rack-danger: #b93267;
   --rack-success-wash: #e8f3ec;
   --rack-danger-wash: #f8e6ee;
-  --rack-panel-shadow: rgb(0 0 0 / 0.18);
+  --rack-line: #3d2841;
+  --rack-panel-shadow: rgb(36 20 38 / 0.11);
   --radius: 0rem;
-  --background: #f7f3f5;
+  --background: #fbf9fa;
   --foreground: #241426;
   --card: #ffffff;
   --card-foreground: #241426;
@@ -28,28 +29,28 @@
   --popover-foreground: #241426;
   --primary: #241426;
   --primary-foreground: #ffffff;
-  --secondary: #eee7f1;
+  --secondary: #f4eff6;
   --secondary-foreground: #241426;
-  --muted: #eee7f1;
+  --muted: #f4eff6;
   --muted-foreground: #56345c;
   --accent: #f5f7da;
   --accent-foreground: #241426;
   --destructive: #b93267;
-  --border: #000000;
-  --input: #000000;
+  --border: #3d2841;
+  --input: #3d2841;
   --ring: #241426;
   --chart-1: #241426;
-  --chart-2: #cbb7cf;
+  --chart-2: #d8c9dc;
   --chart-3: #3f7c5d;
   --chart-4: #56345c;
   --chart-5: #dce66e;
-  --sidebar: #f7f3f5;
+  --sidebar: #fbf9fa;
   --sidebar-foreground: #241426;
   --sidebar-primary: #241426;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eee7f1;
+  --sidebar-accent: #f4eff6;
   --sidebar-accent-foreground: #241426;
-  --sidebar-border: #000000;
+  --sidebar-border: #3d2841;
   --sidebar-ring: #241426;
 }
 
@@ -113,9 +114,9 @@ h4 {
 }
 
 .rack-panel {
-  border: 2px solid #000;
+  border: 1px solid var(--rack-line);
   background: linear-gradient(180deg, #ffffff 0%, #fbf8fb 100%);
-  box-shadow: 5px 5px 0 var(--rack-panel-shadow);
+  box-shadow: 3px 3px 0 var(--rack-panel-shadow);
   padding: 1.25rem;
 }
 
@@ -140,7 +141,7 @@ h4 {
   width: 100%;
   align-items: center;
   gap: 0.5rem;
-  border: 2px solid #000;
+  border: 1px solid var(--rack-line);
   background: #fff;
   padding: 0.65rem 0.8rem;
   font-size: 0.72rem;
@@ -153,7 +154,7 @@ h4 {
 .rack-nav-link--active {
   background: var(--rack-ink);
   color: #fff;
-  box-shadow: 4px 4px 0 #000;
+  box-shadow: 3px 3px 0 var(--rack-panel-shadow);
 }
 
 .rack-item-card {
@@ -372,9 +373,9 @@ h4 {
 }
 
 .rack-empty-state {
-  border: 2px solid #000;
+  border: 1px solid var(--rack-line);
   background: linear-gradient(135deg, #ffffff 0%, var(--rack-wash) 58%, var(--rack-action-wash) 100%);
-  box-shadow: 5px 5px 0 var(--rack-panel-shadow);
+  box-shadow: 3px 3px 0 var(--rack-panel-shadow);
   padding: clamp(1.25rem, 3vw, 2rem);
 }
 
@@ -388,16 +389,16 @@ h4 {
   min-height: 2.75rem;
   align-items: center;
   justify-content: center;
-  border: 2px solid #000;
+  border: 1px solid var(--rack-line);
   background: var(--rack-danger-wash);
   color: var(--rack-danger);
-  box-shadow: 3px 3px 0 var(--rack-panel-shadow);
+  box-shadow: 2px 2px 0 var(--rack-panel-shadow);
   transition: transform 160ms ease-out, box-shadow 160ms ease-out;
 }
 
 .wardrobe-item-action-button:hover {
   transform: translate(-1px, -1px);
-  box-shadow: 4px 4px 0 var(--rack-panel-shadow);
+  box-shadow: 3px 3px 0 var(--rack-panel-shadow);
 }
 
 .wardrobe-item-action-button:focus-visible {
@@ -422,9 +423,9 @@ h4 {
   width: min(100%, 28rem);
   align-items: stretch;
   gap: 0.65rem;
-  border: 3px solid #000;
+  border: 1px solid var(--rack-line);
   background: var(--rack-wash);
-  box-shadow: 5px 5px 0 var(--rack-panel-shadow);
+  box-shadow: 3px 3px 0 var(--rack-panel-shadow);
   padding: 0.5rem;
 }
 
@@ -519,7 +520,7 @@ h4 {
   body {
     @apply text-foreground;
     background:
-      linear-gradient(145deg, #f7f3f5 0%, #f5f1f6 52%, #eee7f1 100%);
+      linear-gradient(145deg, #fbf9fa 0%, #f8f5f8 56%, #f3edf5 100%);
   }
 }
 

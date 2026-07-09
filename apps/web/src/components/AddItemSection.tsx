@@ -201,7 +201,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
     return (
         <div className="mb-8" id="rack-uploader">
             <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-2xl font-black uppercase tracking-tight text-[#241426]">Closet Rack</h2>
+                <h2 className="text-2xl font-extrabold text-[#241426]">Closet rack</h2>
             </div>
 
             <ImageUploader
@@ -214,13 +214,13 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
             />
 
             {isProcessing && (
-                <div className="mt-4 flex items-center justify-center gap-2 border-2 border-black bg-white p-3 text-[#241426]">
+                <div className="mt-4 flex items-center justify-center gap-2 border border-[var(--rack-line)] bg-white p-3 text-sm font-medium text-[#241426]">
                     <Loader2 className="animate-spin" />
                     <span>{status}</span>
                 </div>
             )}
             {!isProcessing && status && (
-                <div className={`mt-4 border-2 border-black p-3 text-center font-semibold ${/fail|error/i.test(status) ? 'bg-[#f8e6ee] text-[#b93267]' : 'bg-[#e8f3ec] text-[#3f7c5d]'}`}>
+                <div className={`mt-4 border border-[var(--rack-line)] p-3 text-center font-semibold ${/fail|error/i.test(status) ? 'bg-[#f8e6ee] text-[#b93267]' : 'bg-[#e8f3ec] text-[#3f7c5d]'}`}>
                     {status}
                 </div>
             )}

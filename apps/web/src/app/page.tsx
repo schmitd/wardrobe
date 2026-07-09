@@ -242,7 +242,7 @@ export default function Home() {
       <div className="mx-auto w-full max-w-[1320px] space-y-6 px-6 pb-16 pt-10 sm:px-8 lg:px-10">
         <section className="space-y-6">
           {importStatus && (
-            <div className="rack-panel rack-panel--shell rounded-none px-5 py-4 text-sm font-semibold uppercase tracking-wide text-[#241426]">
+            <div className="rack-panel rack-panel--shell rounded-none px-5 py-4 text-sm font-semibold text-[#241426]">
               {importStatus}
             </div>
           )}
@@ -274,7 +274,7 @@ export default function Home() {
             <Button
               type="button"
               onClick={() => triggerInput(uploadInputId, 'rack-uploader')}
-              className="rack-action-button rack-action-button-primary rounded-none border-2 border-black"
+              className="rack-action-button rack-action-button-primary rounded-none border border-[var(--rack-line)]"
             >
               <Plus className="h-4 w-4" />
               <span>Add piece</span>
@@ -283,7 +283,7 @@ export default function Home() {
               type="button"
               onClick={() => triggerInput(compareInputId, 'rack-uploader')}
               variant="outline"
-              className="rack-action-button rounded-none border-2 border-black"
+              className="rack-action-button rounded-none border border-[var(--rack-line)]"
             >
               <Sparkles className="h-4 w-4" />
               <span>Check fit</span>

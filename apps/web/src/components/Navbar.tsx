@@ -9,20 +9,20 @@ import { cn } from '@/lib/utils';
 
 const navClass = (active: boolean) =>
   cn(
-    'h-9 rounded-none border-2 border-black px-3 text-[11px] font-black uppercase tracking-[0.14em] shadow-[3px_3px_0_rgb(0_0_0_/_0.18)]',
+    'h-9 rounded-none border border-[var(--rack-line)] px-3 text-xs font-semibold shadow-[2px_2px_0_var(--rack-panel-shadow)]',
     active ? 'bg-[#241426] text-white hover:bg-[#241426]/95' : 'bg-white text-[#241426] hover:bg-[#DCE66E]'
   );
 
 export default function Navbar() {
   const pathname = usePathname();
   return (
-    <nav className="border-b-2 border-black bg-[#CBB7CF]">
+    <nav className="border-b border-[var(--rack-line)] bg-[#D8C9DC]">
       <div className="mx-auto flex w-full max-w-[1320px] items-center justify-between gap-4 px-4 py-4 lg:px-8">
         <Link href="/" className="inline-flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center border-2 border-black bg-[#DCE66E] text-[#241426] shadow-[3px_3px_0_rgb(0_0_0_/_0.18)]">
+          <span className="grid h-9 w-9 place-items-center border border-[var(--rack-line)] bg-[#DCE66E] text-[#241426] shadow-[2px_2px_0_var(--rack-panel-shadow)]">
             <Shirt className="h-4 w-4" />
           </span>
-          <span className="text-sm font-black uppercase tracking-[0.18em] text-[#241426]">Wardrobe</span>
+          <span className="text-sm font-extrabold text-[#241426]">Wardrobe</span>
         </Link>
 
         <div className="flex items-center gap-2">

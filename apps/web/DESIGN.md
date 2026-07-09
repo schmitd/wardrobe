@@ -16,7 +16,7 @@ Chalk paper: `#F7F3F5`
 - Page background and quiet product surfaces.
 - Use as the dominant neutral so rack item photo accents stay visually important.
 
-Mauve shell: `#CBB7CF`
+Mauve shell: `#D8C9DC`
 - App shell, navigation, low-emphasis support panels, neutral preview surfaces.
 - Use as the main non-rack color family when the app needs personality before uploads.
 
@@ -38,15 +38,15 @@ Rack item accents:
 
 ## Surfaces
 
-Use square, light app panels with `2px` black borders and a soft offset shadow around `5px 5px 0 rgb(0 0 0 / 0.18)`. Avoid the earlier heavy `4px` borders and hard `8px` black shadows except where a component is intentionally imitating physical rack material.
+Use square, light app panels with `1px` aubergine borders and a soft offset shadow around `3px 3px 0 rgb(36 20 38 / 0.11)`. The rack item card itself can keep a stronger illustrated outline because it is imitating physical rack material.
 
 Default panels are white to chalk. Support panels use mauve or citron washes. Green and pink washes are reserved for semantic success/danger areas only.
 
 ## Components
 
-Buttons remain square and direct. Primary non-destructive actions use citron with ink text. Destructive actions use ink or danger treatment with clear destructive copy. Avoid pill badges; metadata should read as compact garment notes, labels, or physical hang tags.
+Buttons remain square and direct. Primary non-destructive actions use citron with ink text, but app chrome should stay lighter than rack cards. Destructive actions use ink or danger treatment with clear destructive copy. Avoid pill badges; metadata should read as compact garment notes, labels, or physical hang tags.
 
-The guest demo starts with the closet bio, not a generic landing hero. Upload instructions sit as normal document structure, followed by a single clear `Add Clothes` button. The upload affordance should not be a large nested card or a disguised dropzone inside the hero.
+The guest demo starts with the closet bio concept, not a generic landing hero. Upload instructions sit as normal document structure, followed by a single clear `Add Clothes` button. Do not show an empty bio textarea before analysis; the editable bio appears only after the analysis has produced a draft.
 
 The bottom rack action stack should float above content like app controls, but should not obscure the rack. It should feel like a tool dock, not a marketing CTA cluster.
 
