@@ -1,184 +1,128 @@
 'use client';
 
 import Image from 'next/image';
-import { useMemo, useState } from 'react';
+import { ChangeEvent, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Camera, Shirt, Sparkles } from 'lucide-react';
-import ImageUploader, { type UploadedFile } from '@/components/ImageUploader';
-import { recordDailyFitCheckAction, recordTryOnFitCheckAction } from '@/app/actions/wardrobe';
+import { Camera, ImagePlus, Shirt, Sparkles } from 'lucide-react';
+import { getUploadUrlAction, recordDailyFitCheckAction, recordTryOnFitCheckAction } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
-import { Badge } from '@/components/ui/badge';
+import { userFacingErrorMessage } from '@/lib/userFacingError';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
 type FitCheckMode = 'daily_fit_check' | 'try_on';
 type FitCheckResult = Awaited<ReturnType<typeof recordDailyFitCheckAction>>;
 
-const modeCopy = {
-  daily_fit_check: {
-    label: 'Daily fit',
-    title: 'Record today',
-    uploadLabel: 'Upload daily fit',
-    icon: Camera,
-  },
-  try_on: {
-    label: 'Try-on',
-    title: 'Record try-on',
-    uploadLabel: 'Upload try-on',
-    icon: Shirt,
-  },
-} satisfies Record<FitCheckMode, { label: string; title: string; uploadLabel: string; icon: typeof Camera }>;
+const copy: Record<FitCheckMode, { title: string; description: string; icon: typeof Camera }> = {
+  daily_fit_check: { title: 'Fit check', description: 'Keep today’s outfit in your visual record.', icon: Camera },
+  try_on: { title: 'Try on', description: 'Capture a candidate before it earns a place in your closet.', icon: Shirt },
+};
+
+const dayKey = (date: Date | number) => {
+  const value = new Date(date);
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
+};
+
+function CaptureCard({ mode, active, onComplete }: { mode: FitCheckMode; active: boolean; onComplete: (mode: FitCheckMode, file: File) => void }) {
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const libraryRef = useRef<HTMLInputElement>(null);
+  const Icon = copy[mode].icon;
+  const onChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) onComplete(mode, file);
+  };
+
+  return (
+    <Card className={`rack-panel rounded-none py-0 ${active ? 'rack-panel--action' : 'rack-panel--shell'}`}>
+      <CardContent className="px-0">
+        <div className="flex items-center gap-2 text-[#241426]"><Icon className="h-4 w-4" /><h2 className="text-lg font-extrabold">{copy[mode].title}</h2></div>
+        <p className="mt-2 text-sm font-medium leading-relaxed text-[#56345c]">{copy[mode].description}</p>
+        <input ref={cameraRef} className="hidden" type="file" accept="image/*" capture="user" onChange={onChange} />
+        <input ref={libraryRef} className="hidden" type="file" accept="image/*" onChange={onChange} />
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Button type="button" onClick={() => cameraRef.current?.click()} className="h-10 rounded-none border border-[var(--rack-line)] bg-[#DCE66E] px-4 text-sm font-extrabold text-[#241426] shadow-[2px_2px_0_var(--rack-panel-shadow)]"><Camera className="h-4 w-4" /> Take photo</Button>
+          <Button type="button" variant="outline" onClick={() => libraryRef.current?.click()} className="h-10 rounded-none border border-[var(--rack-line)] bg-white px-4 text-sm font-semibold text-[#241426]"><ImagePlus className="h-4 w-4" /> Choose photo</Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function FitsPage() {
   const { isLoaded, isSignedIn } = useUser();
-  const fitChecks = useQuery(api.fitChecks.listFitChecks, isLoaded && isSignedIn ? { limit: 20 } : 'skip');
+  const searchParams = useSearchParams();
+  const focusedMode: FitCheckMode | null = searchParams.get('mode') === 'try_on' ? 'try_on' : searchParams.get('mode') === 'daily_fit_check' ? 'daily_fit_check' : null;
+  const fitChecks = useQuery(api.fitChecks.listFitChecks, isLoaded && isSignedIn ? { limit: 100 } : 'skip');
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [latestResult, setLatestResult] = useState<FitCheckResult | null>(null);
 
-  const groupedChecks = useMemo(() => fitChecks ?? [], [fitChecks]);
+  const dailyChecks = useMemo(() => (fitChecks ?? []).filter((check) => check.type === 'daily_fit_check'), [fitChecks]);
+  const checkByDay = useMemo(() => new Map(dailyChecks.map((check) => [dayKey(check.createdAt), check])), [dailyChecks]);
+  const days = useMemo(() => Array.from({ length: 84 }, (_, index) => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() - (83 - index));
+    return date;
+  }), []);
 
-  const recordFit = async (mode: FitCheckMode, uploads: UploadedFile[]) => {
-    if (uploads.length === 0) return;
-    const upload = uploads[0];
-    const trace = createTraceContext();
-    setStatus(`${modeCopy[mode].label} processing...`);
+  const record = async (mode: FitCheckMode, file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setError('Choose a photo file to continue.');
+      return;
+    }
+    setStatus(`${copy[mode].title} is being recorded…`);
     setError(null);
-
     try {
-      const result =
-        mode === 'daily_fit_check'
-          ? await recordDailyFitCheckAction({ storageId: upload.storageId, ...trace })
-          : await recordTryOnFitCheckAction({ storageId: upload.storageId, ...trace });
-
+      const uploadUrl = await getUploadUrlAction();
+      const upload = await fetch(uploadUrl, { method: 'POST', body: file });
+      if (!upload.ok) throw new Error(`Upload failed: ${upload.statusText}`);
+      const { storageId } = await upload.json();
+      if (!storageId) throw new Error('Upload response missing storageId.');
+      const trace = createTraceContext();
+      const result = mode === 'daily_fit_check'
+        ? await recordDailyFitCheckAction({ storageId, ...trace })
+        : await recordTryOnFitCheckAction({ storageId, ...trace });
       setLatestResult(result);
-      setStatus(`${modeCopy[mode].label} recorded.`);
-      setTimeout(() => setStatus(null), 3000);
+      setStatus(`${copy[mode].title} saved.`);
     } catch (caught) {
-      console.error('fit_check.record.failed', caught);
-      setError(caught instanceof Error ? caught.message : 'Fit check failed');
+      setError(userFacingErrorMessage(caught, 'Could not save this fit right now.'));
       setStatus(null);
     }
   };
 
-  if (!isLoaded) {
-    return <div className="p-8 text-sm font-semibold uppercase tracking-wide">Loading fits...</div>;
-  }
-
+  if (!isLoaded) return <div className="p-8 text-sm font-semibold">Loading fits…</div>;
   if (!isSignedIn) {
-    return (
-      <main className="mx-auto w-full max-w-[1320px] px-4 py-8 lg:px-8">
-        <Card className="rack-panel rounded-none py-0">
-          <CardContent className="px-0">
-            <h1 className="text-4xl font-black uppercase tracking-tight text-[#310A31]">Fits</h1>
-            <p className="mt-3 text-sm font-medium text-slate-700">Sign in to record outfit history.</p>
-          </CardContent>
-        </Card>
-      </main>
-    );
+    return <main className="mx-auto w-full max-w-[1320px] px-6 py-10 lg:px-10"><Card className="rack-panel rack-panel--shell rounded-none py-0"><CardContent className="px-0"><h1 className="text-4xl font-extrabold text-[#241426]">Fits</h1><p className="mt-3 text-sm font-medium text-[#56345c]">Sign in to keep a visual record of what you wear.</p></CardContent></Card></main>;
   }
 
   return (
-    <main className="mx-auto w-full max-w-[1320px] space-y-6 px-4 py-8 lg:px-8">
-      <section className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
-        <Card className="rack-panel rounded-none py-0">
-          <CardContent className="px-0">
-            <Badge variant="outline" className="rounded-none border-2 border-black bg-white px-2 py-0 text-[10px] font-bold tracking-[0.2em] text-[#9C92A3]">
-              Outfit Memory
-            </Badge>
-            <h1 className="mt-3 text-4xl font-black uppercase tracking-tight text-[#310A31]">Fits</h1>
-            <p className="mt-3 text-sm font-medium leading-relaxed text-slate-700">
-              Daily outfits and try-ons are recorded separately so the graph can tell worn history from acquisition intent.
-            </p>
-            {(status || error) && (
-              <div className={`mt-4 border-2 border-black p-3 text-sm font-semibold ${error ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-900'}`}>
-                {error ?? status}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+    <main className="mx-auto w-full max-w-[1320px] space-y-6 px-6 py-10 lg:px-10">
+      <section className="grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+        <Card className="rack-panel rack-panel--shell rounded-none py-0"><CardContent className="px-0"><p className="text-sm font-semibold text-[#56345c]">Outfit memory</p><h1 className="mt-2 text-4xl font-extrabold text-[#241426]">Fits</h1><p className="mt-3 max-w-lg text-sm font-medium leading-relaxed text-[#56345c]">A small visual record of the looks you lived in. Let the calendar fill in at its own pace.</p>{(status || error) && <p className={`mt-5 border p-3 text-sm font-semibold ${error ? 'border-[#B93267] bg-[var(--rack-danger-wash)] text-[#B93267]' : 'border-[var(--rack-line)] bg-[var(--rack-success-wash)] text-[#241426]'}`}>{error ?? status}</p>}</CardContent></Card>
+        <div className="grid gap-4 md:grid-cols-2"><CaptureCard mode="daily_fit_check" active={focusedMode === 'daily_fit_check'} onComplete={record} /><CaptureCard mode="try_on" active={focusedMode === 'try_on'} onComplete={record} /></div>
+      </section>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          {(['daily_fit_check', 'try_on'] as FitCheckMode[]).map((mode) => {
-            const Icon = modeCopy[mode].icon;
-            return (
-              <Card key={mode} className="rack-panel rounded-none py-0">
-                <CardContent className="px-0">
-                  <div className="mb-4 flex items-center gap-2 text-[#310A31]">
-                    <Icon className="h-4 w-4" />
-                    <h2 className="text-lg font-black uppercase tracking-wide">{modeCopy[mode].title}</h2>
-                  </div>
-                  <ImageUploader
-                    label={modeCopy[mode].uploadLabel}
-                    allowMultiple={false}
-                    enablePreview
-                    capture="environment"
-                    onUploadComplete={(uploads) => void recordFit(mode, uploads)}
-                  />
-                </CardContent>
-              </Card>
-            );
+      <section className="rack-panel rounded-none">
+        <div className="flex flex-wrap items-end justify-between gap-4"><div><h2 className="text-xl font-extrabold text-[#241426]">Your recent rhythm</h2><p className="mt-1 text-sm font-medium text-[#56345c]">Each photo marks a day you checked in.</p></div><span className="text-xs font-semibold text-[#56345c]">Last 12 weeks</span></div>
+        <div className="mt-5 grid grid-cols-12 gap-1.5 sm:gap-2" aria-label="Daily fit calendar">
+          {days.map((date) => {
+            const key = dayKey(date);
+            const check = checkByDay.get(key);
+            const today = key === dayKey(new Date());
+            const content = check?.imageUrl ? <Image src={check.imageUrl} alt={`Fit from ${date.toLocaleDateString()}`} fill sizes="72px" className="object-cover" /> : null;
+            return check ? <a key={key} href={`#fit-${String(check._id)}`} aria-label={`View fit from ${date.toLocaleDateString()}`} className={`relative aspect-square overflow-hidden border ${today ? 'border-[#241426] ring-2 ring-[#DCE66E] ring-offset-1' : 'border-[var(--rack-line)]'} bg-[var(--rack-wash)] hover:-translate-y-0.5`}>{content}</a> : <span key={key} aria-label={`${date.toLocaleDateString()}: no fit recorded`} className={`aspect-square border ${today ? 'border-[#241426] bg-[#DCE66E]' : 'border-[#d8c9dc] bg-[#fbf9fa]'}`} />;
           })}
         </div>
       </section>
 
-      {latestResult && (
-        <Card className="rack-panel rounded-none py-0">
-          <CardContent className="px-0">
-            <div className="mb-3 flex items-center gap-2 text-[#310A31]">
-              <Sparkles className="h-4 w-4" />
-              <h2 className="text-lg font-black uppercase tracking-wide">Latest transcription</h2>
-            </div>
-            <p className="text-sm font-semibold text-slate-800">{latestResult.transcription}</p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {latestResult.items.map((item) => (
-                <Badge key={String(item.id)} variant="outline" className="rounded-none border-2 border-black bg-white">
-                  {item.category ?? 'Item'} · {item.source.replaceAll('_', ' ')}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {latestResult && <Card className="rack-panel rack-panel--success rounded-none py-0"><CardContent className="px-0"><div className="flex items-center gap-2 text-[#241426]"><Sparkles className="h-4 w-4" /><h2 className="text-lg font-extrabold">Latest read</h2></div><p className="mt-3 text-sm font-medium leading-relaxed text-[#56345c]">{latestResult.transcription}</p></CardContent></Card>}
 
-      <section className="space-y-4">
-        <h2 className="text-2xl font-black uppercase tracking-tight text-[#310A31]">Recent fits</h2>
-        <div className="grid gap-4 lg:grid-cols-2">
-          {groupedChecks.map((fitCheck) => (
-            <article key={String(fitCheck._id)} className="border-4 border-black bg-white p-4 shadow-[6px_6px_0_#000]">
-              <div className="grid gap-4 sm:grid-cols-[160px_1fr]">
-                {fitCheck.imageUrl && (
-                  <div className="relative aspect-[4/5] overflow-hidden border-2 border-black bg-slate-100">
-                    <Image
-                      src={fitCheck.imageUrl}
-                      alt={fitCheck.transcription ?? fitCheck.type}
-                      fill
-                      sizes="160px"
-                      className="object-cover"
-                    />
-                  </div>
-                )}
-                <div className="min-w-0">
-                  <Badge variant="outline" className="rounded-none border-2 border-black bg-[#f3eef6]">
-                    {fitCheck.type.replaceAll('_', ' ')}
-                  </Badge>
-                  <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-800">
-                    {fitCheck.transcription ?? fitCheck.description ?? 'No transcription yet.'}
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {fitCheck.items.map((item) => (
-                      <Badge key={String(item._id)} variant="outline" className="rounded-none border-2 border-black bg-white text-[10px]">
-                        {item.category ?? 'Item'} · {item.source.replaceAll('_', ' ')}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+      <section><h2 className="text-xl font-extrabold text-[#241426]">Recent fits</h2><div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{(fitChecks ?? []).map((fitCheck) => <article id={`fit-${String(fitCheck._id)}`} key={String(fitCheck._id)} className="overflow-hidden border border-[var(--rack-line)] bg-white shadow-[3px_3px_0_var(--rack-panel-shadow)]"><div className="relative aspect-[4/3] bg-[var(--rack-wash)]">{fitCheck.imageUrl && <Image src={fitCheck.imageUrl} alt={fitCheck.transcription ?? fitCheck.type} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />}</div><div className="p-4"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#56345c]">{fitCheck.type === 'try_on' ? 'Try on' : 'Fit check'} · {new Date(fitCheck.createdAt).toLocaleDateString()}</p><p className="mt-2 text-sm font-medium leading-relaxed text-[#241426]">{fitCheck.transcription ?? fitCheck.description ?? 'No notes yet.'}</p></div></article>)}</div></section>
     </main>
   );
 }

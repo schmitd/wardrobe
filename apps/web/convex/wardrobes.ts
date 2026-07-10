@@ -88,6 +88,43 @@ export const listWardrobes = query({
   },
 });
 
+export const getWardrobeDetail = query({
+  args: { wardrobeId: v.id("wardrobes") },
+  handler: async (ctx, { wardrobeId }) => {
+    const userId = await getAuthenticatedUserId(ctx);
+    if (!userId) return null;
+
+    const wardrobe = await ctx.db.get(wardrobeId);
+    if (!wardrobe || wardrobe.userId !== userId) return null;
+
+    const memberships = await ctx.db
+      .query("wardrobeMemberships")
+      .withIndex("by_wardrobe", (q) => q.eq("wardrobeId", wardrobeId))
+      .collect();
+
+    const items = await Promise.all(
+      memberships.map(async (membership) => {
+        const item = await ctx.db.get(membership.itemId);
+        if (!item || item.userId !== userId) return null;
+        const imageUrl = await ctx.storage.getUrl(item.storageId);
+        if (!imageUrl) return null;
+        return {
+          ...membership,
+          item: {
+            id: item._id,
+            imageUrl,
+            category: item.category ?? null,
+            description: item.description ?? null,
+            styleTags: item.styleTags ?? null,
+          },
+        };
+      })
+    );
+
+    return { ...wardrobe, items: items.filter((item) => item !== null) };
+  },
+});
+
 export const createWardrobe = mutation({
   args: {
     name: v.string(),
@@ -226,11 +263,6 @@ export const addItemToWardrobe = mutation({
       });
     }
 
-    await ctx.db.patch(args.itemId, {
-      wardrobeId: args.wardrobeId,
-      updatedAt: timestamp,
-    });
-
     await enqueueWardrobeSync(ctx, {
       user,
       wardrobe: {
@@ -275,14 +307,6 @@ export const removeItemFromWardrobe = mutation({
 
     if (existing && existing.userId === userId) {
       await ctx.db.delete(existing._id);
-    }
-
-    const item = await ctx.db.get(args.itemId);
-    if (item?.userId === userId && item.wardrobeId === args.wardrobeId) {
-      await ctx.db.patch(args.itemId, {
-        wardrobeId: undefined,
-        updatedAt: now(),
-      });
     }
 
     return { success: true };

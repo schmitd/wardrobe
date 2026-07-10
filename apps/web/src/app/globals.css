@@ -420,7 +420,7 @@ h4 {
 .rack-action-stack-inner {
   pointer-events: auto;
   display: flex;
-  width: min(100%, 28rem);
+  width: min(100%, 39rem);
   align-items: stretch;
   gap: 0.65rem;
   border: 1px solid var(--rack-line);
@@ -501,7 +501,7 @@ h4 {
   }
 
   .rack-action-stack-inner {
-    width: min(100%, 22rem);
+    width: min(100%, 28rem);
   }
 
   .rack-action-button {

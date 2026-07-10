@@ -54,6 +54,16 @@ If the guest demo hits its free limit, interrupt the flow with a clear blocking 
 
 The bottom rack action stack should float above content like app controls, but should not obscure the rack. It should feel like a tool dock, not a marketing CTA cluster.
 
+The rack action stack contains `Add piece`, `Fit check`, and `Try on`. Use the citron action surface only for the primary add action; the two fit actions are quieter white controls. Do not use a generic “Check fit” label.
+
+## Fits And Collections
+
+The Fits page is a visual diary. Its calendar uses the user’s own outfit photos as the primary activity signal and leaves unrecorded days quiet. Avoid numerical streak counters, longest-streak language, progress badges, or other gamified score surfaces.
+
+Fit check and Try on are camera-first flows. Present `Take photo` and `Choose photo` controls; do not use a drag-and-drop target for a single outfit capture.
+
+Collections are named, user-described loci. Do not expose preset collection kinds. A collection member may be `Owned`, `Trying`, or `Inspiration`, and the user must be able to add, reclassify, and remove members directly. Keep membership controls compact and readable beside the photo rather than treating relationship labels as decorative badges.
+
 ## Accessibility
 
 Maintain WCAG 2.2 AA contrast. Body text should use ink or a dark hue-specific shade, never gray on colored backgrounds. Motion should be functional and respect reduced motion.

@@ -46,8 +46,12 @@ export default function RootLayout({
           modalContent: "rounded-none border border-[var(--rack-line)] shadow-[3px_3px_0_var(--rack-panel-shadow)]",
           card: "rounded-none border border-[var(--rack-line)] shadow-none",
           formFieldInput: "rounded-none border border-[var(--rack-line)] shadow-none",
+          formFieldLabel: "text-sm font-semibold text-[#241426]",
+          formFieldAction: "text-sm font-semibold text-[#56345c] hover:text-[#241426]",
           formButtonPrimary:
             "rounded-none border border-[var(--rack-line)] bg-[#DCE66E] text-[#241426] shadow-[2px_2px_0_var(--rack-panel-shadow)]",
+          userButtonPopoverCard: "rounded-none border border-[var(--rack-line)] shadow-[3px_3px_0_var(--rack-panel-shadow)]",
+          userButtonPopoverActionButton: "rounded-none text-[#241426] hover:bg-[#f4eff6]",
           footer: "hidden",
         },
       }}
