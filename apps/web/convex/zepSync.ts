@@ -2,22 +2,62 @@
 
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { internalAction } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { ensureTraceContext } from "./trace";
+import { getAuthenticatedUser } from "./authIdentity";
 import {
+  addCandidateComparisonMemory,
+  addFitCheckMemory,
+  addWardrobeCollectionMemory,
   addWardrobeItemCreatedMemory,
   addWardrobeItemsMemory,
   deleteUserMemory,
   deleteWardrobeItemMemory,
+  ensureWardrobeZepProject,
   updateProfileMemory,
 } from "./zep";
+
+const zepUser = v.optional(
+  v.object({
+    userId: v.string(),
+    email: v.optional(v.string()),
+    firstName: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    fullName: v.optional(v.string()),
+  })
+);
+
+const zepWardrobeItem = v.object({
+  itemId: v.optional(v.string()),
+  category: v.optional(v.union(v.string(), v.null())),
+  description: v.optional(v.union(v.string(), v.null())),
+  styleTags: v.optional(v.union(v.array(v.string()), v.null())),
+});
+
+const zepBoundingBox = v.optional(
+  v.object({
+    x: v.number(),
+    y: v.number(),
+    width: v.number(),
+    height: v.number(),
+  })
+);
 
 const redactUserId = (userId: string) =>
   userId.length <= 8 ? "[redacted]" : `${userId.slice(0, 4)}...${userId.slice(-4)}`;
 
+export const bootstrapProject = internalAction({
+  args: {},
+  handler: async () => {
+    await ensureWardrobeZepProject();
+    return { ok: true as const };
+  },
+});
+
 export const syncWardrobeAdd = internalAction({
   args: {
     userId: v.string(),
+    user: zepUser,
     itemId: v.id("wardrobeItems"),
     traceId: v.optional(v.string()),
     traceparent: v.optional(v.string()),
@@ -47,11 +87,16 @@ export const syncWardrobeAdd = internalAction({
 
     await addWardrobeItemsMemory(args.userId, [
       {
+        itemId: args.itemId,
         category: item.category ?? null,
         description: item.description ?? null,
         styleTags: item.styleTags ?? null,
+        wardrobeId: item.wardrobeId ?? null,
+        sourceFitCheckId: item.sourceFitCheckId ?? null,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
       },
-    ]);
+    ], args.user);
 
     return { skipped: false as const };
   },
@@ -60,6 +105,7 @@ export const syncWardrobeAdd = internalAction({
 export const syncWardrobeCreate = internalAction({
   args: {
     userId: v.string(),
+    user: zepUser,
     itemId: v.id("wardrobeItems"),
     traceId: v.optional(v.string()),
     traceparent: v.optional(v.string()),
@@ -92,7 +138,7 @@ export const syncWardrobeCreate = internalAction({
       clientFileName: item.clientFileName ?? null,
       contentType: item.contentType ?? null,
       createdAt: item.createdAt,
-    });
+    }, args.user);
 
     return { skipped: false as const };
   },
@@ -101,6 +147,7 @@ export const syncWardrobeCreate = internalAction({
 export const syncWardrobeDelete = internalAction({
   args: {
     userId: v.string(),
+    user: zepUser,
     description: v.string(),
     reason: v.string(),
     traceId: v.optional(v.string()),
@@ -115,16 +162,19 @@ export const syncWardrobeDelete = internalAction({
       reason: args.reason,
     });
 
-    await deleteWardrobeItemMemory(args.userId, args.description, args.reason);
+    await deleteWardrobeItemMemory(args.userId, args.description, args.reason, args.user);
   },
 });
 
 export const syncProfileUpdate = internalAction({
   args: {
     userId: v.string(),
+    user: zepUser,
     bio: v.optional(v.string()),
     skinTone: v.optional(v.string()),
+    complexion: v.optional(v.string()),
     hairColor: v.optional(v.string()),
+    colorSeason: v.optional(v.string()),
     traceId: v.optional(v.string()),
     traceparent: v.optional(v.string()),
   },
@@ -139,8 +189,144 @@ export const syncProfileUpdate = internalAction({
     await updateProfileMemory(args.userId, {
       bio: args.bio ?? null,
       skinTone: args.skinTone ?? null,
+      complexion: args.complexion ?? null,
       hairColor: args.hairColor ?? null,
+      colorSeason: args.colorSeason ?? null,
+    }, args.user);
+  },
+});
+
+export const syncWardrobeCollection = internalAction({
+  args: {
+    userId: v.string(),
+    user: zepUser,
+    wardrobeId: v.string(),
+    name: v.string(),
+    kind: v.string(),
+    description: v.optional(v.string()),
+    status: v.string(),
+    moodWords: v.optional(v.array(v.string())),
+    item: v.optional(zepWardrobeItem),
+    membershipKind: v.optional(v.string()),
+    rationale: v.optional(v.string()),
+    traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const { traceId, traceparent } = ensureTraceContext(args);
+    console.info("zep.sync.wardrobe_collection", {
+      traceId,
+      traceparent,
+      userId: redactUserId(args.userId),
+      wardrobeId: args.wardrobeId,
     });
+
+    await addWardrobeCollectionMemory(args.userId, {
+      wardrobeId: args.wardrobeId,
+      name: args.name,
+      kind: args.kind,
+      description: args.description ?? null,
+      status: args.status,
+      moodWords: args.moodWords ?? [],
+      item: args.item,
+      membershipKind: args.membershipKind,
+      rationale: args.rationale,
+    }, args.user);
+  },
+});
+
+export const syncFitCheck = internalAction({
+  args: {
+    userId: v.string(),
+    user: zepUser,
+    fitCheckId: v.string(),
+    type: v.union(
+      v.literal("daily_fit_check"),
+      v.literal("try_on"),
+      v.literal("candidate_fit_check")
+    ),
+    description: v.optional(v.string()),
+    transcription: v.optional(v.string()),
+    storageId: v.string(),
+    createdAt: v.number(),
+    items: v.array(
+      v.object({
+        wardrobeItemId: v.optional(v.string()),
+        source: v.union(
+          v.literal("matched_existing"),
+          v.literal("created_from_fit_check"),
+          v.literal("transcribed_only")
+        ),
+        category: v.optional(v.union(v.string(), v.null())),
+        description: v.optional(v.union(v.string(), v.null())),
+        styleTags: v.optional(v.union(v.array(v.string()), v.null())),
+        boundingBox: zepBoundingBox,
+        confidence: v.optional(v.number()),
+      })
+    ),
+    traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const { traceId, traceparent } = ensureTraceContext(args);
+    console.info("zep.sync.fit_check", {
+      traceId,
+      traceparent,
+      userId: redactUserId(args.userId),
+      fitCheckId: args.fitCheckId,
+      type: args.type,
+      itemCount: args.items.length,
+    });
+
+    await addFitCheckMemory(args.userId, {
+      fitCheckId: args.fitCheckId,
+      type: args.type,
+      description: args.description ?? null,
+      transcription: args.transcription ?? null,
+      storageId: args.storageId,
+      createdAt: args.createdAt,
+      items: args.items,
+    }, args.user);
+  },
+});
+
+export const syncCandidateComparison = action({
+  args: {
+    candidate: zepWardrobeItem,
+    storageId: v.optional(v.string()),
+    evaluation: v.optional(
+      v.union(
+        v.null(),
+        v.object({
+          score: v.number(),
+          explanation: v.string(),
+          best_pairings: v.array(v.number()),
+          worst_clashes: v.array(v.number()),
+        })
+      )
+    ),
+    similarItems: v.array(zepWardrobeItem),
+    dissimilarItems: v.array(zepWardrobeItem),
+    traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+    const { traceId, traceparent } = ensureTraceContext(args);
+    console.info("zep.sync.candidate_comparison", {
+      traceId,
+      traceparent,
+      userId: redactUserId(user.userId),
+    });
+
+    await addCandidateComparisonMemory(user.userId, {
+      candidate: args.candidate,
+      storageId: args.storageId,
+      evaluation: args.evaluation ?? null,
+      similarItems: args.similarItems,
+      dissimilarItems: args.dissimilarItems,
+    }, user);
   },
 });
 

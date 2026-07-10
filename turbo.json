@@ -8,6 +8,7 @@
         "NEXT_PUBLIC_CONVEX_URL",
         "CLERK_SECRET_KEY",
         "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+        "CLERK_JWT_TEMPLATE",
         "GEMINI_API_KEY",
         "ZEP_KEY",
         "AXIOM_TOKEN",
