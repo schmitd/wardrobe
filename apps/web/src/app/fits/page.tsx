@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { ChangeEvent, useMemo, useRef, useState } from 'react';
+import { ChangeEvent, Suspense, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { useQuery } from 'convex/react';
@@ -53,6 +53,14 @@ function CaptureCard({ mode, active, onComplete }: { mode: FitCheckMode; active:
 }
 
 export default function FitsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-sm font-semibold">Loading fits…</div>}>
+      <FitsContent />
+    </Suspense>
+  );
+}
+
+function FitsContent() {
   const { isLoaded, isSignedIn } = useUser();
   const searchParams = useSearchParams();
   const focusedMode: FitCheckMode | null = searchParams.get('mode') === 'try_on' ? 'try_on' : searchParams.get('mode') === 'daily_fit_check' ? 'daily_fit_check' : null;
