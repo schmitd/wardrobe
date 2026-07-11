@@ -279,7 +279,7 @@ const addFactTriple = async (
 const wardrobeSummaryInstructions = [
   {
     name: "wardrobe_style_identity_v1",
-    text: "Summarize wardrobe identity: silhouettes, colors, textures, roles, fit, lifestyle, and recurring tags.",
+    text: "Summarize wardrobe identity: silhouettes, colors, textures, roles, fit, lifestyle, and tags.",
   },
   {
     name: "wardrobe_temporal_profile_v1",
