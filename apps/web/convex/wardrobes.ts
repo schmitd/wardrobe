@@ -103,7 +103,8 @@ export const getWardrobeDetail = query({
       .collect();
 
     const items = await Promise.all(
-      memberships.map(async (membership) => {
+      memberships.filter((membership) => membership.itemId).map(async (membership) => {
+        if (!membership.itemId) return null;
         const item = await ctx.db.get(membership.itemId);
         if (!item || item.userId !== userId) return null;
         const imageUrl = await ctx.storage.getUrl(item.storageId);

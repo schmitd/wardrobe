@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
-import { Camera, Plus, Shirt } from 'lucide-react';
-import Link from 'next/link';
+import { Plus } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import AddItemSection from '@/components/AddItemSection';
 import GuestClosetDemo from '@/components/GuestClosetDemo';
 import WardrobeGrid from '@/components/WardrobeGrid';
+import RackFitActions from '@/components/RackFitActions';
 import {
   createWardrobeItemAction,
   getUploadUrlAction,
@@ -112,7 +112,7 @@ export default function Home() {
     // Preserve the guest bio as the signed-in profile draft.
     try {
       const trace = createTraceContext();
-      await updateProfileBioAction({ bio: snapshot.bio, ...trace });
+      await updateProfileBioAction({ bio: snapshot.bio, source: 'guest_import', ...trace });
     } catch {
       // Non-blocking; the user can still edit/save on Profile.
     }
@@ -277,18 +277,7 @@ export default function Home() {
               <Plus className="h-4 w-4" />
               <span>Add piece</span>
             </Button>
-            <Button asChild variant="outline" className="rack-action-button rounded-none border border-[var(--rack-line)]">
-              <Link href="/fits?mode=daily_fit_check">
-                <Camera className="h-4 w-4" />
-                <span>Fit check</span>
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="rack-action-button rounded-none border border-[var(--rack-line)]">
-              <Link href="/fits?mode=try_on">
-                <Shirt className="h-4 w-4" />
-                <span>Try on</span>
-              </Link>
-            </Button>
+            <RackFitActions />
           </div>
         </nav>
       )}

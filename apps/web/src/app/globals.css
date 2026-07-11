@@ -513,6 +513,60 @@ h4 {
   }
 }
 
+/* Keep Clerk's generated selectors from lowering auth-modal contrast. */
+.cl-card,
+.cl-modalContent {
+  color: #241426 !important;
+}
+
+.cl-headerTitle,
+.cl-socialButtonsBlockButtonText,
+.cl-formFieldLabel,
+.cl-identityPreviewText {
+  color: #241426 !important;
+}
+
+.cl-headerSubtitle,
+.cl-dividerText,
+.cl-footerActionText {
+  color: #56345c !important;
+}
+
+.cl-socialButtonsBlockButton {
+  border-color: #241426 !important;
+  background: #fff !important;
+  color: #241426 !important;
+  box-shadow: 2px 2px 0 var(--rack-panel-shadow) !important;
+}
+
+.cl-dividerLine {
+  background: #8d7692 !important;
+}
+
+.cl-formFieldInput {
+  border-color: #241426 !important;
+  background: #fff !important;
+  color: #241426 !important;
+}
+
+.cl-formFieldInput::placeholder {
+  color: #6e5a73 !important;
+  opacity: 1 !important;
+}
+
+.cl-formButtonPrimary {
+  border-color: #241426 !important;
+  background: #dce66e !important;
+  color: #241426 !important;
+}
+
+.cl-footerActionLink,
+.cl-formFieldAction,
+.cl-formResendCodeLink {
+  color: #241426 !important;
+  font-weight: 700 !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

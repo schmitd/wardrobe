@@ -5,8 +5,10 @@ import Image from 'next/image';
 import { useUser } from '@clerk/nextjs';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { ArrowRight, FolderHeart, Plus, X } from 'lucide-react';
+import { ArrowRight, ExternalLink, FolderHeart, Plus, X } from 'lucide-react';
 import { createTraceContext } from '@/lib/trace';
+import { refreshStyleBioAction } from '@/app/actions/wardrobe';
+import InspirationIntake from '@/components/InspirationIntake';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -27,6 +29,10 @@ export default function WardrobesPage() {
   );
   const detail = useQuery(
     api.wardrobes.getWardrobeDetail,
+    selectedLocus ? { wardrobeId: selectedLocus._id } : 'skip'
+  );
+  const inspirations = useQuery(
+    api.candidates.listInspirationByWardrobe,
     selectedLocus ? { wardrobeId: selectedLocus._id } : 'skip'
   );
 
@@ -62,6 +68,7 @@ export default function WardrobesPage() {
       setDescription('');
       setSelectedLocusId(String(result.id));
       setStatus('idle');
+      void refreshStyleBioAction().catch((refreshError) => console.warn('style_bio.background_refresh.failed', refreshError));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not create this locus');
       setStatus('error');
@@ -77,6 +84,13 @@ export default function WardrobesPage() {
       membershipKind,
       ...trace,
     });
+    void refreshStyleBioAction().catch((refreshError) => console.warn('style_bio.background_refresh.failed', refreshError));
+  };
+
+  const removeFromLocus = async (itemId: string) => {
+    if (!selectedLocus) return;
+    await removeItem({ wardrobeId: selectedLocus._id, itemId: itemId as never });
+    void refreshStyleBioAction().catch((refreshError) => console.warn('style_bio.background_refresh.failed', refreshError));
   };
 
   if (!isLoaded) return <div className="p-8 text-sm font-semibold">Loading collections…</div>;
@@ -102,8 +116,8 @@ export default function WardrobesPage() {
             <p className="text-sm font-semibold text-[#56345c]">Your point of view</p>
             <h1 className="mt-2 text-4xl font-extrabold text-[#241426]">Collections</h1>
             <p className="mt-3 max-w-xl text-sm font-medium leading-relaxed text-[#56345c]">
-              Make a collection for anything you want to explore. It can hold pieces you own, things you are trying,
-              and references that are shaping your next move.
+              Make a collection for anything you want to explore. Keep pieces you own beside references that are
+              shaping your next move.
             </p>
           </CardContent>
         </Card>
@@ -159,7 +173,12 @@ export default function WardrobesPage() {
                     <div className="flex items-center gap-2 text-[#241426]"><FolderHeart className="h-5 w-5" /><h2 className="text-2xl font-extrabold">{selectedLocus.name}</h2></div>
                     <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-[#56345c]">{selectedLocus.description || 'A collection you can shape as your point of view changes.'}</p>
                   </div>
-                  <span className="border border-[var(--rack-line)] bg-[var(--rack-wash)] px-3 py-1 text-xs font-semibold text-[#241426]">{detail?.items.length ?? 0} pieces</span>
+                  <div className="flex flex-wrap items-center gap-3"><span className="border border-[var(--rack-line)] bg-[var(--rack-wash)] px-3 py-1 text-xs font-semibold text-[#241426]">{detail?.items.length ?? 0} owned · {inspirations?.length ?? 0} inspiration</span><InspirationIntake collectionId={String(selectedLocus._id)} collectionName={selectedLocus.name} /></div>
+                </div>
+
+                <div className="border-t border-[var(--rack-line)] pt-6">
+                  <div className="flex items-end justify-between gap-3"><div><h3 className="text-base font-extrabold text-[#241426]">Inspiration</h3><p className="mt-1 text-sm font-medium text-[#56345c]">References shaping this point of view. These are never treated as owned pieces.</p></div><span className="text-xs font-semibold text-[#56345c]">{inspirations?.length ?? 0} saved</span></div>
+                  {(inspirations ?? []).length > 0 ? <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{(inspirations ?? []).map((item) => <article key={String(item._id)} className="overflow-hidden border border-[var(--rack-line)] bg-[var(--rack-action-wash)]"><div className="relative aspect-[4/3] bg-[var(--rack-wash)]">{item.imageUrl ? <Image src={item.imageUrl} alt={item.description ?? item.category ?? 'Saved inspiration'} fill sizes="(max-width: 768px) 50vw, 220px" className="object-cover" /> : <div className="grid h-full place-items-center text-[#56345c]"><ExternalLink className="h-5 w-5" /></div>}</div><div className="p-3"><p className="text-[10px] font-extrabold uppercase tracking-[.14em] text-[#56345c]">Inspiration · not owned</p><p className="mt-1 line-clamp-2 text-sm font-semibold text-[#241426]">{item.description ?? item.category ?? item.sourceUrl ?? 'Reference'}</p>{item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-[#241426] underline underline-offset-4">View source <ExternalLink className="h-3 w-3" /></a>}</div></article>)}</div> : <div className="mt-4 border border-dashed border-[var(--rack-line)] bg-[var(--rack-wash)] p-4 text-sm font-medium text-[#56345c]">Add a try-on, photo, or source URL to make this direction more concrete.</div>}
                 </div>
 
                 <div>
@@ -172,10 +191,10 @@ export default function WardrobesPage() {
                         <div className="space-y-3 p-3">
                           <p className="text-sm font-semibold text-[#241426]">{membership.item.category ?? 'Untitled piece'}</p>
                           <div className="flex items-center gap-2">
-                            <select aria-label={`Relationship for ${membership.item.category ?? 'item'}`} value={membership.membershipKind === 'included' ? 'owned' : membership.membershipKind} onChange={(event) => void addToLocus(String(membership.item.id), event.target.value)} className="min-h-9 flex-1 border border-[var(--rack-line)] bg-white px-2 text-xs font-semibold text-[#241426]">
-                              <option value="owned">Owned</option><option value="trying">Trying</option><option value="inspiration">Inspiration</option>
+                            <select aria-label={`Relationship for ${membership.item.category ?? 'item'}`} value={membership.membershipKind === 'owned' || membership.membershipKind === 'included' ? 'owned' : 'inspiration'} onChange={(event) => void addToLocus(String(membership.item.id), event.target.value)} className="min-h-9 flex-1 border border-[var(--rack-line)] bg-white px-2 text-xs font-semibold text-[#241426]">
+                              <option value="owned">Owned</option><option value="inspiration">Inspiration</option>
                             </select>
-                            <button type="button" aria-label={`Remove ${membership.item.category ?? 'item'} from collection`} onClick={() => void removeItem({ wardrobeId: selectedLocus._id, itemId: membership.item.id })} className="grid h-9 w-9 place-items-center border border-[var(--rack-line)] bg-white text-[#B93267] hover:bg-[var(--rack-danger-wash)]"><X className="h-4 w-4" /></button>
+                            <button type="button" aria-label={`Remove ${membership.item.category ?? 'item'} from collection`} onClick={() => void removeFromLocus(String(membership.item.id))} className="grid h-9 w-9 place-items-center border border-[var(--rack-line)] bg-white text-[#B93267] hover:bg-[var(--rack-danger-wash)]"><X className="h-4 w-4" /></button>
                           </div>
                         </div>
                       </article>

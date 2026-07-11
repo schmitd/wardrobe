@@ -1,6 +1,6 @@
 "use server";
 
-import { Effect } from "effect";
+import { Effect, Either } from "effect";
 import { SchemaType, type Schema } from "@google/generative-ai";
 import type { Id } from "@convex/_generated/dataModel";
 import { auth } from "@clerk/nextjs/server";
@@ -26,6 +26,7 @@ import {
   embedText,
   fetchImageBase64,
   parseJson,
+  toErrorMessage,
   toInferenceFailure,
   withRetries,
 } from "@/server/inference/shared";
@@ -78,6 +79,21 @@ const getConvexAuth = async () => {
   if (!token) throw new Error("Missing Convex token");
 
   return { userId, token, tier: resolveUserTier(has) };
+};
+
+const runBestEffort = async <A>(
+  event: string,
+  context: Record<string, string>,
+  operation: () => Promise<A>
+) => {
+  const outcome = await runServerAction(
+    Effect.tryPromise({ try: operation, catch: toErrorMessage }).pipe(Effect.either)
+  );
+  if (Either.isLeft(outcome)) {
+    console.warn(event, { ...context, message: outcome.left });
+    return undefined;
+  }
+  return outcome.right;
 };
 
 export const getUploadUrlAction = async () => {
@@ -137,6 +153,33 @@ const analyzeImageFull = (base64: string) =>
     };
   }).pipe(withRetries);
 
+const analyzeInspirationImage = (base64: string) =>
+  Effect.gen(function* () {
+    const gemini = yield* GeminiService;
+    const schema: Schema = {
+      type: SchemaType.OBJECT,
+      properties: {
+        style_tags: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+        category: { type: SchemaType.STRING },
+        description: { type: SchemaType.STRING },
+      },
+      required: ["category", "description", "style_tags"],
+    };
+    const prompt = `Read this image as a mood-board reference for a personal wardrobe.
+- Do not merely inventory garments or products.
+- Infer the broader visual language: silhouette, proportion, texture, palette, mood, setting, and social or cultural associations when visible.
+- Return JSON in this exact order: style_tags, category, description.
+- style_tags: 4-6 associative labels, each at most 3 words.
+- category: a concise reference type, not a retail product title.
+- description: at most ${ITEM_DESCRIPTION_WORD_LIMIT} words; describe what this image could contribute to a future outfit or collection.`;
+    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+      contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { data: base64, mimeType: "image/jpeg" } }] }],
+      generationConfig: { responseMimeType: "application/json", responseSchema: schema, maxOutputTokens: DESCRIPTION_MAX_OUTPUT_TOKENS + STYLE_LABEL_MAX_OUTPUT_TOKENS },
+    });
+    const parsed = yield* parseJson<{ category: string; description: string; style_tags: string[] }>(result.response.text(), "analyzeInspirationImage");
+    return { category: truncateWords(parsed.category, 6), description: truncateWords(parsed.description, ITEM_DESCRIPTION_WORD_LIMIT), style_tags: sanitizeStyleTags(parsed.style_tags) };
+  }).pipe(withRetries);
+
 const generateStyleQuery = (description: string, styleTags: string[]) =>
   Effect.gen(function* () {
     const gemini = yield* GeminiService;
@@ -152,6 +195,7 @@ const evaluateCompatibility = (input: {
   candidate: { category: string; description: string; style_tags: string[] };
   similarItems: { category: string | null; description: string | null; similarity: number }[];
   dissimilarItems: { category: string | null; description: string | null; similarity: number }[];
+  memoryContext: Array<{ fact: string; relation: string; relevance: number | null }>;
 }) =>
   Effect.gen(function* () {
     const gemini = yield* GeminiService;
@@ -176,6 +220,11 @@ const evaluateCompatibility = (input: {
 
 CANDIDATE ITEM:
 ${JSON.stringify(input.candidate)}
+
+WARDROBE MEMORY (saved preferences, collections, and prior comparisons):
+${input.memoryContext.length > 0
+  ? input.memoryContext.map((entry) => `- [${entry.relation}] ${entry.fact}`).join("\n")
+  : "No relevant long-term wardrobe memory found."}
 
 WARDROBE ITEMS (Most Compatible):
 ${input.similarItems.length > 0
@@ -242,13 +291,12 @@ const analyzeSelfie = (base64: string) =>
         complexion: { type: SchemaType.STRING },
         hair_color: { type: SchemaType.STRING },
         color_season: { type: SchemaType.STRING },
-        bio: { type: SchemaType.STRING },
       },
-      required: ["skin_tone", "complexion", "hair_color", "color_season", "bio"],
+      required: ["skin_tone", "complexion", "hair_color", "color_season"],
     };
 
     const prompt =
-      "Analyze this selfie for fashion profiling. Extract approximate skin tone (e.g., Fair, Medium, Deep), complexion/undertone notes, hair color, and likely color season. Also suggest a short professional style bio. Return JSON: { skin_tone, complexion, hair_color, color_season, bio }.";
+      "Analyze only visible color characteristics that can help coordinate clothing. Extract approximate skin tone, complexion/undertone notes, hair color, and a tentative color season. Do not infer profession, personality, lifestyle, gender identity, or style taste from the face. Return JSON: { skin_tone, complexion, hair_color, color_season }.";
 
     const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
       contents: [
@@ -271,7 +319,6 @@ const analyzeSelfie = (base64: string) =>
       complexion: string;
       hair_color: string;
       color_season: string;
-      bio: string;
     }>(
       result.response.text(),
       "analyzeSelfie"
@@ -436,6 +483,46 @@ ${items
     return yield* parseJson<{ bio: string }>(result.response.text(), "generateClosetBio");
   }).pipe(withRetries);
 
+const generateMaintainedStyleBio = (input: {
+  currentBio: string;
+  manualAnchor: string;
+  refreshReason: string;
+  closetItems: { category: string | null; description: string | null; styleTags: string[] }[];
+  recentFits: { type: string; description: string | null; createdAt: number }[];
+  collections: { name: string; description: string | null; memberCount: number }[];
+  graphFacts: string[];
+}) => Effect.gen(function* () {
+  const gemini = yield* GeminiService;
+  const schema: Schema = {
+    type: SchemaType.OBJECT,
+    properties: { bio: { type: SchemaType.STRING } },
+    required: ["bio"],
+  };
+  const prompt = `You maintain a living first-person style notebook for one person. Write 45-90 words about how they actually dress and what they are exploring.
+
+Rules:
+- Treat MANUAL ANCHOR as the user's own words. Preserve its voice, commitments, and specific preferences unless newer evidence directly contradicts them.
+- Make an incremental edit to CURRENT BIO. Do not churn phrasing merely to sound fresh.
+- Ground every claim in the supplied closet, fit diary, collections, or graph facts. Empty evidence means an honest starter note about building the closet, not invented taste.
+- Describe clothing, color, silhouette, texture, repetition, outfit habits, and open style questions. Never sound like LinkedIn, a résumé, a brand manifesto, or a personality assessment.
+- Never infer profession, status, competence, gender identity, or lifestyle from a selfie or appearance.
+- Do not mention AI, graphs, data, uploads, or this prompt.
+
+REFRESH REASON: ${input.refreshReason}
+CURRENT BIO: ${input.currentBio || "(none yet)"}
+MANUAL ANCHOR: ${input.manualAnchor || "(none yet)"}
+CLOSET: ${JSON.stringify(input.closetItems)}
+RECENT FITS: ${JSON.stringify(input.recentFits)}
+COLLECTIONS: ${JSON.stringify(input.collections)}
+GRAPH FACTS: ${JSON.stringify(input.graphFacts)}`;
+
+  const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: { responseMimeType: "application/json", responseSchema: schema },
+  });
+  return yield* parseJson<{ bio: string }>(result.response.text(), "generateMaintainedStyleBio");
+}).pipe(withRetries);
+
 const cosineSimilarity = (a: number[], b: number[]) => {
   let dot = 0;
   let normA = 0;
@@ -590,6 +677,7 @@ export const deleteWardrobeItemAction = async (input: {
 
 export const updateProfileBioAction = async (input: {
   bio: string;
+  source?: "manual" | "guest_import";
   traceId?: string;
   traceparent?: string;
 }) => {
@@ -598,7 +686,7 @@ export const updateProfileBioAction = async (input: {
 
   await fetchMutation(
     api.profile.updateBio,
-    { bio: input.bio, traceId, traceparent },
+    { bio: input.bio, ...(input.source ? { source: input.source } : {}), traceId, traceparent },
     { token }
   );
 
@@ -682,6 +770,13 @@ export const checkCompatibilityForAuth = async (
     )
   );
 
+  let memoryContext: Array<{ fact: string; relation: string; relevance: number | null }> = [];
+  try {
+    memoryContext = await fetchAction(api.zepSync.searchStyleContext, { query: styleQuery, traceId, traceparent }, { token });
+  } catch (error) {
+    console.warn("zep.search.style_context.failed", { traceId, traceparent, userId, message: error instanceof Error ? error.message : String(error) });
+  }
+
   const embedding = await runServerAction(
     embedText(styleQuery).pipe(Effect.provide(GeminiLive))
   );
@@ -749,8 +844,24 @@ export const checkCompatibilityForAuth = async (
     .map(hydrate)
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
+  const rememberTryOn = (description: string) => fetchMutation(
+    api.fitChecks.recordFitCheck,
+    {
+      storageId: input.storageId as Id<"_storage">,
+      type: "try_on" as const,
+      description,
+      transcription: candidate.description,
+      items: [{ source: "transcribed_only" as const, category: candidate.category, description: candidate.description, styleTags: candidate.style_tags }],
+      traceId,
+      traceparent,
+    },
+    { token }
+  );
+
   if (hydratedSimilar.length === 0 && hydratedDissimilar.length === 0) {
-    try {
+    const message = "This piece opens a new direction. There is no close closet anchor yet, but it does not directly clash with what you own.";
+    const fitCheck = await rememberTryOn(message);
+    if (fitCheck.created) try {
       await fetchAction(
         api.zepSync.syncCandidateComparison,
         {
@@ -778,12 +889,13 @@ export const checkCompatibilityForAuth = async (
     }
 
     return {
+      storageId: input.storageId,
+      fitCheckId: fitCheck.id,
       candidate,
       similarItems: [],
       dissimilarItems: [],
       evaluation: null,
-      message:
-        "The item does not relate to any pieces in your wardrobe, but it also does not clash with existing items.",
+      message,
     };
   }
 
@@ -800,10 +912,12 @@ export const checkCompatibilityForAuth = async (
         description: entry.description,
         similarity: entry.similarity,
       })),
+      memoryContext,
     }).pipe(Effect.provide(GeminiLive))
   );
 
-  try {
+  const fitCheck = await rememberTryOn(evaluation.explanation);
+  if (fitCheck.created) try {
     await fetchAction(
       api.zepSync.syncCandidateComparison,
       {
@@ -841,6 +955,8 @@ export const checkCompatibilityForAuth = async (
   }
 
   return {
+    storageId: input.storageId,
+    fitCheckId: fitCheck.id,
     candidate,
     similarItems: hydratedSimilar,
     dissimilarItems: hydratedDissimilar,
@@ -853,6 +969,94 @@ export const checkCompatibilityAction = async (input: {
   traceId?: string;
   traceparent?: string;
 }) => checkCompatibilityForAuth(await getConvexAuth(), input);
+
+const normalizeSourceUrl = (value?: string) => {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  const url = new URL(trimmed);
+  if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Source URL must use http or https");
+  return url.toString();
+};
+
+export const saveInspirationForAuth = async (
+  authContext: ConvexAuthContext,
+  input: {
+    wardrobeId: string; storageId?: string; sourceUrl?: string; sourceLabel?: string;
+    note?: string; candidate?: { category: string; description: string; style_tags: string[] };
+    traceId?: string; traceparent?: string;
+  }
+) => {
+  const { userId, token, tier } = authContext;
+  const { traceId, traceparent } = ensureTraceContext(input);
+  const sourceUrl = normalizeSourceUrl(input.sourceUrl);
+  if (!input.storageId && !sourceUrl) throw new Error("Add an image or source URL");
+  const candidate = input.candidate;
+  if (input.storageId) {
+    await fetchMutation(api.storage.registerUpload, { storageId: input.storageId as Id<"_storage">, purpose: "inspiration" }, { token });
+  }
+  const description = input.note?.trim() || candidate?.description || sourceUrl || "Saved visual reference";
+  const category = candidate?.category || "Visual reference";
+  const styleTags = candidate?.style_tags ?? [];
+  const embedding = candidate
+    ? await runServerAction(embedText(`${category} ${description} ${styleTags.join(" ")}`).pipe(Effect.provide(GeminiLive)))
+    : undefined;
+  const saved = await fetchMutation(api.candidates.createInspiration, {
+    wardrobeId: input.wardrobeId as Id<"wardrobes">,
+    ...(input.storageId ? { storageId: input.storageId as Id<"_storage"> } : {}),
+    ...(sourceUrl ? { sourceUrl } : {}),
+    ...(input.sourceLabel?.trim() ? { sourceLabel: input.sourceLabel.trim() } : {}),
+    category, description, styleTags, ...(embedding ? { embedding } : {}), traceId, traceparent,
+  }, { token });
+  if (!candidate && input.storageId) {
+    await runBestEffort("inspiration.enrichment.failed", { traceId, userId }, async () => {
+      await enforceAuthenticatedProtection({ scope: "inference", tier, userId });
+      const imageUrl = await fetchQuery(api.storage.getStorageUrl, { storageId: input.storageId as Id<"_storage"> }, { token });
+      if (!imageUrl) throw new Error("Uploaded file missing");
+      const analysis = await runServerAction(analyzeInspirationImage(await fetchImageBase64(imageUrl)).pipe(Effect.provide(GeminiLive)));
+      const semanticEmbedding = await runServerAction(embedText(`${analysis.category} ${analysis.description} ${analysis.style_tags.join(" ")}`).pipe(Effect.provide(GeminiLive)));
+      await fetchMutation(api.candidates.enrichInspiration, {
+        candidateItemId: saved.id,
+        category: analysis.category,
+        description: analysis.description,
+        styleTags: analysis.style_tags,
+        embedding: semanticEmbedding,
+        traceId,
+        traceparent,
+      }, { token });
+    });
+  }
+  return saved;
+};
+
+export const saveInspirationAction = async (input: Parameters<typeof saveInspirationForAuth>[1]) =>
+  saveInspirationForAuth(await getConvexAuth(), input);
+
+export const enrichInspirationAction = async (input: {
+  candidateItemId: string;
+  storageId: string;
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { userId, token, tier } = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+  const enriched = await runBestEffort("inspiration.enrichment.failed", { traceId, userId }, async () => {
+    await enforceAuthenticatedProtection({ scope: "inference", tier, userId });
+    const imageUrl = await fetchQuery(api.storage.getStorageUrl, { storageId: input.storageId as Id<"_storage"> }, { token });
+    if (!imageUrl) throw new Error("Uploaded file missing");
+    const analysis = await runServerAction(analyzeInspirationImage(await fetchImageBase64(imageUrl)).pipe(Effect.provide(GeminiLive)));
+    const embedding = await runServerAction(embedText(`${analysis.category} ${analysis.description} ${analysis.style_tags.join(" ")}`).pipe(Effect.provide(GeminiLive)));
+    return fetchMutation(api.candidates.enrichInspiration, {
+      candidateItemId: input.candidateItemId as Id<"candidateItems">,
+      category: analysis.category,
+      description: analysis.description,
+      styleTags: analysis.style_tags,
+      embedding,
+      traceId,
+      traceparent,
+    }, { token });
+  });
+  return enriched ?? { success: false as const };
+};
 
 export const analyzeSelfieForAuth = async (
   authContext: Pick<ConvexAuthContext, "userId" | "token">,
@@ -891,7 +1095,6 @@ export const analyzeSelfieForAuth = async (
   await fetchMutation(
     api.profile.updateProfileAttributes,
     {
-      bio: analysis.bio,
       skinTone: analysis.skin_tone,
       hairColor: analysis.hair_color,
       ...(analysis.complexion ? { complexion: analysis.complexion } : {}),
@@ -904,6 +1107,55 @@ export const analyzeSelfieForAuth = async (
 
   console.info("selfie.analyze.complete", { traceId, traceparent, userId });
   return analysis;
+};
+
+export const refreshStyleBioAction = async (input: {
+  force?: boolean;
+  traceId?: string;
+  traceparent?: string;
+} = {}) => {
+  const { token } = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+  const context = await fetchQuery(api.profile.getStyleBioContext, {}, { token });
+  if (!context) throw new Error("Unauthorized");
+  if (!input.force && !context.shouldRefresh) {
+    return { updated: false as const, reason: context.refreshReason, bio: context.profile?.bio ?? "" };
+  }
+
+  let graphFacts: string[] = [];
+  try {
+    graphFacts = await fetchAction(api.zepSync.getStyleBioGraphContext, {}, { token });
+  } catch (error) {
+    console.warn("style_bio.graph_context.unavailable", { traceId, message: toErrorMessage(error) });
+  }
+
+  const currentBio = context.profile?.bio ?? "";
+  const manualAnchor = context.profile?.bioManualAnchor ?? "";
+  const generated = context.counts.closetItemCount === 0 && context.counts.fitCheckCount === 0 && context.counts.collectionCount === 0
+    ? { bio: manualAnchor || currentBio || "I'm building a clearer picture of what I like to wear. As my closet and outfit notes grow, this space will track the colors, shapes, textures, and combinations I return to without guessing ahead of the evidence." }
+    : await runServerAction(generateMaintainedStyleBio({
+        currentBio,
+        manualAnchor,
+        refreshReason: context.refreshReason,
+        closetItems: context.closetItems,
+        recentFits: context.recentFits,
+        collections: context.collections,
+        graphFacts,
+      }).pipe(Effect.provide(GeminiLive)));
+
+  const saved = await fetchMutation(api.profile.saveGeneratedBio, {
+    bio: truncateWords(generated.bio, 110),
+    reason: context.refreshReason,
+    contextFingerprint: context.fingerprint,
+    ...context.counts,
+    ...(context.profile?.bioRevisionId ? { baseRevisionId: context.profile.bioRevisionId } : {}),
+    traceId,
+    traceparent,
+  }, { token });
+
+  return saved.success
+    ? { updated: true as const, reason: context.refreshReason, bio: generated.bio }
+    : { updated: false as const, reason: saved.reason, bio: context.profile?.bio ?? "" };
 };
 
 export const analyzeSelfieAction = async (input: {

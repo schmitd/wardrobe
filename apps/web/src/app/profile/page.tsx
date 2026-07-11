@@ -1,13 +1,13 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useClerk, useUser } from '@clerk/nextjs';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import Image from 'next/image';
 import { Sparkles } from 'lucide-react';
 import ImageUploader, { type UploadedFile } from '@/components/ImageUploader';
-import { analyzeSelfieAction, updateProfileBioAction } from '@/app/actions/wardrobe';
+import { analyzeSelfieAction, refreshStyleBioAction, updateProfileBioAction } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -33,6 +33,21 @@ export default function ProfilePage() {
     hairColor: string;
     colorSeason?: string;
   } | null>(null);
+  const refreshAttempted = useRef(false);
+
+  useEffect(() => {
+    if (!isSignedIn || profile === undefined || refreshAttempted.current) return;
+    refreshAttempted.current = true;
+    void refreshStyleBioAction()
+      .then((result) => {
+        if (result.updated) setBioDraft(result.bio);
+        setSaveStatus(result.updated ? 'success' : 'idle');
+      })
+      .catch((error) => {
+        console.error('style_bio.refresh.failed', error);
+        setSaveStatus('idle');
+      });
+  }, [isSignedIn, profile]);
 
   const bio = useMemo(() => bioDraft ?? profile?.bio ?? '', [bioDraft, profile]);
   const analysisResult = useMemo(() => {
@@ -70,7 +85,6 @@ export default function ProfilePage() {
         storageId: uploads[0].storageId,
         ...trace,
       });
-      setBioDraft(result.bio);
       setAnalysisOverride({
         skinTone: result.skin_tone,
         complexion: result.complexion,
@@ -159,7 +173,7 @@ export default function ProfilePage() {
             <h2 className="text-lg font-extrabold">Color and fit profile</h2>
           </div>
           <p className="mb-4 text-sm font-medium text-slate-700">
-            Upload a selfie to refresh your tone profile and style summary.
+            Upload a selfie to refresh color notes. Your style bio is maintained from your closet, fits, collections, and your own edits.
           </p>
 
           {latestSelfie?.url ? (

@@ -2,7 +2,8 @@
 
 import { useState, useRef } from 'react';
 import { Effect, Layer } from 'effect';
-import { CloudUpload, AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle, ImagePlus, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { getUploadUrlAction } from '@/app/actions/wardrobe';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { ImageUploadService, makeImageUploadLayer } from '@/services/ImageUploadService';
@@ -34,7 +35,6 @@ export default function ImageUploader({
     uploadLayer,
     hiddenTriggerOnly = false,
 }: ImageUploaderProps) {
-    const [isDragging, setIsDragging] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -44,30 +44,6 @@ export default function ImageUploader({
     // Determine label based on allowMultiple if not explicitly provided
     const displayLabel = label || (allowMultiple ? "Upload Images" : "Upload Image");
 
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(true);
-    };
-
-    const handleDragLeave = (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-    };
-
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        setIsDragging(false);
-        setError(null);
-
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            if (!allowMultiple && e.dataTransfer.files.length > 1) {
-                setError("Please upload a single image for this feature.");
-                return;
-            }
-            handleFiles(Array.from(e.dataTransfer.files));
-        }
-    };
-
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files.length > 0) {
             handleFiles(Array.from(e.target.files));
@@ -75,6 +51,10 @@ export default function ImageUploader({
     };
 
     const handleFiles = async (files: File[]) => {
+        if (!allowMultiple && files.length > 1) {
+            setError("Please upload a single image for this feature.");
+            return;
+        }
         setUploading(true);
         setError(null);
         const uploadedFiles: UploadedFile[] = [];
@@ -136,17 +116,7 @@ export default function ImageUploader({
 
     return (
         <div className="w-full">
-            <div
-                className={`relative cursor-pointer border border-[var(--rack-line)] p-8 text-center transition-all duration-200 ease-in-out ${
-                    isDragging
-                        ? 'bg-[var(--rack-success-wash)]'
-                        : 'bg-white hover:-translate-y-1 hover:shadow-[3px_3px_0_var(--rack-panel-shadow)]'
-                }`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-            >
+            <div className="flex flex-wrap items-center gap-3">
                 <input
                     type="file"
                     id={inputId}
@@ -158,33 +128,16 @@ export default function ImageUploader({
                     onChange={handleFileSelect}
                 />
 
-                <div className="flex min-w-0 flex-col items-center justify-center gap-4">
-                    <div className={`rounded-none border border-[var(--rack-line)] p-4 ${isDragging ? 'bg-white text-[var(--rack-success)]' : 'bg-[var(--rack-wash)] text-[var(--rack-ink)]'}`}>
-                        {uploading ? (
-                            <Loader2 className="h-8 w-8 animate-spin" />
-                        ) : (
-                            <CloudUpload size={32} />
-                        )}
-                    </div>
-
-                    <div className="min-w-0 max-w-full">
-                        <h4 className="text-base font-extrabold leading-snug text-[var(--rack-ink)] sm:text-lg">
-                            {uploading ? 'Uploading...' : displayLabel}
-                        </h4>
-                        <p className="mt-1 text-sm font-medium leading-relaxed text-slate-700">
-                            {uploading
-                                ? 'Please wait while we process your images'
-                                : (allowMultiple ? 'Click or drag photos to upload' : 'Click or drag one photo to upload')
-                            }
-                        </p>
-                    </div>
-                </div>
-
-                {uploading && (
-                    <div className="absolute inset-0 cursor-not-allowed bg-white/40">
-                        {/* Overlay to prevent interactions while uploading */}
-                    </div>
-                )}
+                <Button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="h-10 rounded-none border border-[var(--rack-line)] bg-[#DCE66E] px-4 text-sm font-extrabold text-[#241426] shadow-[2px_2px_0_var(--rack-panel-shadow)]"
+                >
+                    {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                    {uploading ? 'Adding…' : displayLabel}
+                </Button>
+                <p className="text-sm font-medium text-[var(--rack-ink-soft)]">Choose from your device or use its camera.</p>
             </div>
 
             {error && (

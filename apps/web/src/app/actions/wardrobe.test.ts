@@ -25,10 +25,16 @@ const apiMock = {
     getStorageUrl: {},
   },
   profile: {
+    getStyleBioContext: {},
+    saveGeneratedBio: {},
     updateBio: {},
     updateProfileAttributes: {},
   },
+  fitChecks: { recordFitCheck: {} },
+  candidates: { createInspiration: {} },
   zepSync: {
+    getStyleBioGraphContext: {},
+    searchStyleContext: {},
     syncCandidateComparison: {},
   },
 };
@@ -203,9 +209,15 @@ describe("wardrobe server actions", () => {
   });
 
   it("checks compatibility using generated embeddings", async () => {
-    fetchActionMock.mockResolvedValue([
-      { _id: "item_1", _score: 0.98 },
-    ]);
+    fetchActionMock.mockImplementation(async (action) => {
+      if (action === api.zepSync.searchStyleContext) return [];
+      if (action === api.wardrobe.searchSimilarItems) return [{ _id: "item_1", _score: 0.98 }];
+      return null;
+    });
+    fetchMutationMock.mockImplementation(async (mutation) => {
+      if (mutation === api.fitChecks.recordFitCheck) return { id: "fit_try_on", created: true, items: [] };
+      return { success: true };
+    });
 
     fetchQueryMock.mockImplementation(async (query) => {
       if (query === api.storage.getStorageUrl) {
@@ -270,6 +282,15 @@ describe("wardrobe server actions", () => {
 
     expect(result.candidate.description).toBe("Blue shirt");
     expect(result.evaluation?.score).toBe(80);
+    expect(String(result.fitCheckId)).toBe("fit_try_on");
+    expect(fetchMutationMock).toHaveBeenCalledWith(
+      api.fitChecks.recordFitCheck,
+      expect.objectContaining({
+        type: "try_on",
+        items: [expect.objectContaining({ source: "transcribed_only" })],
+      }),
+      expect.objectContaining({ token: "token_123" })
+    );
     expect(fetchActionMock).toHaveBeenCalledWith(
       api.wardrobe.searchSimilarItems,
       expect.objectContaining({
@@ -291,22 +312,60 @@ describe("wardrobe server actions", () => {
     });
 
     runServerActionMock.mockResolvedValue({
-      bio: "Minimalist profile",
       skin_tone: "Medium",
+      complexion: "Warm",
       hair_color: "Brown",
+      color_season: "Autumn",
     });
 
     fetchMutationMock.mockResolvedValue({ success: true });
 
     const result = await actions.analyzeSelfieAction({ storageId: "storage_1" });
 
-    expect(result.bio).toBe("Minimalist profile");
+    expect(result.skin_tone).toBe("Medium");
     expect(fetchMutationMock).toHaveBeenCalledWith(
       api.profile.updateProfileAttributes,
       expect.objectContaining({
-        bio: "Minimalist profile",
+        skinTone: "Medium",
+        complexion: "Warm",
+        hairColor: "Brown",
+        colorSeason: "Autumn",
         traceId: expect.any(String),
         traceparent: expect.any(String),
+      }),
+      expect.objectContaining({ token: "token_123" })
+    );
+  });
+
+  it("creates an honest starter bio when the graph has no style evidence", async () => {
+    fetchQueryMock.mockResolvedValue({
+      profile: null,
+      counts: {
+        closetItemCount: 0,
+        fitCheckCount: 0,
+        collectionCount: 0,
+        collectionMembershipCount: 0,
+      },
+      fingerprint: "0:0:0:0",
+      shouldRefresh: true,
+      refreshReason: "first_profile_visit",
+      closetItems: [],
+      recentFits: [],
+      collections: [],
+    });
+    fetchActionMock.mockResolvedValue([]);
+    fetchMutationMock.mockResolvedValue({ success: true, revisionId: "revision_1" });
+
+    const result = await actions.refreshStyleBioAction();
+
+    expect(result.updated).toBe(true);
+    expect(result.bio).toContain("building a clearer picture");
+    expect(runServerActionMock).not.toHaveBeenCalled();
+    expect(fetchMutationMock).toHaveBeenCalledWith(
+      api.profile.saveGeneratedBio,
+      expect.objectContaining({
+        reason: "first_profile_visit",
+        contextFingerprint: "0:0:0:0",
       }),
       expect.objectContaining({ token: "token_123" })
     );

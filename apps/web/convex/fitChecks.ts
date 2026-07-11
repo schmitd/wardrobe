@@ -65,6 +65,22 @@ export const recordFitCheck = mutation({
       .first();
     if (!upload) throw new Error("Upload not registered");
 
+    if (args.type === "try_on") {
+      const existing = await ctx.db
+        .query("fitChecks")
+        .withIndex("by_user_storage_type", (q) =>
+          q.eq("userId", user.userId).eq("storageId", args.storageId).eq("type", "try_on")
+        )
+        .first();
+      if (existing) {
+        const existingItems = await ctx.db
+          .query("fitCheckItems")
+          .withIndex("by_fit_check", (q) => q.eq("fitCheckId", existing._id))
+          .collect();
+        return { id: existing._id, created: false as const, items: existingItems };
+      }
+    }
+
     const timestamp = now();
     const fitCheckId = await ctx.db.insert("fitChecks", {
       userId: user.userId,
@@ -81,7 +97,11 @@ export const recordFitCheck = mutation({
     const recordedItems = [];
     for (const item of args.items) {
       let wardrobeItemId = item.wardrobeItemId;
-      if (!wardrobeItemId && item.source === "created_from_fit_check") {
+      const source =
+        args.type === "try_on" && item.source === "created_from_fit_check"
+          ? ("transcribed_only" as const)
+          : item.source;
+      if (!wardrobeItemId && source === "created_from_fit_check") {
         wardrobeItemId = await ctx.db.insert("wardrobeItems", {
           userId: user.userId,
           storageId: args.storageId,
@@ -102,7 +122,7 @@ export const recordFitCheck = mutation({
         userId: user.userId,
         fitCheckId,
         wardrobeItemId,
-        source: item.source,
+        source,
         category: item.category ?? undefined,
         description: item.description ?? undefined,
         styleTags: item.styleTags ?? undefined,
@@ -114,7 +134,7 @@ export const recordFitCheck = mutation({
       recordedItems.push({
         id: fitCheckItemId,
         wardrobeItemId,
-        source: item.source,
+        source,
         category: item.category ?? null,
         description: item.description ?? null,
         styleTags: item.styleTags ?? null,
@@ -155,7 +175,7 @@ export const recordFitCheck = mutation({
       });
     }
 
-    return { id: fitCheckId, items: recordedItems };
+    return { id: fitCheckId, created: true as const, items: recordedItems };
   },
 });
 

@@ -7,6 +7,7 @@ import { ensureTraceContext } from "./trace";
 import { getAuthenticatedUser } from "./authIdentity";
 import {
   addCandidateComparisonMemory,
+  addCandidateInspirationMemory,
   addFitCheckMemory,
   addWardrobeCollectionMemory,
   addWardrobeItemCreatedMemory,
@@ -14,6 +15,8 @@ import {
   deleteUserMemory,
   deleteWardrobeItemMemory,
   ensureWardrobeZepProject,
+  searchStyleBioGraphContext,
+  searchWardrobeStyleMemory,
   updateProfileMemory,
 } from "./zep";
 
@@ -171,6 +174,10 @@ export const syncProfileUpdate = internalAction({
     userId: v.string(),
     user: zepUser,
     bio: v.optional(v.string()),
+    bioSource: v.optional(v.string()),
+    bioRevisionId: v.optional(v.string()),
+    previousBioRevisionId: v.optional(v.string()),
+    updateReason: v.optional(v.string()),
     skinTone: v.optional(v.string()),
     complexion: v.optional(v.string()),
     hairColor: v.optional(v.string()),
@@ -188,11 +195,32 @@ export const syncProfileUpdate = internalAction({
 
     await updateProfileMemory(args.userId, {
       bio: args.bio ?? null,
+      bioSource: args.bioSource ?? null,
+      bioRevisionId: args.bioRevisionId ?? null,
+      previousBioRevisionId: args.previousBioRevisionId ?? null,
+      updateReason: args.updateReason ?? null,
       skinTone: args.skinTone ?? null,
       complexion: args.complexion ?? null,
       hairColor: args.hairColor ?? null,
       colorSeason: args.colorSeason ?? null,
     }, args.user);
+  },
+});
+
+export const getStyleBioGraphContext = action({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getAuthenticatedUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+    try {
+      return await searchStyleBioGraphContext(user.userId);
+    } catch (error) {
+      console.warn("zep.style_bio_context.failed", {
+        userId: redactUserId(user.userId),
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
   },
 });
 
@@ -327,6 +355,35 @@ export const syncCandidateComparison = action({
       similarItems: args.similarItems,
       dissimilarItems: args.dissimilarItems,
     }, user);
+  },
+});
+
+export const searchStyleContext = action({
+  args: { query: v.string(), traceId: v.optional(v.string()), traceparent: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+    return searchWardrobeStyleMemory(user.userId, args.query, user);
+  },
+});
+
+export const syncCandidateInspiration = internalAction({
+  args: {
+    userId: v.string(), user: zepUser, candidateItemId: v.id("candidateItems"),
+    wardrobeId: v.id("wardrobes"), wardrobeName: v.string(), wardrobeKind: v.string(),
+    wardrobeStatus: v.string(), wardrobeDescription: v.optional(v.string()),
+    wardrobeMoodWords: v.array(v.string()), storageId: v.optional(v.id("_storage")),
+    sourceUrl: v.optional(v.string()), sourceLabel: v.optional(v.string()),
+    category: v.optional(v.string()), description: v.optional(v.string()),
+    styleTags: v.optional(v.array(v.string())), traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    await addCandidateInspirationMemory(args.userId, {
+      candidate: { itemId: args.candidateItemId, category: args.category ?? null, description: args.description ?? null, styleTags: args.styleTags ?? null, sourceUrl: args.sourceUrl ?? null, sourceLabel: args.sourceLabel ?? null },
+      storageId: args.storageId ?? null,
+      collection: { wardrobeId: args.wardrobeId, name: args.wardrobeName, kind: args.wardrobeKind, description: args.wardrobeDescription ?? null, status: args.wardrobeStatus, moodWords: args.wardrobeMoodWords },
+    }, args.user);
   },
 });
 

@@ -24,16 +24,10 @@ const makeUploadLayer = (
     uploadImageFile,
   });
 
-const dropOnUploader = async (labelText: string, files: File[]) => {
-  const dropZone = screen.getByText(labelText).closest('div');
-  if (!dropZone) throw new Error('Drop zone not found');
-
-  fireEvent.drop(dropZone, {
-    dataTransfer: {
-      files,
-      types: ['Files'],
-    },
-  });
+const chooseFiles = async (files: File[]) => {
+  const input = document.querySelector('input[type="file"]');
+  if (!input) throw new Error('Photo picker not found');
+  fireEvent.change(input, { target: { files } });
 };
 
 describe('ImageUploader', () => {
@@ -66,13 +60,13 @@ describe('ImageUploader', () => {
     expect(screen.getByText('Upload Image')).not.toBeNull();
   });
 
-  it('shows error when dropping multiple files if allowMultiple is false', async () => {
+  it('shows error when multiple files are selected for a single-photo flow', async () => {
     render(<ImageUploader onUploadComplete={mockOnUploadComplete} allowMultiple={false} />);
 
     const file1 = new File(['foo'], 'foo.png', { type: 'image/png' });
     const file2 = new File(['bar'], 'bar.png', { type: 'image/png' });
 
-    await dropOnUploader('Upload Image', [file1, file2]);
+    await chooseFiles([file1, file2]);
 
     expect(screen.getByText('Please upload a single image for this feature.')).not.toBeNull();
     expect(mockOnUploadComplete).not.toHaveBeenCalled();
@@ -92,7 +86,7 @@ describe('ImageUploader', () => {
     );
 
     const file = new File(['foo'], 'foo.png', { type: 'image/png' });
-    await dropOnUploader('Upload Image', [file]);
+    await chooseFiles([file]);
 
     await waitFor(() => {
       expect(uploadImageFile).toHaveBeenCalledTimes(1);
@@ -112,7 +106,7 @@ describe('ImageUploader', () => {
     );
 
     const file = new File(['foo'], 'foo.png', { type: 'image/png' });
-    await dropOnUploader('Upload Image', [file]);
+    await chooseFiles([file]);
 
     await waitFor(() => {
       expect(screen.getByText('Upload failed: Bad Gateway')).not.toBeNull();

@@ -53,12 +53,34 @@ export default defineSchema({
   profiles: defineTable({
     userId: v.string(),
     bio: v.optional(v.string()),
+    bioSource: v.optional(v.string()),
+    bioManualAnchor: v.optional(v.string()),
+    bioContextFingerprint: v.optional(v.string()),
+    bioClosetItemCount: v.optional(v.number()),
+    bioFitCheckCount: v.optional(v.number()),
+    bioCollectionCount: v.optional(v.number()),
+    bioCollectionMembershipCount: v.optional(v.number()),
+    bioGeneratedAt: v.optional(v.number()),
+    bioLastManualEditAt: v.optional(v.number()),
+    bioRevisionId: v.optional(v.id("profileBioRevisions")),
     skinTone: v.optional(v.string()),
     complexion: v.optional(v.string()),
     hairColor: v.optional(v.string()),
     colorSeason: v.optional(v.string()),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
+
+  profileBioRevisions: defineTable({
+    userId: v.string(),
+    bio: v.string(),
+    source: v.union(v.literal("manual"), v.literal("agent"), v.literal("guest_import")),
+    reason: v.string(),
+    parentRevisionId: v.optional(v.id("profileBioRevisions")),
+    contextFingerprint: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_createdAt", ["userId", "createdAt"]),
 
   wardrobes: defineTable({
     userId: v.string(),
@@ -73,10 +95,35 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_updatedAt", ["userId", "updatedAt"]),
 
+  candidateItems: defineTable({
+    userId: v.string(),
+    storageId: v.optional(v.id("_storage")),
+    sourceUrl: v.optional(v.string()),
+    sourceLabel: v.optional(v.string()),
+    kind: v.string(),
+    status: v.string(),
+    category: v.optional(v.string()),
+    description: v.optional(v.string()),
+    styleTags: v.optional(v.array(v.string())),
+    embedding: v.optional(v.array(v.float64())),
+    traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_createdAt", ["userId", "createdAt"])
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 768,
+      filterFields: ["userId", "kind", "status"],
+    }),
+
   wardrobeMemberships: defineTable({
     userId: v.string(),
     wardrobeId: v.id("wardrobes"),
-    itemId: v.id("wardrobeItems"),
+    itemId: v.optional(v.id("wardrobeItems")),
+    candidateItemId: v.optional(v.id("candidateItems")),
     membershipKind: v.string(),
     rationale: v.optional(v.string()),
     createdAt: v.number(),
@@ -85,6 +132,7 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_wardrobe", ["wardrobeId"])
     .index("by_item", ["itemId"])
+    .index("by_candidate", ["candidateItemId"])
     .index("by_wardrobe_item", ["wardrobeId", "itemId"]),
 
   fitChecks: defineTable({
@@ -99,6 +147,7 @@ export default defineSchema({
     traceparent: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
+    .index("by_user_storage_type", ["userId", "storageId", "type"])
     .index("by_user_type_createdAt", ["userId", "type", "createdAt"]),
 
   fitCheckItems: defineTable({

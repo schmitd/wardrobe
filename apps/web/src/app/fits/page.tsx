@@ -1,20 +1,20 @@
 'use client';
 
 import Image from 'next/image';
-import { ChangeEvent, Suspense, useMemo, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Camera, ImagePlus, Shirt, Sparkles } from 'lucide-react';
-import { getUploadUrlAction, recordDailyFitCheckAction, recordTryOnFitCheckAction } from '@/app/actions/wardrobe';
+import { Camera, ImagePlus, Shirt } from 'lucide-react';
+import { getUploadUrlAction, recordDailyFitCheckAction, refreshStyleBioAction } from '@/app/actions/wardrobe';
+import TryOnFeedback from '@/components/TryOnFeedback';
+import { useCompatibilityCheck } from '@/hooks/useCompatibilityCheck';
 import { createTraceContext } from '@/lib/trace';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
 type FitCheckMode = 'daily_fit_check' | 'try_on';
-type FitCheckResult = Awaited<ReturnType<typeof recordDailyFitCheckAction>>;
 
 const copy: Record<FitCheckMode, { title: string; description: string; icon: typeof Camera }> = {
   daily_fit_check: { title: 'Fit check', description: 'Keep today’s outfit in your visual record.', icon: Camera },
@@ -26,9 +26,8 @@ const dayKey = (date: Date | number) => {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`;
 };
 
-function CaptureCard({ mode, active, onComplete }: { mode: FitCheckMode; active: boolean; onComplete: (mode: FitCheckMode, file: File) => void }) {
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const libraryRef = useRef<HTMLInputElement>(null);
+function CaptureCard({ mode, onComplete }: { mode: FitCheckMode; onComplete: (mode: FitCheckMode, file: File) => void }) {
+  const inputRef = useRef<HTMLInputElement>(null);
   const Icon = copy[mode].icon;
   const onChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -37,37 +36,30 @@ function CaptureCard({ mode, active, onComplete }: { mode: FitCheckMode; active:
   };
 
   return (
-    <Card className={`rack-panel rounded-none py-0 ${active ? 'rack-panel--action' : 'rack-panel--shell'}`}>
+    <Card className="rack-panel rack-panel--shell rounded-none py-0">
       <CardContent className="px-0">
         <div className="flex items-center gap-2 text-[#241426]"><Icon className="h-4 w-4" /><h2 className="text-lg font-extrabold">{copy[mode].title}</h2></div>
         <p className="mt-2 text-sm font-medium leading-relaxed text-[#56345c]">{copy[mode].description}</p>
-        <input ref={cameraRef} className="hidden" type="file" accept="image/*" capture="user" onChange={onChange} />
-        <input ref={libraryRef} className="hidden" type="file" accept="image/*" onChange={onChange} />
-        <div className="mt-5 flex flex-wrap gap-3">
-          <Button type="button" onClick={() => cameraRef.current?.click()} className="h-10 rounded-none border border-[var(--rack-line)] bg-[#DCE66E] px-4 text-sm font-extrabold text-[#241426] shadow-[2px_2px_0_var(--rack-panel-shadow)]"><Camera className="h-4 w-4" /> Take photo</Button>
-          <Button type="button" variant="outline" onClick={() => libraryRef.current?.click()} className="h-10 rounded-none border border-[var(--rack-line)] bg-white px-4 text-sm font-semibold text-[#241426]"><ImagePlus className="h-4 w-4" /> Choose photo</Button>
-        </div>
+        <input ref={inputRef} className="hidden" type="file" accept="image/*" onChange={onChange} />
+        <Button type="button" onClick={() => inputRef.current?.click()} className="mt-5 h-10 rounded-none border border-[var(--rack-line)] bg-[#DCE66E] px-4 text-sm font-extrabold text-[#241426] shadow-[2px_2px_0_var(--rack-panel-shadow)]"><ImagePlus className="h-4 w-4" /> Add photo</Button>
       </CardContent>
     </Card>
   );
 }
 
 export default function FitsPage() {
-  return (
-    <Suspense fallback={<div className="p-8 text-sm font-semibold">Loading fits…</div>}>
-      <FitsContent />
-    </Suspense>
-  );
+  return <FitsContent />;
 }
 
 function FitsContent() {
   const { isLoaded, isSignedIn } = useUser();
-  const searchParams = useSearchParams();
-  const focusedMode: FitCheckMode | null = searchParams.get('mode') === 'try_on' ? 'try_on' : searchParams.get('mode') === 'daily_fit_check' ? 'daily_fit_check' : null;
   const fitChecks = useQuery(api.fitChecks.listFitChecks, isLoaded && isSignedIn ? { limit: 100 } : 'skip');
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [latestResult, setLatestResult] = useState<FitCheckResult | null>(null);
+  const [tryOnPreview, setTryOnPreview] = useState<string | null>(null);
+  const tryOn = useCompatibilityCheck();
+
+  useEffect(() => () => { if (tryOnPreview) URL.revokeObjectURL(tryOnPreview); }, [tryOnPreview]);
 
   const dailyChecks = useMemo(() => (fitChecks ?? []).filter((check) => check.type === 'daily_fit_check'), [fitChecks]);
   const checkByDay = useMemo(() => new Map(dailyChecks.map((check) => [dayKey(check.createdAt), check])), [dailyChecks]);
@@ -92,11 +84,16 @@ function FitsContent() {
       const { storageId } = await upload.json();
       if (!storageId) throw new Error('Upload response missing storageId.');
       const trace = createTraceContext();
-      const result = mode === 'daily_fit_check'
-        ? await recordDailyFitCheckAction({ storageId, ...trace })
-        : await recordTryOnFitCheckAction({ storageId, ...trace });
-      setLatestResult(result);
-      setStatus(`${copy[mode].title} saved.`);
+      if (mode === 'try_on') {
+        if (tryOnPreview) URL.revokeObjectURL(tryOnPreview);
+        setTryOnPreview(URL.createObjectURL(file));
+        await tryOn.runCompatibilityCheck(storageId, { startMessage: 'Reading your Collections, then finding closet anchors…', fallbackErrorMessage: 'Try-on feedback failed.' });
+        setStatus(null);
+      } else {
+        await recordDailyFitCheckAction({ storageId, ...trace });
+        setStatus('Fit check saved.');
+      }
+      void refreshStyleBioAction().catch((refreshError) => console.warn('style_bio.background_refresh.failed', refreshError));
     } catch (caught) {
       setError(userFacingErrorMessage(caught, 'Could not save this fit right now.'));
       setStatus(null);
@@ -110,10 +107,15 @@ function FitsContent() {
 
   return (
     <main className="mx-auto w-full max-w-[1320px] space-y-6 px-6 py-10 lg:px-10">
-      <section className="grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-        <Card className="rack-panel rack-panel--shell rounded-none py-0"><CardContent className="px-0"><p className="text-sm font-semibold text-[#56345c]">Outfit memory</p><h1 className="mt-2 text-4xl font-extrabold text-[#241426]">Fits</h1><p className="mt-3 max-w-lg text-sm font-medium leading-relaxed text-[#56345c]">A small visual record of the looks you lived in. Let the calendar fill in at its own pace.</p>{(status || error) && <p className={`mt-5 border p-3 text-sm font-semibold ${error ? 'border-[#B93267] bg-[var(--rack-danger-wash)] text-[#B93267]' : 'border-[var(--rack-line)] bg-[var(--rack-success-wash)] text-[#241426]'}`}>{error ?? status}</p>}</CardContent></Card>
-        <div className="grid gap-4 md:grid-cols-2"><CaptureCard mode="daily_fit_check" active={focusedMode === 'daily_fit_check'} onComplete={record} /><CaptureCard mode="try_on" active={focusedMode === 'try_on'} onComplete={record} /></div>
+      <section className="space-y-4">
+        <div><p className="text-sm font-semibold text-[#56345c]">Outfit memory</p><h1 className="mt-2 text-4xl font-extrabold text-[#241426]">Fits</h1><p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-[#56345c]">A visual record of what you wore and what you considered.</p></div>
+        <div className="grid gap-4 md:grid-cols-2"><CaptureCard mode="daily_fit_check" onComplete={record} /><CaptureCard mode="try_on" onComplete={record} /></div>
+        {(status || error) && <p role="status" className={`border p-3 text-sm font-semibold ${error ? 'border-[#B93267] bg-[var(--rack-danger-wash)] text-[#B93267]' : 'border-[var(--rack-line)] bg-[var(--rack-success-wash)] text-[#241426]'}`}>{error ?? status}</p>}
       </section>
+
+      {tryOn.isProcessing && <section className="rack-panel rack-panel--shell flex min-h-52 flex-col items-center justify-center text-center"><p className="text-lg font-extrabold text-[#241426]">{tryOn.status}</p><p className="mt-2 text-sm font-medium text-[#56345c]">The result will explain compatibility and surface the closest pieces you already own.</p></section>}
+      {!tryOn.isProcessing && tryOn.status && !tryOn.result && <p role="alert" className="border border-[#B93267] bg-[var(--rack-danger-wash)] p-4 text-sm font-semibold text-[#B93267]">{tryOn.status}</p>}
+      {tryOn.result && <section className="space-y-4"><h2 className="text-xl font-extrabold text-[#241426]">Latest try-on feedback</h2><TryOnFeedback result={tryOn.result} previewUrl={tryOnPreview} /></section>}
 
       <section className="rack-panel rounded-none">
         <div className="flex flex-wrap items-end justify-between gap-4"><div><h2 className="text-xl font-extrabold text-[#241426]">Your recent rhythm</h2><p className="mt-1 text-sm font-medium text-[#56345c]">Each photo marks a day you checked in.</p></div><span className="text-xs font-semibold text-[#56345c]">Last 12 weeks</span></div>
@@ -127,8 +129,6 @@ function FitsContent() {
           })}
         </div>
       </section>
-
-      {latestResult && <Card className="rack-panel rack-panel--success rounded-none py-0"><CardContent className="px-0"><div className="flex items-center gap-2 text-[#241426]"><Sparkles className="h-4 w-4" /><h2 className="text-lg font-extrabold">Latest read</h2></div><p className="mt-3 text-sm font-medium leading-relaxed text-[#56345c]">{latestResult.transcription}</p></CardContent></Card>}
 
       <section><h2 className="text-xl font-extrabold text-[#241426]">Recent fits</h2><div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{(fitChecks ?? []).map((fitCheck) => <article id={`fit-${String(fitCheck._id)}`} key={String(fitCheck._id)} className="overflow-hidden border border-[var(--rack-line)] bg-white shadow-[3px_3px_0_var(--rack-panel-shadow)]"><div className="relative aspect-[4/3] bg-[var(--rack-wash)]">{fitCheck.imageUrl && <Image src={fitCheck.imageUrl} alt={fitCheck.transcription ?? fitCheck.type} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />}</div><div className="p-4"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#56345c]">{fitCheck.type === 'try_on' ? 'Try on' : 'Fit check'} · {new Date(fitCheck.createdAt).toLocaleDateString()}</p><p className="mt-2 text-sm font-medium leading-relaxed text-[#241426]">{fitCheck.transcription ?? fitCheck.description ?? 'No notes yet.'}</p></div></article>)}</div></section>
     </main>

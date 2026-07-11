@@ -14,4 +14,10 @@ A collection (stored as a locus) is a named point of view that the user describe
 - **Trying** — being evaluated through a try-on or candidate fit.
 - **Inspiration** — a reference that is shaping the collection.
 
-Users control collection membership directly: add from the closet, change the relationship, or remove it. Online-inspiration intake is tracked separately in GitHub issue #41.
+Users control collection membership directly: add from the closet, change the relationship, or remove it.
+
+Inspiration is a separate candidate/reference record, never a disguised closet item. A photo is enough: the system reads it associatively as a mood-board reference (silhouette, texture, palette, setting, mood, and broader style concepts), rather than requiring a user-written label or note. Saving inspiration creates a CandidateItem → Collection membership and must not create a WardrobeItem or place anything on the rack.
+
+Try on is an evaluation flow. It combines Zep-first style and collection memory with vector-based closet anchors, writes an idempotent try-on entry to Fits, and presents an explanation, compatibility score, closest owned pieces, and an optional Save inspiration action. It never creates owned inventory.
+
+Every photo flow uses one obvious button that opens the device's native picker. On mobile this lets the platform offer the camera or library; on desktop it uses the native file picker. Do not place a drag-and-drop target, a custom camera choice, or a form modal in front of that action.

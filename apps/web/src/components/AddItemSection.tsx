@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react';
 import type { OptimisticWardrobeItem } from '@/types/wardrobe';
 import { createTraceContext } from '@/lib/trace';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
-import { createWardrobeItemAction } from '@/app/actions/wardrobe';
+import { createWardrobeItemAction, refreshStyleBioAction } from '@/app/actions/wardrobe';
 
 interface AddItemSectionProps {
     onOptimisticAdd: (items: OptimisticWardrobeItem[]) => void;
@@ -189,6 +189,9 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                 );
             } else {
                 setStatus(`Processed ${uploads.length} item${uploads.length === 1 ? '' : 's'}.`);
+            }
+            if (successCount > 0) {
+                void refreshStyleBioAction().catch((error) => console.warn('style_bio.background_refresh.failed', error));
             }
             setTimeout(() => setStatus(null), 3000);
         } catch (e) {
