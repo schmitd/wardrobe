@@ -32,7 +32,6 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
   const [demoComplete, setDemoComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bio, setBio] = useState('');
-  const [showSignupPrompt, setShowSignupPrompt] = useState(false);
   const [items, setItems] = useState<GuestDemoItem[]>([]);
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
   const hasGeneratedBio = demoComplete && bio.trim().length > 0;
@@ -79,7 +78,6 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
   const handleFiles = async (files: File[]) => {
     if (files.length === 0) return;
     if (demoComplete) {
-      setShowSignupPrompt(true);
       return;
     }
 
@@ -109,7 +107,6 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
 
       if (result.kind === 'limit') {
         setLimitMessage(result.message);
-        setShowSignupPrompt(true);
         return;
       }
 
@@ -129,9 +126,6 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
     } catch (uploadError) {
       const message = userFacingErrorMessage(uploadError, 'Analysis failed');
       setError(message);
-      if (/sign in|create an account/i.test(message)) {
-        setShowSignupPrompt(true);
-      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -259,35 +253,18 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       {demoComplete && !limitMessage && (
         <section className="rack-panel" aria-label="Save demo profile">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <Button
-              type="button"
-              onClick={() => setShowSignupPrompt(true)}
-              className="h-auto w-full rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)] sm:w-auto"
-            >
-              Save my style profile
-            </Button>
+            <SignUpButton mode="modal" forceRedirectUrl="/" fallbackRedirectUrl="/">
+              <Button
+                type="button"
+                className="h-auto w-full rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)] sm:w-auto"
+              >
+                Save my style profile
+              </Button>
+            </SignUpButton>
             <p className="text-sm font-medium text-[var(--rack-ink-soft)]">
               Includes compatibility checks and deeper personalization.
             </p>
           </div>
-
-          {showSignupPrompt && (
-            <div className="mt-4 border border-[var(--rack-line)] bg-[var(--rack-wash)] p-4">
-              <p className="text-sm font-semibold text-[var(--rack-ink)]">
-                Create your free account to save this closet profile, track your wardrobe, and continue comparisons.
-              </p>
-              <div className="mt-3">
-                <SignUpButton mode="modal" forceRedirectUrl="/" fallbackRedirectUrl="/">
-                  <Button
-                    variant="outline"
-                    className="rounded-none border border-[var(--rack-line)] bg-white px-4 py-2 text-sm font-semibold text-[var(--rack-ink)]"
-                  >
-                    Create free account
-                  </Button>
-                </SignUpButton>
-              </div>
-            </div>
-          )}
         </section>
       )}
     </section>
