@@ -265,23 +265,19 @@ const addFactTriple = async (
 const wardrobeSummaryInstructions = [
   {
     name: "wardrobe_style_identity_v1",
-    text:
-      "Summarize the user's wardrobe identity for styling decisions: preferred silhouettes, colors, textures, garment roles, fit preferences, lifestyle constraints, and recurring tags. Preserve uncertainty and source when a detail came from inference rather than direct user input.",
+    text: "Summarize wardrobe identity: silhouettes, colors, textures, roles, fit, lifestyle, and recurring tags.",
   },
   {
     name: "wardrobe_temporal_profile_v1",
-    text:
-      "Track temporal changes in the user's profile, including bio edits, selfie-derived hair color, complexion, skin tone, color season, and corrections. Prefer recent confirmed updates while retaining meaningful historical changes.",
+    text: "Track evolving profile details: bio, hair, complexion, skin tone, color season, and corrections.",
   },
   {
     name: "wardrobe_fit_check_story_v1",
-    text:
-      "Distinguish shopping/try-on candidate checks from daily fit checks. Daily fit checks describe what the user actually wore; candidate checks describe potential purchases or acquisitions. Record worn items, matched closet items, new items created from outfit photos, and removal reasons over time.",
+    text: "Distinguish daily fits from try-ons; retain worn items, closet matches, candidates, and removals.",
   },
   {
     name: "wardrobe_loci_v1",
-    text:
-      "Treat wardrobes, capsules, moods, styles, trips, seasons, and other closet loci as first-class groupings. Summarize which items belong to each locus, why they belong, and how the user wants that locus to evolve.",
+    text: "Treat wardrobes, capsules, moods, trips, seasons, and goals as evolving first-class loci.",
   },
 ];
 
