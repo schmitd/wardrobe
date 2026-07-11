@@ -1185,60 +1185,70 @@ export const recordFitCheckForAuth = async (
     { token }
   );
 
-  const imageUrl = await fetchQuery(
-    api.storage.getStorageUrl,
-    { storageId: input.storageId as Id<"_storage"> },
-    { token }
-  );
-
-  if (!imageUrl) {
-    throw new Error("Uploaded file missing");
-  }
-
-  const base64 = await fetchImageBase64(imageUrl);
-  const analysis = await runServerAction(
-    analyzeFitCheckPhoto(base64, input.type).pipe(Effect.provide(GeminiLive))
-  );
-
-  const items: RecordFitCheckItemInput[] = [];
-  for (const item of analysis.items) {
-    const embedding = await runServerAction(
-      embedText(`${item.description} ${item.style_tags.join(" ")}`.trim()).pipe(
-        Effect.provide(GeminiLive)
-      )
-    );
-    const matches = await fetchAction(
-      api.wardrobe.searchSimilarItems,
-      { embedding, limit: 1 },
+  const recorded = await runBestEffort("fit_check.analysis.failed", { traceId, userId }, async () => {
+    const imageUrl = await fetchQuery(
+      api.storage.getStorageUrl,
+      { storageId: input.storageId as Id<"_storage"> },
       { token }
     );
-    const bestMatch = matches[0];
-    const matchedExisting = bestMatch && bestMatch._score >= 0.78;
+    if (!imageUrl) throw new Error("Uploaded file missing");
 
-    items.push({
-      source: matchedExisting ? ("matched_existing" as const) : ("created_from_fit_check" as const),
-      category: item.category,
-      description: item.description,
-      styleTags: item.style_tags,
-      ...(matchedExisting ? { wardrobeItemId: bestMatch._id } : {}),
-      ...(item.bounding_box ? { boundingBox: item.bounding_box } : {}),
-      ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
-      ...(matchedExisting ? {} : { embedding }),
-    });
+    const base64 = await fetchImageBase64(imageUrl);
+    const analysis = await runServerAction(
+      analyzeFitCheckPhoto(base64, input.type).pipe(Effect.provide(GeminiLive))
+    );
+    const items: RecordFitCheckItemInput[] = [];
+    for (const item of analysis.items) {
+      const embedding = await runServerAction(
+        embedText(`${item.description} ${item.style_tags.join(" ")}`.trim()).pipe(
+          Effect.provide(GeminiLive)
+        )
+      );
+      const matches = await fetchAction(
+        api.wardrobe.searchSimilarItems,
+        { embedding, limit: 1 },
+        { token }
+      );
+      const bestMatch = matches[0];
+      const matchedExisting = bestMatch && bestMatch._score >= 0.78;
+      items.push({
+        source: matchedExisting ? ("matched_existing" as const) : ("created_from_fit_check" as const),
+        category: item.category,
+        description: item.description,
+        styleTags: item.style_tags,
+        ...(matchedExisting ? { wardrobeItemId: bestMatch._id } : {}),
+        ...(item.bounding_box ? { boundingBox: item.bounding_box } : {}),
+        ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
+        ...(matchedExisting ? {} : { embedding }),
+      });
+    }
+    const saved = await fetchMutation(
+      api.fitChecks.recordFitCheck,
+      { storageId: input.storageId as Id<"_storage">, type: input.type, transcription: analysis.transcription, items, traceId, traceparent },
+      { token }
+    );
+    return { ...saved, transcription: analysis.transcription };
+  });
+
+  if (!recorded) {
+    if (input.type !== "daily_fit_check") {
+      throw new Error("Try-on analysis failed");
+    }
+    const saved = await fetchMutation(
+      api.fitChecks.recordFitCheck,
+      {
+        storageId: input.storageId as Id<"_storage">,
+        type: input.type,
+        description: "Visual analysis is pending.",
+        items: [],
+        traceId,
+        traceparent,
+      },
+      { token }
+    );
+    console.info("fit_check.recorded_without_analysis", { traceId, traceparent, userId, fitCheckId: saved.id });
+    return { ...saved, transcription: "" };
   }
-
-  const recorded = await fetchMutation(
-    api.fitChecks.recordFitCheck,
-    {
-      storageId: input.storageId as Id<"_storage">,
-      type: input.type,
-      transcription: analysis.transcription,
-      items,
-      traceId,
-      traceparent,
-    },
-    { token }
-  );
 
   console.info("fit_check.analyze.complete", {
     traceId,
@@ -1251,7 +1261,6 @@ export const recordFitCheckForAuth = async (
 
   return {
     ...recorded,
-    transcription: analysis.transcription,
   };
 };
 
