@@ -94,6 +94,20 @@ const scalarAttributes = (value: Record<string, unknown>) =>
 const truncate = (value: string, maxLength: number) =>
   value.length <= maxLength ? value : value.slice(0, maxLength - 1).trimEnd();
 
+// Zep limits ontology descriptions and field text to 100 characters. Keep that
+// transport constraint at the boundary so richer source documentation cannot
+// prevent every user graph from being initialized.
+const zepOntologyText = <T>(value: T): T => {
+  if (typeof value === "string") return truncate(value, 100) as T;
+  if (Array.isArray(value)) return value.map(zepOntologyText) as T;
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, zepOntologyText(entry)])
+    ) as T;
+  }
+  return value;
+};
+
 const cleanText = (value?: string | null, fallback = "") => {
   const text = value?.replace(/\s+/g, " ").trim();
   return text || fallback;
@@ -284,7 +298,7 @@ const wardrobeSummaryInstructions = [
 let projectSetupPromise: Promise<void> | null = null;
 
 const runProjectSetup = async (client: ZepClient) => {
-  await client.graph.setOntology(wardrobeEntityTypes, wardrobeEdgeTypes);
+  await client.graph.setOntology(zepOntologyText(wardrobeEntityTypes), zepOntologyText(wardrobeEdgeTypes));
 
   const existing = await client.user.listUserSummaryInstructions({});
   const existingNames = new Set((existing.instructions ?? []).map((instruction) => instruction.name));
