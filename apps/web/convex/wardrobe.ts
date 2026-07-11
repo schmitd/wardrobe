@@ -111,31 +111,6 @@ export const createWardrobeItem = mutation({
 
     console.info("wardrobe.create", { traceId, traceparent, itemId, userId });
 
-    try {
-      const runId = await retrier.run(ctx, internal.zepSync.syncWardrobeCreate, {
-        userId,
-        user,
-        itemId,
-        traceId,
-        traceparent,
-      });
-      console.info("zep.sync.wardrobe_create.enqueued", {
-        traceId,
-        traceparent,
-        itemId,
-        userId,
-        runId,
-      });
-    } catch (error) {
-      console.warn("zep.sync.wardrobe_create.enqueue_failed", {
-        traceId,
-        traceparent,
-        itemId,
-        userId,
-        message: toErrorMessage(error),
-      });
-    }
-
     return { id: itemId };
   },
 });

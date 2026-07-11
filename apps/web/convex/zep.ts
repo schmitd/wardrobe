@@ -433,24 +433,6 @@ export const addWardrobeItemsMemory = async (
       createdAt: items[0]?.updatedAt ?? items[0]?.createdAt,
     });
 
-    for (const item of items) {
-      const nodeName = itemNodeName(item, "Wardrobe item");
-      const summary = itemSummary(item);
-      await addFactTriple(client, userId, user, {
-        factName: "ADDED_TO_WARDROBE",
-        fact: `User owns wardrobe item ${cleanText(item.description, item.category ?? itemReference(item))}.`,
-        targetNodeName: nodeName,
-        targetNodeSummary: summary,
-        targetNodeAttributes: itemAttributes(item),
-        edgeAttributes: {
-          source_ref: item.itemId ?? null,
-          event_time: toIso(item.updatedAt ?? item.createdAt),
-        },
-        createdAt: item.updatedAt ?? item.createdAt,
-      });
-      await addStyleConceptFacts(client, userId, user, item, nodeName, summary, item.updatedAt ?? item.createdAt);
-    }
-
     const threadId = await ensureMainThread(client, userId);
     await client.thread.addMessages(threadId, {
       messages: [
@@ -466,80 +448,6 @@ export const addWardrobeItemsMemory = async (
     console.error("zep.addWardrobeItemsMemory.failed", {
       userId,
       count: items.length,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
-  }
-};
-
-export const addWardrobeItemCreatedMemory = async (
-  userId: string,
-  item: WardrobeItemMemory,
-  user?: AuthenticatedUser | null
-) => {
-  if (!apiKey) return;
-
-  const client = ensureClient();
-  const createdAt = item.createdAt ?? Date.now();
-
-  try {
-    await addGraphEpisode(client, userId, user, {
-      sourceDescription: "Wardrobe item upload queued",
-      createdAt,
-      data: {
-        event: "wardrobe_item_created",
-        ontology_hints: {
-          entities: ["WardrobeItem"],
-          edges: ["ADDED_TO_WARDROBE"],
-        },
-        user: userMetadata(user),
-        item: {
-          itemId: item.itemId ?? null,
-          clientFileName: item.clientFileName ?? null,
-          contentType: item.contentType ?? null,
-          status: "queued_for_analysis",
-        },
-      },
-    });
-
-    await addFactTriple(client, userId, user, {
-      factName: "ADDED_TO_WARDROBE",
-      fact: `User started adding wardrobe item ${itemReference(item)}.`,
-      targetNodeName: itemNodeName(item, "Wardrobe item"),
-      targetNodeSummary: item.clientFileName
-        ? `A wardrobe item uploaded from ${item.clientFileName}.`
-        : "A wardrobe item queued for analysis.",
-      targetNodeAttributes: scalarAttributes({
-        ...itemAttributes(item),
-        status: "queued_for_analysis",
-      }),
-      edgeAttributes: {
-        source_ref: item.itemId ?? null,
-        event_time: toIso(createdAt),
-      },
-      createdAt,
-    });
-
-    const threadId = await ensureMainThread(client, userId);
-    await client.thread.addMessages(threadId, {
-      messages: [
-        {
-          role: "user",
-          name: userDisplayName(userId, user),
-          content: `I started adding a wardrobe item${item.clientFileName ? ` from ${item.clientFileName}` : ""}.`,
-          metadata: {
-            type: "item_created",
-            itemId: item.itemId ?? undefined,
-            clientFileName: item.clientFileName ?? undefined,
-            contentType: item.contentType ?? undefined,
-          },
-        },
-      ],
-    });
-  } catch (error) {
-    console.error("zep.addWardrobeItemCreatedMemory.failed", {
-      userId,
-      item,
       error: error instanceof Error ? error.message : String(error),
     });
     throw error;
