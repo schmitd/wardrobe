@@ -16,7 +16,14 @@ const fitCheckType = v.union(
 const detectedItemSource = v.union(
   v.literal("matched_existing"),
   v.literal("created_from_fit_check"),
-  v.literal("transcribed_only")
+  v.literal("transcribed_only"),
+  v.literal("observed_unresolved")
+);
+
+const garmentResolutionStatus = v.union(
+  v.literal("auto_matched"),
+  v.literal("needs_confirmation"),
+  v.literal("unresolved")
 );
 
 const boundingBox = v.optional(
@@ -47,6 +54,19 @@ export const recordFitCheck = mutation({
         boundingBox,
         confidence: v.optional(v.number()),
         embedding: v.optional(v.array(v.float64())),
+        observation: v.optional(v.object({
+          cropStorageId: v.id("_storage"),
+          categoryKey: v.string(),
+          visualEmbedding: v.array(v.float64()),
+          semanticEmbedding: v.optional(v.array(v.float64())),
+          embeddingModel: v.string(),
+          detectorModel: v.string(),
+          resolutionStatus: garmentResolutionStatus,
+          matchScore: v.optional(v.number()),
+          matchMargin: v.optional(v.number()),
+          candidateItemIds: v.array(v.id("wardrobeItems")),
+          candidateScores: v.array(v.number()),
+        })),
       })
     ),
     traceId: v.optional(v.string()),
@@ -95,6 +115,7 @@ export const recordFitCheck = mutation({
     });
 
     const recordedItems = [];
+    const recordedObservations = [];
     for (const item of args.items) {
       let wardrobeItemId = item.wardrobeItemId;
       const source =
@@ -141,6 +162,35 @@ export const recordFitCheck = mutation({
         boundingBox: item.boundingBox ?? null,
         confidence: item.confidence,
       });
+
+      if (item.observation && item.boundingBox && item.category && item.description) {
+        const observationId = await ctx.db.insert("garmentObservations", {
+          userId: user.userId,
+          fitCheckId,
+          fitCheckItemId,
+          cropStorageId: item.observation.cropStorageId,
+          wardrobeItemId,
+          category: item.category,
+          categoryKey: item.observation.categoryKey,
+          description: item.description,
+          styleTags: item.styleTags ?? [],
+          boundingBox: item.boundingBox,
+          detectorConfidence: item.confidence,
+          visualEmbedding: item.observation.visualEmbedding,
+          semanticEmbedding: item.observation.semanticEmbedding,
+          embeddingModel: item.observation.embeddingModel,
+          detectorModel: item.observation.detectorModel,
+          resolutionStatus: item.observation.resolutionStatus,
+          matchScore: item.observation.matchScore,
+          matchMargin: item.observation.matchMargin,
+          candidateItemIds: item.observation.candidateItemIds,
+          candidateScores: item.observation.candidateScores,
+          resolvedAt: item.observation.resolutionStatus === "auto_matched" ? timestamp : undefined,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        });
+        recordedObservations.push({ id: observationId, status: item.observation.resolutionStatus });
+      }
     }
 
     try {
@@ -175,7 +225,7 @@ export const recordFitCheck = mutation({
       });
     }
 
-    return { id: fitCheckId, created: true as const, items: recordedItems };
+    return { id: fitCheckId, created: true as const, items: recordedItems, observations: recordedObservations };
   },
 });
 
@@ -202,14 +252,119 @@ export const listFitChecks = query({
           .take(cappedLimit);
 
     return Promise.all(
-      checks.map(async (fitCheck) => ({
-        ...fitCheck,
-        imageUrl: await ctx.storage.getUrl(fitCheck.storageId),
-        items: await ctx.db
+      checks.map(async (fitCheck) => {
+        const observations = await ctx.db
+          .query("garmentObservations")
+          .withIndex("by_fit_check", (q) => q.eq("fitCheckId", fitCheck._id))
+          .collect();
+        const candidateIds = [...new Set(observations.flatMap((observation) => observation.candidateItemIds))];
+        const candidateItems = await Promise.all(candidateIds.map(async (itemId) => {
+          const item = await ctx.db.get(itemId);
+          if (!item || item.userId !== userId) return null;
+          return { id: item._id, imageUrl: await ctx.storage.getUrl(item.storageId), category: item.category ?? null, description: item.description ?? null };
+        }));
+        const candidateMap = new Map(candidateItems.filter((item) => item !== null).map((item) => [String(item.id), item]));
+        return {
+          ...fitCheck,
+          imageUrl: await ctx.storage.getUrl(fitCheck.storageId),
+          items: await ctx.db
           .query("fitCheckItems")
           .withIndex("by_fit_check", (q) => q.eq("fitCheckId", fitCheck._id))
           .collect(),
-      }))
+          observations: await Promise.all(observations.map(async (observation) => ({
+            ...observation,
+            cropUrl: await ctx.storage.getUrl(observation.cropStorageId),
+            candidates: observation.candidateItemIds.map((itemId, index) => ({
+              ...(candidateMap.get(String(itemId)) ?? { id: itemId, imageUrl: null, category: null, description: null }),
+              score: observation.candidateScores[index] ?? 0,
+            })),
+          }))),
+        };
+      })
     );
+  },
+});
+
+export const resolveGarmentObservation = mutation({
+  args: {
+    observationId: v.id("garmentObservations"),
+    wardrobeItemId: v.id("wardrobeItems"),
+  },
+  handler: async (ctx, { observationId, wardrobeItemId }) => {
+    const user = await getAuthenticatedUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+    const [observation, wardrobeItem] = await Promise.all([ctx.db.get(observationId), ctx.db.get(wardrobeItemId)]);
+    if (!observation || observation.userId !== user.userId || !wardrobeItem || wardrobeItem.userId !== user.userId) {
+      throw new Error("Not found");
+    }
+    const timestamp = now();
+    await Promise.all([
+      ctx.db.patch(observationId, { wardrobeItemId, resolutionStatus: "confirmed", resolvedAt: timestamp, updatedAt: timestamp }),
+      ctx.db.patch(observation.fitCheckItemId, { wardrobeItemId, source: "matched_existing" }),
+    ]);
+    try {
+      await retrier.run(ctx, internal.zepSync.syncGarmentIdentityResolution, {
+        userId: user.userId,
+        user,
+        fitCheckId: observation.fitCheckId,
+        wardrobeItemId,
+        category: observation.category,
+        description: observation.description,
+        resolution: "confirmed",
+        score: observation.matchScore,
+        createdAt: timestamp,
+      });
+    } catch (error) {
+      console.warn("zep.sync.garment_identity.enqueue_failed", { observationId, message: toErrorMessage(error) });
+    }
+    return { success: true as const, wardrobeItemId };
+  },
+});
+
+export const promoteGarmentObservation = mutation({
+  args: { observationId: v.id("garmentObservations") },
+  handler: async (ctx, { observationId }) => {
+    const user = await getAuthenticatedUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+    const observation = await ctx.db.get(observationId);
+    if (!observation || observation.userId !== user.userId) throw new Error("Not found");
+    if (observation.wardrobeItemId) return { success: true as const, wardrobeItemId: observation.wardrobeItemId };
+    const timestamp = now();
+    const wardrobeItemId = await ctx.db.insert("wardrobeItems", {
+      userId: user.userId,
+      storageId: observation.cropStorageId,
+      sourceFitCheckId: observation.fitCheckId,
+      clientFileName: `fit-${observation.fitCheckId}-${observationId}.jpg`,
+      contentType: "image/jpeg",
+      category: observation.category,
+      description: observation.description,
+      styleTags: observation.styleTags,
+      embedding: observation.semanticEmbedding,
+      visualEmbedding: observation.visualEmbedding,
+      visualEmbeddingModel: observation.embeddingModel,
+      analysisStatus: "ready",
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    });
+    await Promise.all([
+      ctx.db.patch(observationId, { wardrobeItemId, resolutionStatus: "promoted_new", resolvedAt: timestamp, updatedAt: timestamp }),
+      ctx.db.patch(observation.fitCheckItemId, { wardrobeItemId, source: "created_from_fit_check" }),
+    ]);
+    try {
+      await retrier.run(ctx, internal.zepSync.syncGarmentIdentityResolution, {
+        userId: user.userId,
+        user,
+        fitCheckId: observation.fitCheckId,
+        wardrobeItemId,
+        category: observation.category,
+        description: observation.description,
+        resolution: "promoted_new",
+        score: observation.matchScore,
+        createdAt: timestamp,
+      });
+    } catch (error) {
+      console.warn("zep.sync.garment_identity.enqueue_failed", { observationId, message: toErrorMessage(error) });
+    }
+    return { success: true as const, wardrobeItemId };
   },
 });

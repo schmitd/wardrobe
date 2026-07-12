@@ -46,3 +46,14 @@ export const embedText = (text: string) =>
     const result = yield* gemini.embedContent(text);
     return result.embedding.values;
   }).pipe(withRetries);
+
+export const embedImage = (base64: string, mimeType: string, context?: string) =>
+  Effect.gen(function* () {
+    const gemini = yield* GeminiService;
+    const parts = [
+      ...(context ? [{ text: context }] : []),
+      { inlineData: { data: base64, mimeType } },
+    ];
+    const result = yield* gemini.embedContent(parts);
+    return result.embedding.values;
+  }).pipe(withRetries);

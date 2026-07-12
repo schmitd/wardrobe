@@ -12,6 +12,7 @@ import type * as account from "../account.js";
 import type * as authIdentity from "../authIdentity.js";
 import type * as candidates from "../candidates.js";
 import type * as fitChecks from "../fitChecks.js";
+import type * as garmentIdentityQueries from "../garmentIdentityQueries.js";
 import type * as http from "../http.js";
 import type * as profile from "../profile.js";
 import type * as retrier from "../retrier.js";
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   authIdentity: typeof authIdentity;
   candidates: typeof candidates;
   fitChecks: typeof fitChecks;
+  garmentIdentityQueries: typeof garmentIdentityQueries;
   http: typeof http;
   profile: typeof profile;
   retrier: typeof retrier;

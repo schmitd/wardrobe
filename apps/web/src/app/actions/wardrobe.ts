@@ -23,6 +23,7 @@ import {
   GeminiService,
 } from "@/services/GeminiService";
 import {
+  embedImage,
   embedText,
   fetchImageBase64,
   parseJson,
@@ -30,6 +31,12 @@ import {
   toInferenceFailure,
   withRetries,
 } from "@/server/inference/shared";
+import {
+  classifyGarmentMatch,
+  cropGarmentRegion,
+  normalizeGarmentCategory,
+  type GarmentIdentityCandidate,
+} from "@/server/garmentIdentity";
 import { processWardrobeInference } from "@/server/wardrobeInference";
 
 type UserTier = "free" | "pro";
@@ -94,6 +101,26 @@ const runBestEffort = async <A>(
     return undefined;
   }
   return outcome.right;
+};
+
+const backfillWardrobeVisualEmbeddings = async (token: string, traceId: string, userId: string) => {
+  const missing = await fetchQuery(api.wardrobe.listItemsMissingVisualEmbedding, { limit: 12 }, { token });
+  for (const item of missing) {
+    if (!item.imageUrl) continue;
+    const imageUrl = item.imageUrl;
+    await runBestEffort("wardrobe.visual_embedding.backfill_item_failed", { traceId, userId }, async () => {
+      const base64 = await fetchImageBase64(imageUrl);
+      const context = [item.category, item.description, ...item.styleTags].filter(Boolean).join(" ");
+      const visualEmbedding = await runServerAction(
+        embedImage(base64, item.contentType, context).pipe(Effect.provide(GeminiLive))
+      );
+      await fetchMutation(api.wardrobe.applyVisualEmbedding, {
+        itemId: item.id,
+        visualEmbedding,
+        model: "gemini-embedding-2@768",
+      }, { token });
+    });
+  }
 };
 
 export const getUploadUrlAction = async () => {
@@ -342,7 +369,7 @@ type DetectedFitCheckItem = {
 
 type RecordFitCheckItemInput = {
   wardrobeItemId?: Id<"wardrobeItems">;
-  source: "matched_existing" | "created_from_fit_check";
+  source: "matched_existing" | "created_from_fit_check" | "observed_unresolved";
   category: string;
   description: string;
   styleTags: string[];
@@ -354,20 +381,30 @@ type RecordFitCheckItemInput = {
   };
   confidence?: number;
   embedding?: number[];
+  observation?: {
+    cropStorageId: Id<"_storage">;
+    categoryKey: string;
+    visualEmbedding: number[];
+    semanticEmbedding?: number[];
+    embeddingModel: string;
+    detectorModel: string;
+    resolutionStatus: "auto_matched" | "needs_confirmation" | "unresolved";
+    matchScore?: number;
+    matchMargin?: number;
+    candidateItemIds: Id<"wardrobeItems">[];
+    candidateScores: number[];
+  };
 };
 
 const normalizeBoundingBox = (box: DetectedFitCheckItem["bounding_box"]) => {
   if (!box) return undefined;
   const clamp = (value: number) => Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0));
-  return {
-    x: clamp(box.x),
-    y: clamp(box.y),
-    width: clamp(box.width),
-    height: clamp(box.height),
-  };
+  const x = clamp(box.x);
+  const y = clamp(box.y);
+  return { x, y, width: Math.min(clamp(box.width), 1 - x), height: Math.min(clamp(box.height), 1 - y) };
 };
 
-const analyzeFitCheckPhoto = (base64: string, type: FitCheckKind) =>
+const analyzeFitCheckPhoto = (base64: string, type: FitCheckKind, mimeType = "image/jpeg") =>
   Effect.gen(function* () {
     const gemini = yield* GeminiService;
     const schema: Schema = {
@@ -420,7 +457,7 @@ Return JSON only.
           role: "user",
           parts: [
             { text: prompt },
-            { inlineData: { data: base64, mimeType: "image/jpeg" } },
+            { inlineData: { data: base64, mimeType } },
           ],
         },
       ],
@@ -1185,6 +1222,10 @@ export const recordFitCheckForAuth = async (
     { token }
   );
 
+  await runBestEffort("wardrobe.visual_embedding.backfill_failed", { traceId, userId }, () =>
+    backfillWardrobeVisualEmbeddings(token, traceId, userId)
+  );
+
   const recorded = await runBestEffort("fit_check.analysis.failed", { traceId, userId }, async () => {
     const imageUrl = await fetchQuery(
       api.storage.getStorageUrl,
@@ -1193,33 +1234,85 @@ export const recordFitCheckForAuth = async (
     );
     if (!imageUrl) throw new Error("Uploaded file missing");
 
-    const base64 = await fetchImageBase64(imageUrl);
+    const imageResponse = await fetch(imageUrl);
+    if (!imageResponse.ok) throw new Error(`Image fetch failed: ${imageResponse.statusText}`);
+    const imageMimeType = imageResponse.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+    const sourceImage = Buffer.from(await imageResponse.arrayBuffer());
+    const base64 = sourceImage.toString("base64");
     const analysis = await runServerAction(
-      analyzeFitCheckPhoto(base64, input.type).pipe(Effect.provide(GeminiLive))
+      analyzeFitCheckPhoto(base64, input.type, imageMimeType).pipe(Effect.provide(GeminiLive))
     );
     const items: RecordFitCheckItemInput[] = [];
     for (const item of analysis.items) {
-      const embedding = await runServerAction(
+      const semanticEmbedding = await runServerAction(
         embedText(`${item.description} ${item.style_tags.join(" ")}`.trim()).pipe(
           Effect.provide(GeminiLive)
         )
       );
-      const matches = await fetchAction(
-        api.wardrobe.searchSimilarItems,
-        { embedding, limit: 1 },
-        { token }
-      );
-      const bestMatch = matches[0];
-      const matchedExisting = bestMatch && bestMatch._score >= 0.78;
+      const observation = item.bounding_box
+        ? await runBestEffort("fit_check.garment_observation.failed", { traceId, userId }, async () => {
+            const crop = await cropGarmentRegion(sourceImage, item.bounding_box!);
+            const cropBase64 = crop.toString("base64");
+            const visualEmbedding = await runServerAction(
+              embedImage(cropBase64, "image/jpeg", `${item.category}. ${item.description}`).pipe(Effect.provide(GeminiLive))
+            );
+            const categoryKey = normalizeGarmentCategory(item.category);
+            const candidates = await fetchAction(
+              api.wardrobe.searchGarmentIdentityCandidates,
+              { visualEmbedding, categoryKey, limit: 5 },
+              { token }
+            ) as GarmentIdentityCandidate[];
+            const decision = classifyGarmentMatch(candidates);
+
+            const uploadUrl = await fetchMutation(api.wardrobe.getUploadUrl, {}, { token });
+            const cropUpload = await fetch(uploadUrl, {
+              method: "POST",
+              headers: { "Content-Type": "image/jpeg" },
+              body: new Blob([new Uint8Array(crop)], { type: "image/jpeg" }),
+            });
+            if (!cropUpload.ok) throw new Error(`Crop upload failed: ${cropUpload.statusText}`);
+            const cropUploadResult = await cropUpload.json() as { storageId?: string };
+            if (!cropUploadResult.storageId) throw new Error("Crop upload missing storageId");
+            const cropStorageId = cropUploadResult.storageId as Id<"_storage">;
+            await fetchMutation(api.storage.registerUpload, { storageId: cropStorageId, purpose: "garment_crop" }, { token });
+
+            return {
+              decision,
+              cropStorageId,
+              categoryKey,
+              visualEmbedding,
+              candidates,
+            };
+          })
+        : undefined;
+
+      const autoWardrobeItemId = observation?.decision.status === "auto_matched"
+        ? observation.decision.wardrobeItemId as Id<"wardrobeItems">
+        : undefined;
       items.push({
-        source: matchedExisting ? ("matched_existing" as const) : ("created_from_fit_check" as const),
+        source: autoWardrobeItemId ? "matched_existing" : "observed_unresolved",
         category: item.category,
         description: item.description,
         styleTags: item.style_tags,
-        ...(matchedExisting ? { wardrobeItemId: bestMatch._id } : {}),
+        ...(autoWardrobeItemId ? { wardrobeItemId: autoWardrobeItemId } : {}),
         ...(item.bounding_box ? { boundingBox: item.bounding_box } : {}),
         ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
-        ...(matchedExisting ? {} : { embedding }),
+        embedding: semanticEmbedding,
+        ...(observation ? {
+          observation: {
+            cropStorageId: observation.cropStorageId,
+            categoryKey: observation.categoryKey,
+            visualEmbedding: observation.visualEmbedding,
+            semanticEmbedding,
+            embeddingModel: "gemini-embedding-2@768",
+            detectorModel: GEMINI_FLASH_LITE_MODEL,
+            resolutionStatus: observation.decision.status,
+            matchScore: observation.decision.confidence,
+            matchMargin: observation.decision.margin,
+            candidateItemIds: observation.candidates.map((candidate) => candidate.wardrobeItemId as Id<"wardrobeItems">),
+            candidateScores: observation.candidates.map((candidate) => candidate.score),
+          },
+        } : {}),
       });
     }
     const saved = await fetchMutation(

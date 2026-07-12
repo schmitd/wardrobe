@@ -18,6 +18,7 @@ import {
   GeminiService,
 } from "@/services/GeminiService";
 import {
+  embedImage,
   embedText,
   fetchImageBase64,
   parseJson,
@@ -262,6 +263,13 @@ export const processWardrobeInference = async ({
         Effect.provide(GeminiLive)
       )
     );
+    const visualEmbedding = await runServerAction(
+      embedImage(
+        base64,
+        item.contentType ?? "image/jpeg",
+        [finalCategory, detailResult.description, ...tagResult.style_tags].filter(Boolean).join(" ")
+      ).pipe(Effect.provide(GeminiLive))
+    );
 
     await onProgress?.("persisting");
     await fetchMutation(
@@ -272,6 +280,7 @@ export const processWardrobeInference = async ({
         description: detailResult.description,
         styleTags: tagResult.style_tags,
         embedding,
+        visualEmbedding,
         traceId,
         traceparent,
       },

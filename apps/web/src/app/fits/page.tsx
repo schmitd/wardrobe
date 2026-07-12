@@ -13,6 +13,7 @@ import { createTraceContext } from '@/lib/trace';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import GarmentObservationReview from '@/components/GarmentObservationReview';
 
 type FitCheckMode = 'daily_fit_check' | 'try_on';
 
@@ -130,7 +131,7 @@ function FitsContent() {
         </div>
       </section>
 
-      <section><h2 className="text-xl font-extrabold text-[#241426]">Recent fits</h2><div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{(fitChecks ?? []).map((fitCheck) => <article id={`fit-${String(fitCheck._id)}`} key={String(fitCheck._id)} className="overflow-hidden border border-[var(--rack-line)] bg-white shadow-[3px_3px_0_var(--rack-panel-shadow)]"><div className="relative aspect-[4/3] bg-[var(--rack-wash)]">{fitCheck.imageUrl && <Image src={fitCheck.imageUrl} alt={fitCheck.transcription ?? fitCheck.type} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />}</div><div className="p-4"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#56345c]">{fitCheck.type === 'try_on' ? 'Try on' : 'Fit check'} · {new Date(fitCheck.createdAt).toLocaleDateString()}</p><p className="mt-2 text-sm font-medium leading-relaxed text-[#241426]">{fitCheck.transcription ?? fitCheck.description ?? 'No notes yet.'}</p></div></article>)}</div></section>
+      <section><h2 className="text-xl font-extrabold text-[#241426]">Recent fits</h2><div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{(fitChecks ?? []).map((fitCheck) => <article id={`fit-${String(fitCheck._id)}`} key={String(fitCheck._id)} className="overflow-hidden border border-[var(--rack-line)] bg-white shadow-[3px_3px_0_var(--rack-panel-shadow)]"><div className="relative aspect-[4/3] bg-[var(--rack-wash)]">{fitCheck.imageUrl && <Image src={fitCheck.imageUrl} alt={fitCheck.transcription ?? fitCheck.type} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />}</div><div className="p-4"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#56345c]">{fitCheck.type === 'try_on' ? 'Try on' : 'Fit check'} · {new Date(fitCheck.createdAt).toLocaleDateString()}</p><p className="mt-2 text-sm font-medium leading-relaxed text-[#241426]">{fitCheck.transcription ?? fitCheck.description ?? 'No notes yet.'}</p>{fitCheck.type === 'daily_fit_check' && <GarmentObservationReview observations={fitCheck.observations} />}</div></article>)}</div></section>
     </main>
   );
 }
