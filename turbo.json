@@ -12,7 +12,9 @@
         "GEMINI_API_KEY",
         "ZEP_KEY",
         "AXIOM_TOKEN",
-        "AXIOM_DATASET"
+        "AXIOM_DATASET",
+        "NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN",
+        "NEXT_PUBLIC_POSTHOG_HOST"
       ]
     },
     "dev": {

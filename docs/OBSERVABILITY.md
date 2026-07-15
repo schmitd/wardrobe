@@ -17,11 +17,13 @@ Do not mirror server logs or trace payloads into PostHog. Never send prompts, up
 
 - PostHog project: [Wardrobe project 281423](https://us.posthog.com/project/281423)
 - Product dashboard: [Wardrobe product dashboard 1836234](https://us.posthog.com/project/281423/dashboard/1836234)
+- Bug-feedback dashboard: [Wardrobe Bug Feedback 1854419](https://us.posthog.com/project/281423/dashboard/1854419)
 - Session replay: [Recordings](https://us.posthog.com/project/281423/replay)
 - Compatibility survey: [Compatibility feedback](https://us.posthog.com/project/281423/surveys/019f570d-9a15-0000-aeee-3ec5bba6e5e9)
 - Survey rollout flag: `compatibility-feedback-survey` (50% rollout)
 - Axiom organization: [davids-org-xpzu](https://app.axiom.co/davids-org-xpzu)
 - Axiom dataset: `wardrobe-logs`
+- Axiom operations dashboard: [Wardrobe Operations](https://app.axiom.co/davids-org-xpzu/dashboards/uid/f40a830c-1fde-4e6b-b0c0-143246781bcc)
 - GitHub work queue: [schmitd/wardrobe issues](https://github.com/schmitd/wardrobe/issues)
 
 The official PostHog plugin/MCP and Axiom MCP are connected in Codex. Vercel injects the PostHog public token and host into production and preview environments. Axiom receives OTLP server telemetry directly because the Vercel Marketplace log drain requires a paid Vercel plan; direct OTLP is the intentional integration on the current plan.
@@ -72,4 +74,4 @@ The web app proxies `/ingest/*` to PostHog, which keeps browser analytics first-
 3. Open the deployed app and confirm a `$pageview`, a masked replay, and no new browser exception.
 4. Exercise one server-backed workflow and confirm its Axiom trace carries the deployment SHA or trace ID.
 
-Last dashboard and connection verification: 2026-07-15.
+Last dashboard and connection verification: 2026-07-15. Production smoke `9e965e17-a5bc-4702-96f4-f1c8f3b6a6a2` was accepted by both PostHog and Axiom for commit `466213e2a7c4d7a3ead952a244e123101c5ab116`.
