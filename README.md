@@ -55,11 +55,14 @@ Use `gemini-2.5-flash` in Google AI Studio for the app's primary fit-checking fe
     ZEP_KEY=your_zep_key
     AXIOM_TOKEN=your_axiom_token
     AXIOM_DATASET=your_axiom_dataset
+    NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=your_posthog_project_token
+    NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
     ```
     Notes:
     - Convex trusts the production Clerk issuer (`https://clerk.wardrobe.davidcschmitt.com`) and the project development issuer (`https://beloved-guppy-95.clerk.accounts.dev`) by default.
     - The Clerk JWT template must include the `aud` claim set to `convex`.
     - Server actions export OTLP telemetry to Axiom via Effect runtime; enable Convex log streaming separately if you want Convex logs in Axiom.
+    - PostHog is reserved for product analytics, feature flags, surveys, masked session replay, and browser exceptions. See `docs/OBSERVABILITY.md` for the telemetry contract and dashboard links.
 5.  **Run the app**:
     ```bash
     bun dev
@@ -76,6 +79,14 @@ bun run typecheck
 Vercel builds through `bun run vercel-build`, which runs the web workspace's Convex CLI with `convex deploy --cmd "cd ../.. && bun run web-build"`. Set `CONVEX_DEPLOY_KEY` in Vercel so each production or preview web deployment deploys the matching Convex functions and schema before the frontend build completes.
 
 Set `STYLE_FIT_API_TOKEN` on the web app to require `Authorization: Bearer <token>` for `/api/context/style-fit`. Companion apps can pass the token through their own runtime config (`WARDROBE_API_TOKEN` for the ChatGPT app, Chrome extension storage, or `EXPO_PUBLIC_WARDROBE_API_TOKEN` for Expo development builds).
+
+Vercel provides the PostHog public token and host to both production and preview deployments. Axiom remains connected through the server-side `AXIOM_TOKEN` and `AXIOM_DATASET` variables, which also apply to production and previews.
+
+To verify both ingestion paths without customer data, pull the intended Vercel environment and run:
+
+```bash
+bun run observability:smoke
+```
 
 ## Usage
 

@@ -11,6 +11,7 @@ import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import RackItemCard from './RackItemCard';
+import posthog from 'posthog-js';
 
 type GuestDemoItem = {
   id: string;
@@ -123,7 +124,11 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       );
       setBio(result.suggestedBio);
       setDemoComplete(true);
+      posthog.capture('guest_demo_analyzed', {
+        item_count: result.items.length,
+      });
     } catch (uploadError) {
+      posthog.captureException(uploadError, { workflow: 'guest_demo' });
       const message = userFacingErrorMessage(uploadError, 'Analysis failed');
       setError(message);
     } finally {
@@ -232,6 +237,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
             <SignUpButton mode="modal" forceRedirectUrl="/" fallbackRedirectUrl="/">
               <Button
                 type="button"
+                onClick={() => posthog.capture('guest_signup_prompted', { source: 'demo_limit' })}
                 className="h-auto w-full rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)] sm:w-auto"
               >
                 Sign up
@@ -256,6 +262,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
             <SignUpButton mode="modal" forceRedirectUrl="/" fallbackRedirectUrl="/">
               <Button
                 type="button"
+                onClick={() => posthog.capture('guest_signup_prompted', { source: 'demo_complete' })}
                 className="h-auto w-full rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)] sm:w-auto"
               >
                 Save my style profile

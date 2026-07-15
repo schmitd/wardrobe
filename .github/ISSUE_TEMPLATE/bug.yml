@@ -1,0 +1,76 @@
+name: Bug report
+description: Triage a user-visible or operational failure with PostHog and Axiom evidence.
+title: "[Bug]: "
+labels:
+  - bug
+  - "status: needs-triage"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste uploads, prompts, style-bio text, access tokens, raw logs, or personal data. Link the protected PostHog/Axiom view instead.
+  - type: textarea
+    id: observed
+    attributes:
+      label: What happened?
+      description: Describe the visible behavior and impact.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      placeholder: "1. Open…\n2. Select…\n3. Observe…"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment and route
+      placeholder: "production /compatibility or preview URL"
+    validations:
+      required: true
+  - type: input
+    id: time
+    attributes:
+      label: Occurrence time and timezone
+      placeholder: "2026-07-15 14:35 America/New_York"
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - P0 — outage, security, or data-loss risk
+        - P1 — core workflow blocked for many users
+        - P2 — degraded workflow with a workaround
+        - P3 — minor or cosmetic defect
+    validations:
+      required: true
+  - type: input
+    id: replay
+    attributes:
+      label: PostHog replay, exception, or insight link
+      description: Link the protected view; do not paste its contents.
+  - type: input
+    id: axiom
+    attributes:
+      label: Axiom query or trace ID
+      description: Link the protected query or provide only the trace ID.
+  - type: input
+    id: scope
+    attributes:
+      label: Affected-user scope
+      placeholder: "anonymous/authenticated/pro tier; no email or name"
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Fix acceptance criteria
+      description: Include the deploy and telemetry checks needed to close this issue.

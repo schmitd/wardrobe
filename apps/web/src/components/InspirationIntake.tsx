@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Either, promiseEffect, runBackground, runEffectResult } from '@/lib/effect-result';
 import { createTraceContext } from '@/lib/trace';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
+import posthog from 'posthog-js';
 
 export default function InspirationIntake({ collectionId, collectionName }: { collectionId: string; collectionName: string }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -55,6 +56,7 @@ export default function InspirationIntake({ collectionId, collectionName }: { co
       })
     );
     if (Either.isLeft(outcome)) {
+      posthog.captureException(outcome.left, { workflow: 'inspiration_add', stage });
       console.error('inspiration.add.failed', { stage, error: outcome.left });
       setState('error');
       setMessage(userFacingErrorMessage(
@@ -69,6 +71,10 @@ export default function InspirationIntake({ collectionId, collectionName }: { co
     }
     setState('saved');
     setMessage(`Added to ${collectionName}.`);
+    posthog.capture('inspiration_saved', {
+      has_photo: true,
+      collection_type: 'wardrobe',
+    });
     runBackground('style_bio.background_refresh.failed', () => refreshStyleBioAction());
     runBackground('inspiration.enrichment.failed', () => enrichInspirationAction({
       candidateItemId: String(outcome.right.saved.id),
