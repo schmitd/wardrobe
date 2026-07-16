@@ -4,19 +4,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { Plus } from 'lucide-react';
 import { useQuery } from 'convex/react';
+import { Effect, Either } from 'effect';
 import { api } from '@convex/_generated/api';
 import AddItemSection from '@/components/AddItemSection';
 import GuestClosetDemo from '@/components/GuestClosetDemo';
 import WardrobeGrid from '@/components/WardrobeGrid';
 import RackFitActions from '@/components/RackFitActions';
 import {
+  completeGuestOnboardingAction,
   createWardrobeItemAction,
   getUploadUrlAction,
-  seedWardrobeItemFromGuestAction,
   updateProfileBioAction,
 } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
-import { loadGuestSnapshot, removeGuestSnapshotItem, updateGuestSnapshotItem } from '@/lib/guestSnapshot';
+import { clearGuestSnapshot, loadGuestSnapshot, updateGuestSnapshotItem } from '@/lib/guestSnapshot';
 import { dataUrlToFile } from '@/lib/imageClient';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ export default function Home() {
   const items = useQuery(api.wardrobe.listWardrobeItems, isSignedIn ? {} : 'skip');
   const [optimisticItems, setOptimisticItems] = useState<OptimisticWardrobeItem[]>([]);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const importedSnapshotRef = useRef<number | null>(null);
   const isImportingSnapshotRef = useRef(false);
 
@@ -86,6 +88,7 @@ export default function Home() {
 
     importedSnapshotRef.current = snapshot.createdAt;
     isImportingSnapshotRef.current = true;
+    setImportError(null);
 
     const queue = snapshot.items.map((item) => ({
       item,
@@ -117,6 +120,14 @@ export default function Home() {
       // Non-blocking; the user can still edit/save on Profile.
     }
 
+    let allItemsPrepared = true;
+    const preparedItems: Array<{
+      item: (typeof queue)[number]['item'];
+      tempId: string;
+      itemId: string;
+      traceId: string;
+      traceparent: string;
+    }> = [];
     try {
       for (const { item, tempId, traceId, traceparent } of queue) {
         try {
@@ -148,34 +159,88 @@ export default function Home() {
           if (!createdItemId) {
             throw new Error('Import failed to create wardrobe item');
           }
-
-          const seeded = await seedWardrobeItemFromGuestAction({
-            itemId: createdItemId,
-            category: item.category,
-            description: item.description,
-            styleTags: item.styleTags,
+          preparedItems.push({
+            item,
+            tempId,
+            itemId: String(createdItemId),
             traceId,
             traceparent,
           });
-
-          if (!seeded.success) {
-            patchOptimisticItem(tempId, {
-              status: 'error',
-              error: userFacingErrorMessage(seeded.error, 'Analysis failed'),
-            });
-            continue;
-          }
-
-          // Remove imported items from the guest snapshot so backing out of auth or refreshing
-          // doesn't re-import duplicates.
-          removeGuestSnapshotItem(item.id);
         } catch (error) {
+          allItemsPrepared = false;
           patchOptimisticItem(tempId, {
             status: 'error',
             error: userFacingErrorMessage(error, 'Import failed'),
           });
         }
       }
+
+      if (!allItemsPrepared) return;
+      if (!snapshot.sourceFit) {
+        setImportError('Your original fit check is no longer available. Start with a new full-body photo.');
+        return;
+      }
+
+      setImportStatus('Saving your closet and first fit check...');
+      const completionOutcome = await Effect.runPromise(
+        Effect.tryPromise({
+          try: async () => {
+            const file = dataUrlToFile(snapshot.sourceFit!.dataUrl, snapshot.sourceFit!.fileName);
+            const uploadUrl = await getUploadUrlAction();
+            const uploadResponse = await fetch(uploadUrl, { method: 'POST', body: file });
+            if (!uploadResponse.ok) throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+            const { storageId } = await uploadResponse.json();
+            if (!storageId) throw new Error('Upload response missing storageId');
+            const trace = createTraceContext();
+            return completeGuestOnboardingAction({
+              items: preparedItems.map(({ item, itemId, traceId, traceparent }) => ({
+                itemId,
+                category: item.category,
+                description: item.description,
+                styleTags: item.styleTags,
+                ...(item.boundingBox ? { boundingBox: item.boundingBox } : {}),
+                ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
+                traceId,
+                traceparent,
+              })),
+              sourceFit: {
+                storageId,
+                transcription: snapshot.sourceFit!.transcription,
+              },
+              ...trace,
+            });
+          },
+          catch: (error) => error,
+        }).pipe(Effect.either)
+      );
+
+      if (Either.isLeft(completionOutcome)) {
+        const message = userFacingErrorMessage(
+          completionOutcome.left,
+          'Your closet was saved, but onboarding needs another try.'
+        );
+        preparedItems.forEach(({ tempId }) => {
+          patchOptimisticItem(tempId, { status: 'error', error: message });
+        });
+        setImportError(message);
+        return;
+      }
+
+      if (!completionOutcome.right.success) {
+        for (const result of completionOutcome.right.results) {
+          if (result.success) continue;
+          const prepared = preparedItems.find(({ itemId }) => itemId === result.itemId);
+          if (!prepared) continue;
+          patchOptimisticItem(prepared.tempId, {
+            status: 'error',
+            error: userFacingErrorMessage(result.error, 'Analysis failed'),
+          });
+        }
+        setImportError('Some pieces need another pass before the first fit can be saved.');
+        return;
+      }
+
+      clearGuestSnapshot();
     } finally {
       setImportStatus(null);
       isImportingSnapshotRef.current = false;
@@ -243,6 +308,11 @@ export default function Home() {
           {importStatus && (
             <div className="rack-panel rack-panel--shell rounded-none px-5 py-4 text-sm font-semibold text-[#241426]">
               {importStatus}
+            </div>
+          )}
+          {importError && (
+            <div role="alert" className="rack-panel rounded-none border-[var(--rack-danger)] bg-[var(--rack-danger-wash)] px-5 py-4 text-sm font-semibold text-[var(--rack-danger)]">
+              {importError}
             </div>
           )}
 

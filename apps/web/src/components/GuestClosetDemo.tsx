@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SignInButton, SignUpButton } from '@clerk/nextjs';
 import { Loader2, Sparkles } from 'lucide-react';
-import { analyzeGuestBatchAction, type GuestBatchAnalysisResult } from '@/app/actions/wardrobe';
+import { analyzeGuestFitCheckAction, type GuestFitCheckAnalysisResult } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
 import { loadGuestSnapshot, saveGuestSnapshot } from '@/lib/guestSnapshot';
 import { downscaleToJpegDataUrl } from '@/lib/imageClient';
@@ -21,6 +21,20 @@ type GuestDemoItem = {
   category: string;
   description: string;
   styleTags: string[];
+  boundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  confidence?: number;
+};
+
+type GuestSourceFit = {
+  fileName: string;
+  mimeType: string;
+  dataUrl: string;
+  transcription: string;
 };
 
 interface GuestClosetDemoProps {
@@ -34,6 +48,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
   const [error, setError] = useState<string | null>(null);
   const [bio, setBio] = useState('');
   const [items, setItems] = useState<GuestDemoItem[]>([]);
+  const [sourceFit, setSourceFit] = useState<GuestSourceFit | null>(null);
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
   const hasGeneratedBio = demoComplete && bio.trim().length > 0;
 
@@ -50,9 +65,12 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         category: item.category,
         description: item.description,
         styleTags: item.styleTags,
+        ...(item.boundingBox ? { boundingBox: item.boundingBox } : {}),
+        ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
       }))
     );
     setBio(snapshot.bio);
+    setSourceFit(snapshot.sourceFit ?? null);
     setDemoComplete(true);
   }, []);
 
@@ -64,6 +82,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       version: 1,
       createdAt: Date.now(),
       bio,
+      ...(sourceFit ? { sourceFit } : {}),
       items: items.map((item) => ({
         id: item.id,
         fileName: item.fileName,
@@ -72,9 +91,11 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         category: item.category,
         description: item.description,
         styleTags: item.styleTags,
+        ...(item.boundingBox ? { boundingBox: item.boundingBox } : {}),
+        ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
       })),
     });
-  }, [bio, demoComplete, items]);
+  }, [bio, demoComplete, items, sourceFit]);
 
   const handleFiles = async (files: File[]) => {
     if (files.length === 0) return;
@@ -87,22 +108,21 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
     setLimitMessage(null);
 
     try {
-      const imageFiles = files.filter((file) => file.type.startsWith('image/'));
-      const payload = await Promise.all(
-        imageFiles.map(async (file) => ({
-          id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
-          fileName: file.name,
-          ...(await downscaleToJpegDataUrl(file, { maxSize: 1024, quality: 0.82 })),
-        }))
-      );
+      const imageFile = files.find((file) => file.type.startsWith('image/'));
+      if (!imageFile) throw new Error('Choose a photo file to continue.');
+      const payload = {
+        id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+        fileName: imageFile.name,
+        ...(await downscaleToJpegDataUrl(imageFile, { maxSize: 1280, quality: 0.82 })),
+      };
 
       const trace = createTraceContext();
-      const result: GuestBatchAnalysisResult = await analyzeGuestBatchAction({
-        items: payload.map((entry) => ({
-          fileName: entry.fileName,
-          mimeType: entry.mimeType,
-          base64: entry.dataUrl,
-        })),
+      const result: GuestFitCheckAnalysisResult = await analyzeGuestFitCheckAction({
+        photo: {
+          fileName: payload.fileName,
+          mimeType: payload.mimeType,
+          base64: payload.dataUrl,
+        },
         ...trace,
       });
 
@@ -113,18 +133,26 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
 
       setItems(
         result.items.map((entry, index) => ({
-          id: payload[index]?.id ?? `${entry.fileName}-${index}`,
+          id: `${payload.id}-${index}`,
           fileName: entry.fileName,
-          previewUrl: payload[index]?.dataUrl ?? '',
-          dataUrl: payload[index]?.dataUrl ?? '',
+          previewUrl: entry.dataUrl,
+          dataUrl: entry.dataUrl,
           category: entry.category,
           description: entry.description,
           styleTags: entry.styleTags,
+          boundingBox: entry.boundingBox,
+          ...(entry.confidence !== undefined ? { confidence: entry.confidence } : {}),
         }))
       );
       setBio(result.suggestedBio);
+      setSourceFit({
+        fileName: payload.fileName,
+        mimeType: payload.mimeType,
+        dataUrl: payload.dataUrl,
+        transcription: result.transcription,
+      });
       setDemoComplete(true);
-      posthog.capture('guest_demo_analyzed', {
+      posthog.capture('guest_fit_check_analyzed', {
         item_count: result.items.length,
       });
     } catch (uploadError) {
@@ -148,7 +176,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
             category={item.category}
             description={item.description}
             styleTags={item.styleTags}
-            badgeLabel="Demo"
+            badgeLabel="From your fit"
           />
         </div>
       )),
@@ -163,7 +191,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
             Create your dream wardrobe
           </h1>
           <p className="mt-3 max-w-xl text-sm font-medium leading-relaxed text-[var(--rack-ink-soft)] md:text-base">
-            Find your style based on your existing clothing. Once we define your look, you can modify it and we will help you find more clothes to perfect your wardrobe.
+            Find your style based on what you already wear. Start with one full-body photo and we will pick out the pieces, define your look, and help you perfect your wardrobe.
           </p>
         </div>
 
@@ -189,18 +217,19 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 id="guest-upload-title" className="text-xl font-extrabold text-[var(--rack-ink)]">
-              First, add a few items that are quintessentially &quot;you&quot;
+              First, add one full-body fit check
             </h2>
             <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-[var(--rack-ink-soft)]">
-              Press Start Building Your Closet to take photos or add them from your camera roll
+              Press Start with a fit check to take a full-body selfie or choose one from your camera roll. Keep your whole outfit in frame and wear something that feels quintessentially &quot;you.&quot;
             </p>
           </div>
           <Button
             type="button"
+            disabled={isAnalyzing}
             onClick={() => fileInputRef.current?.click()}
             className="h-auto w-fit self-start rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)]"
           >
-            Start building your closet
+            Start with a fit check
           </Button>
         </div>
 
@@ -210,15 +239,17 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
           type="file"
           className="hidden"
           accept="image/*"
-          multiple
-          capture="environment"
-          onChange={(event) => handleFiles(Array.from(event.target.files ?? []))}
+          onChange={(event) => {
+            const files = Array.from(event.currentTarget.files ?? []);
+            event.currentTarget.value = '';
+            void handleFiles(files);
+          }}
         />
 
         {isAnalyzing && (
           <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-[var(--rack-ink)]">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Reading textures, palettes, and silhouettes...</span>
+            <span>Reading your outfit’s textures, palette, and silhouette...</span>
           </div>
         )}
 

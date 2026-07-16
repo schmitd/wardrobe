@@ -9,6 +9,7 @@ import {
   addCandidateComparisonMemory,
   addCandidateInspirationMemory,
   addFitCheckMemory,
+  addGarmentIdentityResolutionMemory,
   addWardrobeCollectionMemory,
   addWardrobeItemsMemory,
   deleteUserMemory,
@@ -240,7 +241,8 @@ export const syncFitCheck = internalAction({
         source: v.union(
           v.literal("matched_existing"),
           v.literal("created_from_fit_check"),
-          v.literal("transcribed_only")
+          v.literal("transcribed_only"),
+          v.literal("observed_unresolved")
         ),
         category: v.optional(v.union(v.string(), v.null())),
         description: v.optional(v.union(v.string(), v.null())),
@@ -271,6 +273,31 @@ export const syncFitCheck = internalAction({
       storageId: args.storageId,
       createdAt: args.createdAt,
       items: args.items,
+    }, args.user);
+  },
+});
+
+export const syncGarmentIdentityResolution = internalAction({
+  args: {
+    userId: v.string(),
+    user: zepUser,
+    fitCheckId: v.id("fitChecks"),
+    wardrobeItemId: v.id("wardrobeItems"),
+    category: v.string(),
+    description: v.string(),
+    resolution: v.union(v.literal("confirmed"), v.literal("promoted_new")),
+    score: v.optional(v.number()),
+    createdAt: v.number(),
+  },
+  handler: async (_ctx, args) => {
+    await addGarmentIdentityResolutionMemory(args.userId, {
+      fitCheckId: String(args.fitCheckId),
+      wardrobeItemId: String(args.wardrobeItemId),
+      category: args.category,
+      description: args.description,
+      resolution: args.resolution,
+      score: args.score,
+      createdAt: args.createdAt,
     }, args.user);
   },
 });

@@ -7,6 +7,13 @@ export type GuestSnapshotItem = {
   category: string;
   description: string;
   styleTags: string[];
+  boundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  confidence?: number;
   createdItemId?: string;
 };
 
@@ -15,6 +22,12 @@ export type GuestSnapshot = {
   createdAt: number;
   bio: string;
   items: GuestSnapshotItem[];
+  sourceFit?: {
+    fileName: string;
+    mimeType: string;
+    dataUrl: string;
+    transcription: string;
+  };
 };
 
 const STORAGE_KEY = "wardrobe.guestSnapshot.v1";

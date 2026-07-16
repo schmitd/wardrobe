@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, mock } from "bun:test";
+import { Either } from "effect";
 
 const fetchMutationMock = mock();
 const fetchQueryMock = mock();
@@ -412,6 +413,120 @@ describe("wardrobe server actions", () => {
     expect(result.capped).toBe(true);
     expect(result.items).toHaveLength(4);
     expect(runServerActionMock).toHaveBeenCalledTimes(6);
+  });
+
+  it("turns one guest fit photo into cropped onboarding pieces", async () => {
+    queueRunServerAction(
+      {
+        transcription: "A blue shirt with black trousers.",
+        items: [
+          {
+            category: "Top",
+            description: "Blue crew-neck shirt",
+            style_tags: ["clean", "casual"],
+            bounding_box: { x: 0.2, y: 0.2, width: 0.6, height: 0.35 },
+            confidence: 0.96,
+          },
+        ],
+      },
+      Either.right(Buffer.from("cropped-jpeg")),
+      { bio: "I wear clean, casual foundations." }
+    );
+
+    const result = await actions.analyzeGuestFitCheckAction({
+      photo: {
+        fileName: "outfit.jpg",
+        mimeType: "image/jpeg",
+        base64: "data:image/jpeg;base64,QUJDRA==",
+      },
+    });
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected a successful guest fit result");
+    expect(result.transcription).toBe("A blue shirt with black trousers.");
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        fileName: "fit-top-1.jpg",
+        category: "Top",
+        dataUrl: "data:image/jpeg;base64,Y3JvcHBlZC1qcGVn",
+      }),
+    ]);
+    expect(result.suggestedBio).toBe("I wear clean, casual foundations.");
+  });
+
+  it("completes all guest pieces and the first fit behind one onboarding limit check", async () => {
+    fetchQueryMock.mockImplementation(async (_query, args) => ({
+      _id: args.itemId,
+      storageId: `storage_${args.itemId}`,
+      imageUrl: `https://example.com/${args.itemId}.jpg`,
+      contentType: "image/jpeg",
+    }));
+    fetchMutationMock.mockImplementation(async (mutation, args) => {
+      if (mutation === api.fitChecks.recordFitCheck) {
+        return { id: "fit_onboarding", created: true, items: args.items };
+      }
+      return { success: true };
+    });
+    queueRunServerAction(
+      [0.1, 0.2],
+      [0.3, 0.4],
+      [0.5, 0.6],
+      [0.7, 0.8]
+    );
+
+    const result = await actions.completeGuestOnboardingAction({
+      items: [
+        {
+          itemId: "item_top",
+          category: "Top",
+          description: "Blue crew-neck shirt",
+          styleTags: ["clean", "casual"],
+          boundingBox: { x: 0.2, y: 0.2, width: 0.6, height: 0.35 },
+          confidence: 0.96,
+        },
+        {
+          itemId: "item_bottom",
+          category: "Bottom",
+          description: "Black straight-leg pants",
+          styleTags: ["minimal"],
+          boundingBox: { x: 0.25, y: 0.5, width: 0.5, height: 0.4 },
+          confidence: 0.94,
+        },
+      ],
+      sourceFit: {
+        storageId: "storage_fit",
+        transcription: "A blue shirt with black pants.",
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(runServerActionMock).toHaveBeenCalledTimes(5);
+    expect(fetchMutationMock).toHaveBeenCalledWith(
+      api.fitChecks.recordFitCheck,
+      expect.objectContaining({
+        storageId: "storage_fit",
+        type: "daily_fit_check",
+        items: [
+          expect.objectContaining({
+            wardrobeItemId: "item_top",
+            source: "matched_existing",
+            observation: expect.objectContaining({
+              resolutionStatus: "auto_matched",
+              candidateItemIds: ["item_top"],
+            }),
+          }),
+          expect.objectContaining({
+            wardrobeItemId: "item_bottom",
+            source: "matched_existing",
+            observation: expect.objectContaining({
+              resolutionStatus: "auto_matched",
+              candidateItemIds: ["item_bottom"],
+            }),
+          }),
+        ],
+      }),
+      expect.objectContaining({ token: "token_123" })
+    );
   });
 
   it("rejects oversized guest images before inference", async () => {

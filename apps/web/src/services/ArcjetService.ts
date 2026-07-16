@@ -2,11 +2,12 @@ import arcjet, { detectBot, fixedWindow, request, slidingWindow } from "@arcjet/
 import { Context, Effect, Layer } from "effect";
 
 export type UserTier = "free" | "pro";
-export type AuthenticatedScope = "upload" | "check" | "inference";
+export type AuthenticatedScope = "upload" | "check" | "inference" | "onboarding";
 
 const UPLOAD_DAILY_LIMIT: Record<UserTier, number> = { free: 5, pro: 20 };
 const CHECK_DAILY_LIMIT: Record<UserTier, number> = { free: 3, pro: 20 };
 const INFERENCE_DAILY_LIMIT: Record<UserTier, number> = { free: 5, pro: 20 };
+const ONBOARDING_DAILY_LIMIT: Record<UserTier, number> = { free: 2, pro: 10 };
 const RATE_LIMIT_WINDOW = "1d";
 const RATE_LIMIT_BURST_INTERVAL = "10s";
 const RATE_LIMIT_BURST_MAX: Partial<Record<AuthenticatedScope, number>> = {
@@ -14,7 +15,10 @@ const RATE_LIMIT_BURST_MAX: Partial<Record<AuthenticatedScope, number>> = {
   inference: 1,
 };
 
-const GUEST_BATCH_UPLOAD_LIMIT = 2;
+// Preview deployments are exercised repeatedly by CI and manual QA from the same
+// browser/IP. Keep production's public allowance intentionally small without
+// making a successful preview impossible to retest during a release cycle.
+const GUEST_BATCH_UPLOAD_LIMIT = process.env.VERCEL_ENV === "preview" ? 8 : 2;
 const GUEST_BATCH_LIMIT_WINDOW = "7d";
 
 const SECURITY_UNAVAILABLE_MESSAGE = "Security checks are unavailable right now. Please try again.";
@@ -25,6 +29,8 @@ const CHECK_RATE_LIMIT_MESSAGE =
   "Compatibility check limit reached for your plan. Please try again later or upgrade to continue.";
 const INFERENCE_RATE_LIMIT_MESSAGE =
   "Analysis limit reached for your plan. Please try again later or upgrade to continue.";
+const ONBOARDING_RATE_LIMIT_MESSAGE =
+  "Onboarding limit reached for today. Please try again tomorrow.";
 const GUEST_AUTH_PROMPT_MESSAGE =
   "You have reached the guest upload limit (2 batches per week). Please sign in or create an account to continue.";
 const GUEST_BOT_BLOCK_MESSAGE =
@@ -48,6 +54,8 @@ const deniedErrorForScope = (scope: AuthenticatedScope) => {
       return new Error(UPLOAD_RATE_LIMIT_MESSAGE);
     case "check":
       return new Error(CHECK_RATE_LIMIT_MESSAGE);
+    case "onboarding":
+      return new Error(ONBOARDING_RATE_LIMIT_MESSAGE);
     case "inference":
     default:
       return new Error(INFERENCE_RATE_LIMIT_MESSAGE);
@@ -100,6 +108,10 @@ const make = Effect.gen(function* () {
     inference: {
       free: createAuthenticatedProtection("inference", INFERENCE_DAILY_LIMIT.free, arcjetKey),
       pro: createAuthenticatedProtection("inference", INFERENCE_DAILY_LIMIT.pro, arcjetKey),
+    },
+    onboarding: {
+      free: createAuthenticatedProtection("onboarding", ONBOARDING_DAILY_LIMIT.free, arcjetKey),
+      pro: createAuthenticatedProtection("onboarding", ONBOARDING_DAILY_LIMIT.pro, arcjetKey),
     },
   } as const;
 

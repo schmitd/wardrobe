@@ -33,7 +33,7 @@ export const GEMINI_EMBEDDING_DIMENSIONS = 768;
 type EmbedContentRequestWithDimensions = {
   content: {
     role: string;
-    parts: Array<{ text: string }>;
+    parts: Part[];
   };
   output_dimensionality: typeof GEMINI_EMBEDDING_DIMENSIONS;
 };
@@ -56,7 +56,7 @@ export interface GeminiService {
     request: GenerateContentRequest | string | Array<string | Part>
   ) => Effect.Effect<GenerateContentResult, GeminiError>;
 
-  readonly embedContent: (text: string) => Effect.Effect<EmbedContentResponse, GeminiError>;
+  readonly embedContent: (input: string | Part[]) => Effect.Effect<EmbedContentResponse, GeminiError>;
 
   readonly batchEmbedContents: (
     request: BatchEmbedContentsRequest
@@ -112,11 +112,11 @@ const make = Effect.gen(function* () {
         catch: (error) => new GeminiError(error),
       }).pipe(Effect.withSpan("gemini.generateContent", { attributes: { model: modelName } })),
 
-    embedContent: (text: string) =>
+    embedContent: (input: string | Part[]) =>
       Effect.tryPromise({
         try: () => {
           const request = {
-            content: { role: "user", parts: [{ text }] },
+            content: { role: "user", parts: typeof input === "string" ? [{ text: input }] : input },
             output_dimensionality: GEMINI_EMBEDDING_DIMENSIONS,
           } satisfies EmbedContentRequestWithDimensions;
           return embeddingModel.embedContent(

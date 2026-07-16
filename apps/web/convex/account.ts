@@ -14,6 +14,7 @@ export const deleteUserData = internalMutation({
       wardrobeMemberships,
       fitChecks,
       fitCheckItems,
+      garmentObservations,
       uploads,
       subscriptions,
       profileBioRevisions,
@@ -47,6 +48,10 @@ export const deleteUserData = internalMutation({
         .withIndex("by_user", (q) => q.eq("userId", userId))
         .collect(),
       ctx.db
+        .query("garmentObservations")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .collect(),
+      ctx.db
         .query("uploads")
         .withIndex("by_user", (q) => q.eq("userId", userId))
         .collect(),
@@ -64,6 +69,7 @@ export const deleteUserData = internalMutation({
       ...wardrobeItems.map((item) => item.storageId),
       ...candidateItems.flatMap((item) => (item.storageId ? [item.storageId] : [])),
       ...fitChecks.map((fitCheck) => fitCheck.storageId),
+      ...garmentObservations.map((observation) => observation.cropStorageId),
       ...uploads.map((upload) => upload.storageId),
     ]);
 
@@ -75,6 +81,7 @@ export const deleteUserData = internalMutation({
     await Promise.all(wardrobeMemberships.map((membership) => ctx.db.delete(membership._id)));
     await Promise.all(fitChecks.map((fitCheck) => ctx.db.delete(fitCheck._id)));
     await Promise.all(fitCheckItems.map((fitCheckItem) => ctx.db.delete(fitCheckItem._id)));
+    await Promise.all(garmentObservations.map((observation) => ctx.db.delete(observation._id)));
     await Promise.all(uploads.map((upload) => ctx.db.delete(upload._id)));
     await Promise.all(subscriptions.map((subscription) => ctx.db.delete(subscription._id)));
     await Promise.all(profileBioRevisions.map((revision) => ctx.db.delete(revision._id)));
@@ -87,6 +94,7 @@ export const deleteUserData = internalMutation({
       wardrobeMemberships: wardrobeMemberships.length,
       fitChecks: fitChecks.length,
       fitCheckItems: fitCheckItems.length,
+      garmentObservations: garmentObservations.length,
       uploads: uploads.length,
       subscriptions: subscriptions.length,
       profileBioRevisions: profileBioRevisions.length,

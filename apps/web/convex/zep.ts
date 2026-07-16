@@ -60,7 +60,7 @@ type FitCheckMemory = {
   items: Array<
     WardrobeItemMemory & {
       wardrobeItemId?: string | null;
-      source: "matched_existing" | "created_from_fit_check" | "transcribed_only";
+      source: "matched_existing" | "created_from_fit_check" | "transcribed_only" | "observed_unresolved";
       boundingBox?: { x: number; y: number; width: number; height: number } | null;
       confidence?: number;
     }
@@ -857,6 +857,9 @@ export const addFitCheckMemory = async (
   });
 
   for (const item of fitCheck.items) {
+    // Unresolved visual observations stay in the source episode, but do not
+    // become graph identities until the app or user resolves them.
+    if (item.source === "observed_unresolved") continue;
     const wardrobeItem: WardrobeItemMemory = {
       ...item,
       itemId: item.wardrobeItemId ?? item.itemId ?? null,
@@ -907,6 +910,83 @@ export const addFitCheckMemory = async (
     }
 
     await addStyleConceptFacts(client, userId, user, wardrobeItem, itemNode, itemNodeSummary, createdAt);
+  }
+};
+
+export const addGarmentIdentityResolutionMemory = async (
+  userId: string,
+  resolution: {
+    fitCheckId: string;
+    wardrobeItemId: string;
+    category: string;
+    description: string;
+    resolution: "confirmed" | "promoted_new";
+    score?: number | null;
+    createdAt: number;
+  },
+  user?: AuthenticatedUser | null
+) => {
+  if (!apiKey) return;
+  const client = ensureClient();
+  const item: WardrobeItemMemory = {
+    itemId: resolution.wardrobeItemId,
+    category: resolution.category,
+    description: resolution.description,
+    sourceFitCheckId: resolution.fitCheckId,
+  };
+  const itemNode = itemNodeName(item, "Wardrobe item");
+  const contextName = truncate(`Fit check ${resolution.fitCheckId}`, 50);
+
+  await addGraphEpisode(client, userId, user, {
+    sourceDescription: "Garment observation identity resolved",
+    createdAt: resolution.createdAt,
+    data: {
+      event: "garment_identity_resolved",
+      wardrobeItemId: resolution.wardrobeItemId,
+      fitCheckId: resolution.fitCheckId,
+      category: resolution.category,
+      description: resolution.description,
+      resolution: resolution.resolution,
+      matchScore: resolution.score ?? null,
+    },
+  });
+
+  await addFactTriple(client, userId, user, {
+    factName: "WORN_FOR",
+    fact: `${itemReference(item)} was identified in daily fit check ${resolution.fitCheckId}.`,
+    sourceNodeName: itemNode,
+    sourceNodeSummary: itemSummary(item),
+    sourceNodeAttributes: itemAttributes(item),
+    targetNodeName: contextName,
+    targetNodeSummary: `Daily fit check containing ${resolution.description}.`,
+    targetNodeAttributes: {
+      context_kind: "daily_fit_check",
+      timeframe: toIso(resolution.createdAt),
+      source_ref: resolution.fitCheckId,
+    },
+    edgeAttributes: {
+      usage_kind: "worn",
+      feedback: resolution.resolution,
+      event_time: toIso(resolution.createdAt),
+      match_score: resolution.score ?? null,
+    },
+    createdAt: resolution.createdAt,
+  });
+
+  if (resolution.resolution === "promoted_new") {
+    await addFactTriple(client, userId, user, {
+      factName: "ADDED_TO_WARDROBE",
+      fact: `User added ${itemReference(item)} after identifying it in a daily fit check.`,
+      targetNodeName: itemNode,
+      targetNodeSummary: itemSummary(item),
+      targetNodeAttributes: itemAttributes(item),
+      edgeAttributes: {
+        added_reason: "confirmed_from_daily_fit_check",
+        source_ref: resolution.fitCheckId,
+        event_time: toIso(resolution.createdAt),
+      },
+      createdAt: resolution.createdAt,
+    });
   }
 };
 
