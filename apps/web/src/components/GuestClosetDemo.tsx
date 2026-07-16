@@ -130,6 +130,10 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         setLimitMessage(result.message);
         return;
       }
+      if (result.kind === 'error') {
+        setError(result.message);
+        return;
+      }
 
       setItems(
         result.items.map((entry, index) => ({

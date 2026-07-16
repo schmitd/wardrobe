@@ -454,6 +454,27 @@ describe("wardrobe server actions", () => {
     expect(result.suggestedBio).toBe("I wear clean, casual foundations.");
   });
 
+  it("returns a useful recovery message when a guest fit photo is blocked", async () => {
+    allowArcjet();
+    runServerActionMock.mockRejectedValueOnce(
+      new Error("Text not available. Response was blocked due to PROHIBITED_CONTENT")
+    );
+
+    const result = await actions.analyzeGuestFitCheckAction({
+      photo: {
+        fileName: "outfit.jpg",
+        mimeType: "image/jpeg",
+        base64: "data:image/jpeg;base64,QUJDRA==",
+      },
+    });
+
+    expect(result).toEqual({
+      kind: "error",
+      message:
+        "This photo could not be analyzed. Try another well-lit photo where your full outfit is visible.",
+    });
+  });
+
   it("completes all guest pieces and the first fit behind one onboarding limit check", async () => {
     fetchQueryMock.mockImplementation(async (_query, args) => ({
       _id: args.itemId,
