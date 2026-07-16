@@ -15,7 +15,10 @@ const RATE_LIMIT_BURST_MAX: Partial<Record<AuthenticatedScope, number>> = {
   inference: 1,
 };
 
-const GUEST_BATCH_UPLOAD_LIMIT = 2;
+// Preview deployments are exercised repeatedly by CI and manual QA from the same
+// browser/IP. Keep production's public allowance intentionally small without
+// making a successful preview impossible to retest during a release cycle.
+const GUEST_BATCH_UPLOAD_LIMIT = process.env.VERCEL_ENV === "preview" ? 8 : 2;
 const GUEST_BATCH_LIMIT_WINDOW = "7d";
 
 const SECURITY_UNAVAILABLE_MESSAGE = "Security checks are unavailable right now. Please try again.";
