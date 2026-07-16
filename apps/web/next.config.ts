@@ -1,17 +1,21 @@
 import type { NextConfig } from "next";
 
+const sharpRuntimeFiles = [
+  "./node_modules/@img/sharp-linux-x64/**/*",
+  "./node_modules/@img/sharp-libvips-linux-x64/**/*",
+  "../../node_modules/@img/sharp-linux-x64/**/*",
+  "../../node_modules/@img/sharp-libvips-linux-x64/**/*",
+];
+
 const nextConfig: NextConfig = {
   transpilePackages: ["@wardrobe/context-client", "@wardrobe/shared"],
   // Sharp loads its platform packages dynamically, so Next's file tracer does
   // not discover libvips on its own. Include both Linux runtime packages in the
-  // /fits server function instead of shipping only the sharp native binding.
+  // onboarding and /fits server functions instead of shipping only the sharp
+  // native binding.
   outputFileTracingIncludes: {
-    "/fits": [
-      "./node_modules/@img/sharp-linux-x64/**/*",
-      "./node_modules/@img/sharp-libvips-linux-x64/**/*",
-      "../../node_modules/@img/sharp-linux-x64/**/*",
-      "../../node_modules/@img/sharp-libvips-linux-x64/**/*",
-    ],
+    "/": sharpRuntimeFiles,
+    "/fits": sharpRuntimeFiles,
   },
   // Keep analytics first-party so ad blockers do not silently remove product signals.
   // The more-specific static route must come before the catch-all proxy.
