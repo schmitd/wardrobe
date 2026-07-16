@@ -354,6 +354,14 @@ const analyzeSelfie = (base64: string) =>
 
 type FitCheckKind = "daily_fit_check" | "try_on";
 
+const FIT_CHECK_CONTENT_BLOCK_MESSAGE =
+  "This photo could not be analyzed. Try another well-lit photo where your full outfit is visible.";
+
+const isGeminiContentBlock = (error: unknown) =>
+  /PROHIBITED_CONTENT|prompt was blocked|response was blocked|finishReason.*SAFETY/i.test(
+    toErrorMessage(error)
+  );
+
 type DetectedFitCheckItem = {
   category: string;
   description: string;
@@ -441,7 +449,8 @@ const analyzeFitCheckPhoto = (base64: string, type: FitCheckKind, mimeType = "im
       required: ["transcription", "items"],
     };
 
-    const prompt = `Analyze this full-body outfit photo for a ${type === "daily_fit_check" ? "daily fit check of what the user actually wore" : "try-on check of items the user tried on"}.
+    const prompt = `Analyze only the clothing and accessories visible in this outfit photo for a ${type === "daily_fit_check" ? "daily fit check of what the user actually wore" : "try-on check of items the user tried on"}.
+Do not identify or describe the person. Do not infer age, gender, ethnicity, health, body characteristics, or any other sensitive personal trait. Ignore exposed skin and omit anything that is not clearly a garment or accessory.
 Return JSON only.
 - transcription: one concise sentence describing the whole outfit.
 - items: each visible worn garment, shoe, bag, or accessory.
@@ -451,26 +460,45 @@ Return JSON only.
 - bounding_box: normalized coordinates from 0 to 1 around just that item, as { x, y, width, height }.
 - confidence: 0 to 1.`;
 
-    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: prompt },
-            { inlineData: { data: base64, mimeType } },
+    const requestAnalysis = (
+      model: typeof GEMINI_FLASH_LITE_MODEL | "gemini-2.5-flash",
+      instruction: string
+    ) =>
+      Effect.gen(function* () {
+        const result = yield* gemini.generateContent(model, {
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: instruction },
+                { inlineData: { data: base64, mimeType } },
+              ],
+            },
           ],
-        },
-      ],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseSchema: schema,
-      },
-    });
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: schema,
+          },
+        });
+        const responseText = yield* Effect.try({
+          try: () => result.response.text(),
+          catch: (error) => new Error(toErrorMessage(error)),
+        });
+        return yield* parseJson<{
+          transcription: string;
+          items: DetectedFitCheckItem[];
+        }>(responseText, "analyzeFitCheckPhoto");
+      });
 
-    const parsed = yield* parseJson<{
-      transcription: string;
-      items: DetectedFitCheckItem[];
-    }>(result.response.text(), "analyzeFitCheckPhoto");
+    const fallbackPrompt = `${prompt}
+This is a wardrobe cataloging task. Focus narrowly on fabric, color, silhouette, and garment boundaries; produce no commentary about the wearer.`;
+    const parsed = yield* requestAnalysis(GEMINI_FLASH_LITE_MODEL, prompt).pipe(
+      Effect.catchAll((error) =>
+        isGeminiContentBlock(error)
+          ? requestAnalysis("gemini-2.5-flash", fallbackPrompt)
+          : Effect.fail(error)
+      )
+    );
 
     return {
       transcription: truncateWords(parsed.transcription, 40),
@@ -485,7 +513,12 @@ Return JSON only.
             : undefined,
       })),
     };
-  }).pipe(withRetries);
+  }).pipe(
+    Effect.retry({
+      times: 2,
+      while: (error) => !isGeminiContentBlock(error),
+    })
+  );
 
 const generateClosetBio = (items: { category: string; description: string; style_tags: string[] }[]) =>
   Effect.gen(function* () {
@@ -1638,6 +1671,10 @@ export type GuestFitCheckAnalysisResult =
   | {
       kind: "limit";
       message: string;
+    }
+  | {
+      kind: "error";
+      message: string;
     };
 
 /**
@@ -1668,11 +1705,33 @@ export const analyzeGuestFitCheckAction = async (input: {
     };
   }
 
-  const analysis = await runServerAction(
-    analyzeFitCheckPhoto(photo.normalizedBase64, "daily_fit_check", photo.mimeType).pipe(
-      Effect.provide(GeminiLive)
-    )
+  const analysisOutcome = await Effect.runPromise(
+    Effect.tryPromise({
+      try: () =>
+        runServerAction(
+          analyzeFitCheckPhoto(photo.normalizedBase64, "daily_fit_check", photo.mimeType).pipe(
+            Effect.provide(GeminiLive)
+          )
+        ),
+      catch: (error) => error,
+    }).pipe(Effect.either)
   );
+  if (Either.isLeft(analysisOutcome)) {
+    const message = toErrorMessage(analysisOutcome.left);
+    console.warn("guest.fit_check.analysis_failed", {
+      traceId,
+      traceparent,
+      code: isGeminiContentBlock(message) ? "content_blocked" : "analysis_failed",
+      message,
+    });
+    return {
+      kind: "error",
+      message: isGeminiContentBlock(message)
+        ? FIT_CHECK_CONTENT_BLOCK_MESSAGE
+        : "We could not analyze this photo right now. Please try again.",
+    };
+  }
+  const analysis = analysisOutcome.right;
   const sourceImage = Buffer.from(photo.normalizedBase64, "base64");
   const croppedItems = [];
 
