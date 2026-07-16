@@ -21,6 +21,13 @@ type GuestDemoItem = {
   category: string;
   description: string;
   styleTags: string[];
+  boundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  confidence?: number;
 };
 
 type GuestSourceFit = {
@@ -58,6 +65,8 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         category: item.category,
         description: item.description,
         styleTags: item.styleTags,
+        ...(item.boundingBox ? { boundingBox: item.boundingBox } : {}),
+        ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
       }))
     );
     setBio(snapshot.bio);
@@ -82,6 +91,8 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         category: item.category,
         description: item.description,
         styleTags: item.styleTags,
+        ...(item.boundingBox ? { boundingBox: item.boundingBox } : {}),
+        ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
       })),
     });
   }, [bio, demoComplete, items, sourceFit]);
@@ -129,6 +140,8 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
           category: entry.category,
           description: entry.description,
           styleTags: entry.styleTags,
+          boundingBox: entry.boundingBox,
+          ...(entry.confidence !== undefined ? { confidence: entry.confidence } : {}),
         }))
       );
       setBio(result.suggestedBio);

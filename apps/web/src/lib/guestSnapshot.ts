@@ -7,6 +7,13 @@ export type GuestSnapshotItem = {
   category: string;
   description: string;
   styleTags: string[];
+  boundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  confidence?: number;
   createdItemId?: string;
 };
 

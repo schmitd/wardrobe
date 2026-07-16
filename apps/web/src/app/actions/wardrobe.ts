@@ -40,7 +40,7 @@ import {
 import { processWardrobeInference } from "@/server/wardrobeInference";
 
 type UserTier = "free" | "pro";
-type AuthenticatedScope = "upload" | "check" | "inference";
+type AuthenticatedScope = "upload" | "check" | "inference" | "onboarding";
 type ConvexAuthContext = {
   userId: string;
   token: string;
@@ -603,17 +603,43 @@ export const createWardrobeItemAction = async (input: {
   return result;
 };
 
-export const seedWardrobeItemFromGuestAction = async (input: {
+type GuestWardrobeSeedInput = {
   itemId: string;
   category?: string | null;
   description: string;
   styleTags: string[];
+  boundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  confidence?: number;
   traceId?: string;
   traceparent?: string;
-}) => {
-  const { userId, token, tier } = await getConvexAuth();
+};
+
+type GuestWardrobeSeedResult =
+  | {
+      success: true;
+      itemId: string;
+      storageId: Id<"_storage">;
+      categoryKey: string;
+      embedding: number[];
+      visualEmbedding: number[];
+    }
+  | {
+      success: false;
+      itemId: string;
+      error: string;
+    };
+
+const seedWardrobeItemFromGuestForAuth = async (
+  authContext: Pick<ConvexAuthContext, "userId" | "token">,
+  input: GuestWardrobeSeedInput
+): Promise<GuestWardrobeSeedResult> => {
+  const { userId, token } = authContext;
   const { traceId, traceparent } = ensureTraceContext(input);
-  await enforceAuthenticatedProtection({ scope: "inference", tier, userId });
 
   try {
     await fetchMutation(
@@ -678,7 +704,14 @@ export const seedWardrobeItemFromGuestAction = async (input: {
       { token }
     );
 
-    return { success: true as const };
+    return {
+      success: true as const,
+      itemId: input.itemId,
+      storageId: item.storageId,
+      categoryKey: normalizeGarmentCategory(input.category ?? "garment"),
+      embedding,
+      visualEmbedding,
+    };
   } catch (error) {
     const failure = toInferenceFailure(error);
     try {
@@ -697,8 +730,130 @@ export const seedWardrobeItemFromGuestAction = async (input: {
       code: failure.code,
       message: failure.message,
     });
-    return { success: false as const, error: failure.userMessage };
+    return {
+      success: false as const,
+      itemId: input.itemId,
+      error: failure.userMessage,
+    };
   }
+};
+
+export const seedWardrobeItemFromGuestAction = async (input: GuestWardrobeSeedInput) => {
+  const authContext = await getConvexAuth();
+  await enforceAuthenticatedProtection({
+    scope: "inference",
+    tier: authContext.tier,
+    userId: authContext.userId,
+  });
+  return seedWardrobeItemFromGuestForAuth(authContext, input);
+};
+
+export const completeGuestOnboardingAction = async (input: {
+  items: GuestWardrobeSeedInput[];
+  sourceFit: {
+    storageId: string;
+    transcription: string;
+  };
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const authContext = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+  const items = input.items.slice(0, 8);
+  if (items.length === 0) throw new Error("No onboarding items provided");
+
+  await enforceAuthenticatedProtection({
+    scope: "onboarding",
+    tier: authContext.tier,
+    userId: authContext.userId,
+  });
+
+  const results: Array<{
+    input: GuestWardrobeSeedInput;
+    result: GuestWardrobeSeedResult;
+  }> = [];
+  for (const item of items) {
+    results.push({
+      input: item,
+      result: await seedWardrobeItemFromGuestForAuth(authContext, item),
+    });
+  }
+
+  const successful = results.filter(
+    (entry): entry is {
+      input: GuestWardrobeSeedInput;
+      result: Extract<GuestWardrobeSeedResult, { success: true }>;
+    } => entry.result.success
+  );
+  if (successful.length !== results.length) {
+    return {
+      success: false as const,
+      results: results.map(({ result }) => result),
+    };
+  }
+
+  const fitStorageId = input.sourceFit.storageId as Id<"_storage">;
+  await fetchMutation(
+    api.storage.registerUpload,
+    { storageId: fitStorageId, purpose: "daily_fit_check" },
+    { token: authContext.token }
+  );
+
+  const recorded = await fetchMutation(
+    api.fitChecks.recordFitCheck,
+    {
+      storageId: fitStorageId,
+      type: "daily_fit_check",
+      transcription: input.sourceFit.transcription,
+      items: successful.map(({ input: item, result }) => {
+        const wardrobeItemId = item.itemId as Id<"wardrobeItems">;
+        return {
+          wardrobeItemId,
+          source: "matched_existing" as const,
+          category: item.category ?? null,
+          description: item.description,
+          styleTags: item.styleTags,
+          ...(item.boundingBox ? { boundingBox: item.boundingBox } : {}),
+          ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
+          embedding: result.embedding,
+          ...(item.boundingBox && item.category
+            ? {
+                observation: {
+                  cropStorageId: result.storageId,
+                  categoryKey: result.categoryKey,
+                  visualEmbedding: result.visualEmbedding,
+                  semanticEmbedding: result.embedding,
+                  embeddingModel: "gemini-embedding-2@768",
+                  detectorModel: GEMINI_FLASH_LITE_MODEL,
+                  resolutionStatus: "auto_matched" as const,
+                  matchScore: 1,
+                  matchMargin: 1,
+                  candidateItemIds: [wardrobeItemId],
+                  candidateScores: [1],
+                },
+              }
+            : {}),
+        };
+      }),
+      traceId,
+      traceparent,
+    },
+    { token: authContext.token }
+  );
+
+  console.info("guest.onboarding.complete", {
+    traceId,
+    traceparent,
+    userId: authContext.userId,
+    fitCheckId: recorded.id,
+    itemCount: successful.length,
+  });
+
+  return {
+    success: true as const,
+    fitCheckId: recorded.id,
+    results: successful.map(({ result }) => result),
+  };
 };
 
 export const deleteWardrobeItemAction = async (input: {
@@ -1470,6 +1625,13 @@ export type GuestFitCheckAnalysisResult =
         category: string;
         description: string;
         styleTags: string[];
+        boundingBox: {
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        };
+        confidence?: number;
       }[];
       suggestedBio: string;
     }
@@ -1515,11 +1677,12 @@ export const analyzeGuestFitCheckAction = async (input: {
   const croppedItems = [];
 
   for (const [index, item] of analysis.items.slice(0, 8).entries()) {
-    if (!item.bounding_box) continue;
+    const boundingBox = normalizeBoundingBox(item.bounding_box);
+    if (!boundingBox) continue;
     const crop = await runBestEffort(
       "guest.fit_check.crop_failed",
       { traceId, itemIndex: String(index) },
-      () => cropGarmentRegion(sourceImage, item.bounding_box!)
+      () => cropGarmentRegion(sourceImage, boundingBox)
     );
     if (!crop) continue;
     const categoryKey = normalizeGarmentCategory(item.category);
@@ -1529,6 +1692,8 @@ export const analyzeGuestFitCheckAction = async (input: {
       category: item.category,
       description: item.description,
       styleTags: item.style_tags,
+      boundingBox,
+      ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
     });
   }
 

@@ -11,10 +11,9 @@ import GuestClosetDemo from '@/components/GuestClosetDemo';
 import WardrobeGrid from '@/components/WardrobeGrid';
 import RackFitActions from '@/components/RackFitActions';
 import {
+  completeGuestOnboardingAction,
   createWardrobeItemAction,
   getUploadUrlAction,
-  recordDailyFitCheckAction,
-  seedWardrobeItemFromGuestAction,
   updateProfileBioAction,
 } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
@@ -121,7 +120,14 @@ export default function Home() {
       // Non-blocking; the user can still edit/save on Profile.
     }
 
-    let allItemsImported = true;
+    let allItemsPrepared = true;
+    const preparedItems: Array<{
+      item: (typeof queue)[number]['item'];
+      tempId: string;
+      itemId: string;
+      traceId: string;
+      traceparent: string;
+    }> = [];
     try {
       for (const { item, tempId, traceId, traceparent } of queue) {
         try {
@@ -153,27 +159,15 @@ export default function Home() {
           if (!createdItemId) {
             throw new Error('Import failed to create wardrobe item');
           }
-
-          const seeded = await seedWardrobeItemFromGuestAction({
-            itemId: createdItemId,
-            category: item.category,
-            description: item.description,
-            styleTags: item.styleTags,
+          preparedItems.push({
+            item,
+            tempId,
+            itemId: String(createdItemId),
             traceId,
             traceparent,
           });
-
-          if (!seeded.success) {
-            allItemsImported = false;
-            patchOptimisticItem(tempId, {
-              status: 'error',
-              error: userFacingErrorMessage(seeded.error, 'Analysis failed'),
-            });
-            continue;
-          }
-
         } catch (error) {
-          allItemsImported = false;
+          allItemsPrepared = false;
           patchOptimisticItem(tempId, {
             status: 'error',
             error: userFacingErrorMessage(error, 'Import failed'),
@@ -181,29 +175,69 @@ export default function Home() {
         }
       }
 
-      if (!allItemsImported) return;
+      if (!allItemsPrepared) return;
+      if (!snapshot.sourceFit) {
+        setImportError('Your original fit check is no longer available. Start with a new full-body photo.');
+        return;
+      }
 
-      if (snapshot.sourceFit) {
-        setImportStatus('Saving your first fit check...');
-        const fitOutcome = await Effect.runPromise(
-          Effect.tryPromise({
-            try: async () => {
-              const file = dataUrlToFile(snapshot.sourceFit!.dataUrl, snapshot.sourceFit!.fileName);
-              const uploadUrl = await getUploadUrlAction();
-              const uploadResponse = await fetch(uploadUrl, { method: 'POST', body: file });
-              if (!uploadResponse.ok) throw new Error(`Upload failed: ${uploadResponse.statusText}`);
-              const { storageId } = await uploadResponse.json();
-              if (!storageId) throw new Error('Upload response missing storageId');
-              const trace = createTraceContext();
-              return recordDailyFitCheckAction({ storageId, ...trace });
-            },
-            catch: (error) => error,
-          }).pipe(Effect.either)
+      setImportStatus('Saving your closet and first fit check...');
+      const completionOutcome = await Effect.runPromise(
+        Effect.tryPromise({
+          try: async () => {
+            const file = dataUrlToFile(snapshot.sourceFit!.dataUrl, snapshot.sourceFit!.fileName);
+            const uploadUrl = await getUploadUrlAction();
+            const uploadResponse = await fetch(uploadUrl, { method: 'POST', body: file });
+            if (!uploadResponse.ok) throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+            const { storageId } = await uploadResponse.json();
+            if (!storageId) throw new Error('Upload response missing storageId');
+            const trace = createTraceContext();
+            return completeGuestOnboardingAction({
+              items: preparedItems.map(({ item, itemId, traceId, traceparent }) => ({
+                itemId,
+                category: item.category,
+                description: item.description,
+                styleTags: item.styleTags,
+                ...(item.boundingBox ? { boundingBox: item.boundingBox } : {}),
+                ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
+                traceId,
+                traceparent,
+              })),
+              sourceFit: {
+                storageId,
+                transcription: snapshot.sourceFit!.transcription,
+              },
+              ...trace,
+            });
+          },
+          catch: (error) => error,
+        }).pipe(Effect.either)
+      );
+
+      if (Either.isLeft(completionOutcome)) {
+        const message = userFacingErrorMessage(
+          completionOutcome.left,
+          'Your closet was saved, but onboarding needs another try.'
         );
-        if (Either.isLeft(fitOutcome)) {
-          setImportError(userFacingErrorMessage(fitOutcome.left, 'Your closet was saved, but the first fit check needs another try.'));
-          return;
+        preparedItems.forEach(({ tempId }) => {
+          patchOptimisticItem(tempId, { status: 'error', error: message });
+        });
+        setImportError(message);
+        return;
+      }
+
+      if (!completionOutcome.right.success) {
+        for (const result of completionOutcome.right.results) {
+          if (result.success) continue;
+          const prepared = preparedItems.find(({ itemId }) => itemId === result.itemId);
+          if (!prepared) continue;
+          patchOptimisticItem(prepared.tempId, {
+            status: 'error',
+            error: userFacingErrorMessage(result.error, 'Analysis failed'),
+          });
         }
+        setImportError('Some pieces need another pass before the first fit can be saved.');
+        return;
       }
 
       clearGuestSnapshot();

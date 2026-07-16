@@ -454,6 +454,81 @@ describe("wardrobe server actions", () => {
     expect(result.suggestedBio).toBe("I wear clean, casual foundations.");
   });
 
+  it("completes all guest pieces and the first fit behind one onboarding limit check", async () => {
+    fetchQueryMock.mockImplementation(async (_query, args) => ({
+      _id: args.itemId,
+      storageId: `storage_${args.itemId}`,
+      imageUrl: `https://example.com/${args.itemId}.jpg`,
+      contentType: "image/jpeg",
+    }));
+    fetchMutationMock.mockImplementation(async (mutation, args) => {
+      if (mutation === api.fitChecks.recordFitCheck) {
+        return { id: "fit_onboarding", created: true, items: args.items };
+      }
+      return { success: true };
+    });
+    queueRunServerAction(
+      [0.1, 0.2],
+      [0.3, 0.4],
+      [0.5, 0.6],
+      [0.7, 0.8]
+    );
+
+    const result = await actions.completeGuestOnboardingAction({
+      items: [
+        {
+          itemId: "item_top",
+          category: "Top",
+          description: "Blue crew-neck shirt",
+          styleTags: ["clean", "casual"],
+          boundingBox: { x: 0.2, y: 0.2, width: 0.6, height: 0.35 },
+          confidence: 0.96,
+        },
+        {
+          itemId: "item_bottom",
+          category: "Bottom",
+          description: "Black straight-leg pants",
+          styleTags: ["minimal"],
+          boundingBox: { x: 0.25, y: 0.5, width: 0.5, height: 0.4 },
+          confidence: 0.94,
+        },
+      ],
+      sourceFit: {
+        storageId: "storage_fit",
+        transcription: "A blue shirt with black pants.",
+      },
+    });
+
+    expect(result.success).toBe(true);
+    expect(runServerActionMock).toHaveBeenCalledTimes(5);
+    expect(fetchMutationMock).toHaveBeenCalledWith(
+      api.fitChecks.recordFitCheck,
+      expect.objectContaining({
+        storageId: "storage_fit",
+        type: "daily_fit_check",
+        items: [
+          expect.objectContaining({
+            wardrobeItemId: "item_top",
+            source: "matched_existing",
+            observation: expect.objectContaining({
+              resolutionStatus: "auto_matched",
+              candidateItemIds: ["item_top"],
+            }),
+          }),
+          expect.objectContaining({
+            wardrobeItemId: "item_bottom",
+            source: "matched_existing",
+            observation: expect.objectContaining({
+              resolutionStatus: "auto_matched",
+              candidateItemIds: ["item_bottom"],
+            }),
+          }),
+        ],
+      }),
+      expect.objectContaining({ token: "token_123" })
+    );
+  });
+
   it("rejects oversized guest images before inference", async () => {
     const oversized = "A".repeat(2_100_000);
 
