@@ -1,0 +1,54 @@
+name: Product opportunity
+description: Capture a product hypothesis with PostHog evidence and a measurable outcome.
+title: "[Product]: "
+labels:
+  - enhancement
+  - "status: needs-triage"
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: Describe the user problem, not a preferred implementation.
+    validations:
+      required: true
+  - type: input
+    id: audience
+    attributes:
+      label: Target user and moment
+      placeholder: "Guests after completing the closet demo"
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Link PostHog insights, survey results, or masked replays. Do not paste customer data.
+    validations:
+      required: true
+  - type: input
+    id: metric
+    attributes:
+      label: Target metric and expected movement
+      placeholder: "Increase demo-to-signup conversion from X% to Y%"
+    validations:
+      required: true
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Hypothesis and rollout
+      description: State the expected mechanism and proposed feature-flag exposure/control.
+    validations:
+      required: true
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Scope, constraints, and operational guardrails
+      description: Note latency/error-rate limits to validate in Axiom.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance and decision criteria
+      description: Define what ships, what is measured, and when to keep, iterate, or roll back.
+    validations:
+      required: true

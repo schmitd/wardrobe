@@ -7,6 +7,7 @@ import type { OptimisticWardrobeItem } from '@/types/wardrobe';
 import { createTraceContext } from '@/lib/trace';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { createWardrobeItemAction, refreshStyleBioAction } from '@/app/actions/wardrobe';
+import posthog from 'posthog-js';
 
 interface AddItemSectionProps {
     onOptimisticAdd: (items: OptimisticWardrobeItem[]) => void;
@@ -173,7 +174,11 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                     }
 
                     successCount += 1;
+                    posthog.capture('wardrobe_item_added', {
+                        content_type: upload.file.type || 'unknown',
+                    });
                 } catch (error) {
+                    posthog.captureException(error, { workflow: 'wardrobe_item_add' });
                     console.error('wardrobe.create.failed', error);
                     onOptimisticUpdate(tempId, {
                         status: 'error',
@@ -195,6 +200,7 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
             }
             setTimeout(() => setStatus(null), 3000);
         } catch (e) {
+            posthog.captureException(e, { workflow: 'wardrobe_batch_add' });
             console.error("wardrobe.batch.failed", e);
             setStatus(userFacingErrorMessage(e, 'Analysis failed'));
         }

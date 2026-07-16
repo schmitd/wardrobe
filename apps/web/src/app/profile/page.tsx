@@ -12,6 +12,7 @@ import { createTraceContext } from '@/lib/trace';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import posthog from 'posthog-js';
 
 export default function ProfilePage() {
   const { isLoaded, isSignedIn } = useUser();
@@ -70,7 +71,9 @@ export default function ProfilePage() {
       const trace = createTraceContext();
       await updateProfileBioAction({ bio, ...trace });
       setSaveStatus('success');
+      posthog.capture('profile_bio_saved', { character_count: bio.length });
     } catch (error) {
+      posthog.captureException(error, { workflow: 'profile_bio_save' });
       setSaveStatus('error');
       setErrorMessage(String(error));
     }
@@ -92,7 +95,11 @@ export default function ProfilePage() {
         colorSeason: result.color_season,
       });
       setSaveStatus('success');
+      posthog.capture('selfie_analyzed', {
+        has_color_season: Boolean(result.color_season),
+      });
     } catch (error) {
+      posthog.captureException(error, { workflow: 'selfie_analysis' });
       console.error('selfie.analyze.failed', error);
       setSaveStatus('error');
       setErrorMessage('Failed to analyze selfie');
