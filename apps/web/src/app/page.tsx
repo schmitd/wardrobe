@@ -303,7 +303,7 @@ export default function Home() {
 
   return (
     <main className="relative min-h-screen pb-44">
-      <div className="mx-auto w-full max-w-[1320px] space-y-6 px-6 pb-16 pt-10 sm:px-8 lg:px-10">
+      <div className="mx-auto w-full max-w-[1320px] space-y-6 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-10 lg:pt-10">
         <section className="space-y-6">
           {importStatus && (
             <div className="rack-panel rack-panel--shell rounded-none px-5 py-4 text-sm font-semibold text-[#241426]">
