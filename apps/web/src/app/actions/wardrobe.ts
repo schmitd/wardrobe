@@ -650,6 +650,18 @@ export const seedWardrobeItemFromGuestAction = async (input: {
         Effect.provide(GeminiLive)
       )
     );
+    const item = await fetchQuery(
+      api.wardrobe.getWardrobeItemWithUrl,
+      { itemId: input.itemId as Id<"wardrobeItems"> },
+      { token }
+    );
+    const visualEmbedding = await runServerAction(
+      embedImage(
+        await fetchImageBase64(item.imageUrl),
+        item.contentType ?? "image/jpeg",
+        `${input.category ?? "garment"}. ${input.description}`
+      ).pipe(Effect.provide(GeminiLive))
+    );
 
     await fetchMutation(
       api.wardrobe.applyFullAnalysis,
@@ -659,6 +671,7 @@ export const seedWardrobeItemFromGuestAction = async (input: {
         description: input.description,
         styleTags: input.styleTags,
         embedding,
+        visualEmbedding,
         traceId,
         traceparent,
       },
@@ -1446,6 +1459,106 @@ export type GuestBatchAnalysisResult =
       message: string;
       limit: number;
     };
+
+export type GuestFitCheckAnalysisResult =
+  | {
+      kind: "ok";
+      transcription: string;
+      items: {
+        fileName: string;
+        dataUrl: string;
+        category: string;
+        description: string;
+        styleTags: string[];
+      }[];
+      suggestedBio: string;
+    }
+  | {
+      kind: "limit";
+      message: string;
+    };
+
+/**
+ * Turn one full-body guest photo into the same garment-sized inputs used by
+ * the signed-in closet. The original selfie stays client-side until signup;
+ * only the downscaled image is sent for this analysis.
+ */
+export const analyzeGuestFitCheckAction = async (input: {
+  photo: { fileName: string; mimeType: string; base64: string };
+  traceId?: string;
+  traceparent?: string;
+}): Promise<GuestFitCheckAnalysisResult> => {
+  const { traceId, traceparent } = ensureTraceContext(input);
+  const [photo] = validateGuestBatchItems([input.photo]);
+  if (!photo) throw new Error("No image provided");
+
+  const protection = await Effect.runPromise(
+    Effect.tryPromise({
+      try: enforceGuestBatchProtection,
+      catch: toErrorMessage,
+    }).pipe(Effect.either)
+  );
+  if (Either.isLeft(protection)) {
+    const message = protection.left;
+    return {
+      kind: "limit",
+      message: /automated traffic/i.test(message) ? message : GUEST_DEMO_LIMIT_MESSAGE,
+    };
+  }
+
+  const analysis = await runServerAction(
+    analyzeFitCheckPhoto(photo.normalizedBase64, "daily_fit_check", photo.mimeType).pipe(
+      Effect.provide(GeminiLive)
+    )
+  );
+  const sourceImage = Buffer.from(photo.normalizedBase64, "base64");
+  const croppedItems = [];
+
+  for (const [index, item] of analysis.items.slice(0, 8).entries()) {
+    if (!item.bounding_box) continue;
+    const crop = await runBestEffort(
+      "guest.fit_check.crop_failed",
+      { traceId, itemIndex: String(index) },
+      () => cropGarmentRegion(sourceImage, item.bounding_box!)
+    );
+    if (!crop) continue;
+    const categoryKey = normalizeGarmentCategory(item.category);
+    croppedItems.push({
+      fileName: `fit-${categoryKey}-${index + 1}.jpg`,
+      dataUrl: `data:image/jpeg;base64,${crop.toString("base64")}`,
+      category: item.category,
+      description: item.description,
+      styleTags: item.style_tags,
+    });
+  }
+
+  if (croppedItems.length === 0) {
+    throw new Error("We could not find a clear outfit. Try a well-lit, full-body photo.");
+  }
+
+  const summary = await runServerAction(
+    generateClosetBio(
+      croppedItems.map((item) => ({
+        category: item.category,
+        description: item.description,
+        style_tags: item.styleTags,
+      }))
+    ).pipe(Effect.provide(GeminiLive))
+  );
+
+  console.info("guest.fit_check.complete", {
+    traceId,
+    traceparent,
+    itemCount: croppedItems.length,
+  });
+
+  return {
+    kind: "ok",
+    transcription: analysis.transcription,
+    items: croppedItems,
+    suggestedBio: summary.bio,
+  };
+};
 
 export const analyzeGuestBatchAction = async (input: {
   items: { fileName: string; mimeType: string; base64: string }[];

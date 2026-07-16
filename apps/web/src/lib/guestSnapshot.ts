@@ -15,6 +15,12 @@ export type GuestSnapshot = {
   createdAt: number;
   bio: string;
   items: GuestSnapshotItem[];
+  sourceFit?: {
+    fileName: string;
+    mimeType: string;
+    dataUrl: string;
+    transcription: string;
+  };
 };
 
 const STORAGE_KEY = "wardrobe.guestSnapshot.v1";

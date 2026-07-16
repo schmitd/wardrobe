@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
 import { Plus } from 'lucide-react';
 import { useQuery } from 'convex/react';
+import { Effect, Either } from 'effect';
 import { api } from '@convex/_generated/api';
 import AddItemSection from '@/components/AddItemSection';
 import GuestClosetDemo from '@/components/GuestClosetDemo';
@@ -12,11 +13,12 @@ import RackFitActions from '@/components/RackFitActions';
 import {
   createWardrobeItemAction,
   getUploadUrlAction,
+  recordDailyFitCheckAction,
   seedWardrobeItemFromGuestAction,
   updateProfileBioAction,
 } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
-import { loadGuestSnapshot, removeGuestSnapshotItem, updateGuestSnapshotItem } from '@/lib/guestSnapshot';
+import { clearGuestSnapshot, loadGuestSnapshot, updateGuestSnapshotItem } from '@/lib/guestSnapshot';
 import { dataUrlToFile } from '@/lib/imageClient';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { Button } from '@/components/ui/button';
@@ -28,6 +30,7 @@ export default function Home() {
   const items = useQuery(api.wardrobe.listWardrobeItems, isSignedIn ? {} : 'skip');
   const [optimisticItems, setOptimisticItems] = useState<OptimisticWardrobeItem[]>([]);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const importedSnapshotRef = useRef<number | null>(null);
   const isImportingSnapshotRef = useRef(false);
 
@@ -86,6 +89,7 @@ export default function Home() {
 
     importedSnapshotRef.current = snapshot.createdAt;
     isImportingSnapshotRef.current = true;
+    setImportError(null);
 
     const queue = snapshot.items.map((item) => ({
       item,
@@ -117,6 +121,7 @@ export default function Home() {
       // Non-blocking; the user can still edit/save on Profile.
     }
 
+    let allItemsImported = true;
     try {
       for (const { item, tempId, traceId, traceparent } of queue) {
         try {
@@ -159,6 +164,7 @@ export default function Home() {
           });
 
           if (!seeded.success) {
+            allItemsImported = false;
             patchOptimisticItem(tempId, {
               status: 'error',
               error: userFacingErrorMessage(seeded.error, 'Analysis failed'),
@@ -166,16 +172,41 @@ export default function Home() {
             continue;
           }
 
-          // Remove imported items from the guest snapshot so backing out of auth or refreshing
-          // doesn't re-import duplicates.
-          removeGuestSnapshotItem(item.id);
         } catch (error) {
+          allItemsImported = false;
           patchOptimisticItem(tempId, {
             status: 'error',
             error: userFacingErrorMessage(error, 'Import failed'),
           });
         }
       }
+
+      if (!allItemsImported) return;
+
+      if (snapshot.sourceFit) {
+        setImportStatus('Saving your first fit check...');
+        const fitOutcome = await Effect.runPromise(
+          Effect.tryPromise({
+            try: async () => {
+              const file = dataUrlToFile(snapshot.sourceFit!.dataUrl, snapshot.sourceFit!.fileName);
+              const uploadUrl = await getUploadUrlAction();
+              const uploadResponse = await fetch(uploadUrl, { method: 'POST', body: file });
+              if (!uploadResponse.ok) throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+              const { storageId } = await uploadResponse.json();
+              if (!storageId) throw new Error('Upload response missing storageId');
+              const trace = createTraceContext();
+              return recordDailyFitCheckAction({ storageId, ...trace });
+            },
+            catch: (error) => error,
+          }).pipe(Effect.either)
+        );
+        if (Either.isLeft(fitOutcome)) {
+          setImportError(userFacingErrorMessage(fitOutcome.left, 'Your closet was saved, but the first fit check needs another try.'));
+          return;
+        }
+      }
+
+      clearGuestSnapshot();
     } finally {
       setImportStatus(null);
       isImportingSnapshotRef.current = false;
@@ -243,6 +274,11 @@ export default function Home() {
           {importStatus && (
             <div className="rack-panel rack-panel--shell rounded-none px-5 py-4 text-sm font-semibold text-[#241426]">
               {importStatus}
+            </div>
+          )}
+          {importError && (
+            <div role="alert" className="rack-panel rounded-none border-[var(--rack-danger)] bg-[var(--rack-danger-wash)] px-5 py-4 text-sm font-semibold text-[var(--rack-danger)]">
+              {importError}
             </div>
           )}
 

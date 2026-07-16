@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, mock } from "bun:test";
+import { Either } from "effect";
 
 const fetchMutationMock = mock();
 const fetchQueryMock = mock();
@@ -412,6 +413,45 @@ describe("wardrobe server actions", () => {
     expect(result.capped).toBe(true);
     expect(result.items).toHaveLength(4);
     expect(runServerActionMock).toHaveBeenCalledTimes(6);
+  });
+
+  it("turns one guest fit photo into cropped onboarding pieces", async () => {
+    queueRunServerAction(
+      {
+        transcription: "A blue shirt with black trousers.",
+        items: [
+          {
+            category: "Top",
+            description: "Blue crew-neck shirt",
+            style_tags: ["clean", "casual"],
+            bounding_box: { x: 0.2, y: 0.2, width: 0.6, height: 0.35 },
+            confidence: 0.96,
+          },
+        ],
+      },
+      Either.right(Buffer.from("cropped-jpeg")),
+      { bio: "I wear clean, casual foundations." }
+    );
+
+    const result = await actions.analyzeGuestFitCheckAction({
+      photo: {
+        fileName: "outfit.jpg",
+        mimeType: "image/jpeg",
+        base64: "data:image/jpeg;base64,QUJDRA==",
+      },
+    });
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected a successful guest fit result");
+    expect(result.transcription).toBe("A blue shirt with black trousers.");
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        fileName: "fit-top-1.jpg",
+        category: "Top",
+        dataUrl: "data:image/jpeg;base64,Y3JvcHBlZC1qcGVn",
+      }),
+    ]);
+    expect(result.suggestedBio).toBe("I wear clean, casual foundations.");
   });
 
   it("rejects oversized guest images before inference", async () => {
