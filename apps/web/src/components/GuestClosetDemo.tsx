@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SignInButton, SignUpButton } from '@clerk/nextjs';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Camera, Loader2, Sparkles } from 'lucide-react';
 import { analyzeGuestFitCheckAction, type GuestFitCheckAnalysisResult } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
 import { loadGuestSnapshot, saveGuestSnapshot } from '@/lib/guestSnapshot';
@@ -189,18 +189,70 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
 
   return (
     <section className="space-y-6">
-      <section className="rack-panel rack-panel--shell" aria-labelledby="guest-style-bio-title">
-        <div className="max-w-2xl">
-          <h1 id="guest-style-bio-title" className="text-3xl font-extrabold leading-tight text-[var(--rack-ink)] md:text-5xl">
+      <section
+        id="rack-uploader"
+        className="rack-panel rack-panel--action overflow-hidden"
+        aria-labelledby="guest-style-bio-title"
+      >
+        <div className="max-w-3xl">
+          <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--rack-ink-soft)]">
+            Your closet starts here
+          </p>
+          <h1
+            id="guest-style-bio-title"
+            className="mt-2 text-3xl font-extrabold leading-tight text-[var(--rack-ink)] md:text-5xl"
+          >
             Create your dream wardrobe
           </h1>
-          <p className="mt-3 max-w-xl text-sm font-medium leading-relaxed text-[var(--rack-ink-soft)] md:text-base">
+          <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-[var(--rack-ink-soft)] md:text-base">
             Find your style based on what you already wear. Start with one full-body photo and we will pick out the pieces, define your look, and help you perfect your wardrobe.
           </p>
         </div>
 
+        {!demoComplete && (
+          <div className="mt-6 border-t border-[var(--rack-line)] pt-5">
+            <div className="max-w-2xl">
+              <h2 id="guest-upload-title" className="text-xl font-extrabold text-[var(--rack-ink)] md:text-2xl">
+                Add one full-body fit check
+              </h2>
+              <p
+                id="guest-upload-help"
+                className="mt-2 text-sm font-medium leading-relaxed text-[var(--rack-ink-soft)]"
+              >
+                Take a full-body selfie or choose one from your camera roll. Keep your whole outfit in frame and wear something that feels quintessentially &quot;you.&quot;
+              </p>
+            </div>
+
+            <Button
+              type="button"
+              disabled={isAnalyzing}
+              aria-describedby="guest-upload-help"
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-5 min-h-12 w-full rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)] sm:w-fit"
+            >
+              {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+              {isAnalyzing ? 'Reading your fit…' : error ? 'Try another fit check' : 'Start with a fit check'}
+            </Button>
+
+            {isAnalyzing && (
+              <p className="mt-3 text-sm font-semibold text-[var(--rack-ink)]" role="status" aria-live="polite">
+                Reading your outfit’s textures, palette, and silhouette…
+              </p>
+            )}
+
+            {error && (
+              <p
+                className="mt-4 border border-[var(--rack-danger)] bg-[var(--rack-danger-wash)] p-3 text-sm font-semibold leading-relaxed text-[var(--rack-danger)]"
+                role="alert"
+              >
+                {error}
+              </p>
+            )}
+          </div>
+        )}
+
         {hasGeneratedBio && (
-          <div className="mt-6">
+          <div className="mt-6 border-t border-[var(--rack-line)] pt-5">
             <div className="mb-3 flex items-center gap-2">
               <Sparkles className="h-4 w-4" />
               <p className="text-sm font-semibold text-[var(--rack-ink)]">Your closet bio</p>
@@ -215,27 +267,6 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
             </p>
           </div>
         )}
-      </section>
-
-      <section id="rack-uploader" className="rack-panel rack-panel--action" aria-labelledby="guest-upload-title">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h2 id="guest-upload-title" className="text-xl font-extrabold text-[var(--rack-ink)]">
-              First, add one full-body fit check
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-[var(--rack-ink-soft)]">
-              Press Start with a fit check to take a full-body selfie or choose one from your camera roll. Keep your whole outfit in frame and wear something that feels quintessentially &quot;you.&quot;
-            </p>
-          </div>
-          <Button
-            type="button"
-            disabled={isAnalyzing}
-            onClick={() => fileInputRef.current?.click()}
-            className="h-auto w-fit self-start rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)]"
-          >
-            Start with a fit check
-          </Button>
-        </div>
 
         <input
           id={uploaderInputId}
@@ -249,15 +280,6 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
             void handleFiles(files);
           }}
         />
-
-        {isAnalyzing && (
-          <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-[var(--rack-ink)]">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Reading your outfit’s textures, palette, and silhouette...</span>
-          </div>
-        )}
-
-        {error && <p className="mt-4 border border-[var(--rack-line)] bg-[var(--rack-danger-wash)] p-3 text-sm font-semibold text-[var(--rack-danger)]">{error}</p>}
       </section>
 
       {items.length > 0 && <div className="guest-rack-grid">{rackCards}</div>}

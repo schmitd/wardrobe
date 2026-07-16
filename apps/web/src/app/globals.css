@@ -513,6 +513,20 @@ h4 {
   }
 }
 
+@media (max-width: 767px) {
+  body:has(.rack-mobile-tabs) main {
+    padding-bottom: calc(8.5rem + env(safe-area-inset-bottom));
+  }
+
+  body:has(.rack-mobile-tabs) .rack-action-stack {
+    bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  }
+}
+
+.rack-mobile-tabs {
+  padding-bottom: max(0.35rem, env(safe-area-inset-bottom));
+}
+
 /* Keep Clerk's generated selectors from lowering auth-modal contrast. */
 .cl-card,
 .cl-modalContent {
