@@ -212,6 +212,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
           </div>
           <Button
             type="button"
+            disabled={isAnalyzing}
             onClick={() => fileInputRef.current?.click()}
             className="h-auto w-fit self-start rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)]"
           >
@@ -225,7 +226,11 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
           type="file"
           className="hidden"
           accept="image/*"
-          onChange={(event) => handleFiles(Array.from(event.target.files ?? []))}
+          onChange={(event) => {
+            const files = Array.from(event.currentTarget.files ?? []);
+            event.currentTarget.value = '';
+            void handleFiles(files);
+          }}
         />
 
         {isAnalyzing && (
