@@ -207,7 +207,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
               First, add one full-body fit check
             </h2>
             <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-[var(--rack-ink-soft)]">
-              Press Start With a Fit Check to take a full-body photo or add one from your camera roll. Wear an outfit that feels quintessentially &quot;you.&quot;
+              Press Start with a fit check to take a full-body selfie or choose one from your camera roll. Keep your whole outfit in frame and wear something that feels quintessentially &quot;you.&quot;
             </p>
           </div>
           <Button
