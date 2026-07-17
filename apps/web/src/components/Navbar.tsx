@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import { SignInButton, SignedIn, SignedOut } from '@clerk/nextjs';
 import { Layers3, Sparkles, Shirt, UserRound } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { UnifiedCaptureController, UnifiedCaptureTrigger } from '@/components/UnifiedCapture';
 import { cn } from '@/lib/utils';
 
 const navClass = (active: boolean) =>
@@ -15,7 +16,7 @@ const navClass = (active: boolean) =>
 
 const mobileNavClass = (active: boolean) =>
   cn(
-    'flex min-h-14 min-w-16 flex-col items-center justify-center gap-1 px-3 text-[0.68rem] font-bold transition-colors',
+    'flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[0.68rem] font-bold transition-colors',
     active ? 'bg-[var(--rack-action)] text-[var(--rack-ink)]' : 'text-[var(--rack-ink-soft)] hover:bg-white'
   );
 
@@ -30,6 +31,7 @@ export default function Navbar() {
   const pathname = usePathname();
   return (
     <>
+      <UnifiedCaptureController />
       <nav className="sticky top-0 z-40 border-b border-[var(--rack-line)] bg-[#D8C9DC]/95 backdrop-blur-sm">
         <div className="mx-auto flex min-h-16 w-full max-w-[1320px] items-center justify-between gap-4 px-4 py-2 lg:px-8">
           <Link href="/" className="inline-flex min-h-11 items-center gap-2" aria-label="Wardrobe home">
@@ -47,6 +49,7 @@ export default function Navbar() {
               </Link>
             </Button>
             <SignedIn>
+              <UnifiedCaptureTrigger variant="desktop" />
               {signedInLinks.slice(1).map(({ href, label, icon: Icon }) => (
                 <Button key={href} asChild variant="outline" className={navClass(pathname === href)}>
                   <Link href={href}>
@@ -73,8 +76,17 @@ export default function Navbar() {
           className="rack-mobile-tabs fixed inset-x-0 bottom-0 z-50 border-t border-[var(--rack-line)] bg-[var(--rack-paper)]/95 backdrop-blur-sm md:hidden"
           aria-label="Primary navigation"
         >
-          <div className="mx-auto grid max-w-md grid-cols-4">
-            {signedInLinks.map(({ href, label, icon: Icon }) => (
+          <div className="rack-mobile-tabs-inner mx-auto max-w-md">
+            {signedInLinks.slice(0, 2).map(({ href, label, icon: Icon }) => (
+              <Link key={href} href={href} className={mobileNavClass(pathname === href)} aria-current={pathname === href ? 'page' : undefined}>
+                <Icon className="h-5 w-5" />
+                <span>{label}</span>
+              </Link>
+            ))}
+            <div className="flex items-start justify-center">
+              <UnifiedCaptureTrigger variant="mobile" />
+            </div>
+            {signedInLinks.slice(2).map(({ href, label, icon: Icon }) => (
               <Link key={href} href={href} className={mobileNavClass(pathname === href)} aria-current={pathname === href ? 'page' : undefined}>
                 <Icon className="h-5 w-5" />
                 <span>{label}</span>
