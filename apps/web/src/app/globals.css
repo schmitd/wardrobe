@@ -422,6 +422,17 @@ h4 {
 
 .rack-mobile-tab-link {
   box-sizing: border-box;
+  border-top: 3px solid transparent;
+}
+
+.rack-mobile-tab-link--active {
+  border-top-color: var(--rack-ink);
+  font-weight: 900;
+}
+
+.rack-mobile-tab-link--active svg {
+  fill: currentColor;
+  stroke-width: 2.25;
 }
 
 .rack-capture-trigger {
