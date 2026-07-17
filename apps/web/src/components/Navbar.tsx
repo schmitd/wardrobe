@@ -18,8 +18,8 @@ const mobileNavClass = (active: boolean) =>
   cn(
     'rack-mobile-tab-link flex min-w-0 flex-col items-center justify-center gap-1 bg-transparent px-1 text-[0.68rem] font-bold transition-colors',
     active
-      ? 'rack-mobile-tab-link--active text-[var(--rack-ink)]'
-      : 'text-[var(--rack-ink-soft)] hover:text-[var(--rack-ink)]'
+      ? 'rack-mobile-tab-link--active text-[var(--rack-ink-soft)]'
+      : 'text-[var(--rack-ink-soft)]/75 hover:text-[var(--rack-ink-soft)]'
   );
 
 const signedInLinks = [

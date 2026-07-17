@@ -421,18 +421,39 @@ h4 {
 }
 
 .rack-mobile-tab-link {
+  position: relative;
   box-sizing: border-box;
-  border-top: 3px solid transparent;
 }
 
 .rack-mobile-tab-link--active {
-  border-top-color: var(--rack-ink);
   font-weight: 900;
+}
+
+.rack-mobile-tab-link--active::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--rack-ink-soft);
+  content: '';
+  pointer-events: none;
+}
+
+.rack-mobile-tabs-inner > .rack-mobile-tab-link--active:nth-child(2)::before {
+  right: -5rem;
+}
+
+.rack-mobile-tabs-inner > .rack-mobile-tab-link--active:nth-child(4)::before {
+  left: -5rem;
 }
 
 .rack-mobile-tab-link--active svg {
   fill: currentColor;
   stroke-width: 2.25;
+}
+
+.rack-mobile-capture-slot {
+  position: relative;
+  z-index: 1;
 }
 
 .rack-capture-trigger {
