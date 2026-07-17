@@ -2,14 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
-import { Plus } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { Effect, Either } from 'effect';
 import { api } from '@convex/_generated/api';
 import AddItemSection from '@/components/AddItemSection';
 import GuestClosetDemo from '@/components/GuestClosetDemo';
 import WardrobeGrid from '@/components/WardrobeGrid';
-import RackFitActions from '@/components/RackFitActions';
 import {
   completeGuestOnboardingAction,
   createWardrobeItemAction,
@@ -20,7 +18,7 @@ import { createTraceContext } from '@/lib/trace';
 import { clearGuestSnapshot, loadGuestSnapshot, updateGuestSnapshotItem } from '@/lib/guestSnapshot';
 import { dataUrlToFile } from '@/lib/imageClient';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
-import { Button } from '@/components/ui/button';
+import { openCaptureMenu } from '@/lib/captureEvents';
 import type { OptimisticWardrobeItem, WardrobeItem } from '@/types/wardrobe';
 
 export default function Home() {
@@ -290,19 +288,8 @@ export default function Home() {
     [hiddenServerIds, items]
   );
 
-  const triggerInput = (inputId: string, fallback?: string) => {
-    const input = document.getElementById(inputId) as HTMLInputElement | null;
-    if (input) {
-      input.click();
-      return;
-    }
-    if (fallback) {
-      document.getElementById(fallback)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  };
-
   return (
-    <main className="relative min-h-screen pb-44">
+    <main className="relative min-h-screen pb-28 md:pb-16">
       <div className="mx-auto w-full max-w-[1320px] space-y-6 px-4 pb-16 pt-6 sm:px-6 sm:pt-8 lg:px-10 lg:pt-10">
         <section className="space-y-6">
           {importStatus && (
@@ -326,7 +313,7 @@ export default function Home() {
               <WardrobeGrid
                 items={displayItems}
                 optimisticItems={filteredOptimisticItems}
-                onAddPiece={() => triggerInput(uploadInputId, 'rack-uploader')}
+                onAddPiece={openCaptureMenu}
                 onRemoveOptimistic={handleRemoveOptimistic}
               />
             </>
@@ -336,21 +323,6 @@ export default function Home() {
         </section>
       </div>
 
-      {isSignedIn && (
-        <nav aria-label="Rack actions" className="rack-action-stack">
-          <div className="rack-action-stack-inner">
-            <Button
-              type="button"
-              onClick={() => triggerInput(uploadInputId, 'rack-uploader')}
-              className="rack-action-button rack-action-button-primary rounded-none border border-[var(--rack-line)]"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Add piece</span>
-            </Button>
-            <RackFitActions />
-          </div>
-        </nav>
-      )}
     </main>
   );
 }

@@ -37,6 +37,7 @@ import {
   normalizeGarmentCategory,
   type GarmentIdentityCandidate,
 } from "@/server/garmentIdentity";
+import { normalizeCaptureRoute } from "@/server/captureRouter";
 import { processWardrobeInference } from "@/server/wardrobeInference";
 
 type UserTier = "free" | "pro";
@@ -127,6 +128,91 @@ export const getUploadUrlAction = async () => {
   const { token } = await getConvexAuth();
 
   return fetchMutation(api.wardrobe.getUploadUrl, {}, { token });
+};
+
+export const routeCaptureAction = async (input: {
+  storageId: string;
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { userId, token, tier } = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+  await enforceAuthenticatedProtection({ scope: "inference", tier, userId });
+
+  await fetchMutation(
+    api.storage.registerUpload,
+    { storageId: input.storageId as Id<"_storage">, purpose: "capture_router" },
+    { token }
+  );
+  const imageUrl = await fetchQuery(
+    api.storage.getStorageUrl,
+    { storageId: input.storageId as Id<"_storage"> },
+    { token }
+  );
+  if (!imageUrl) throw new Error("Uploaded file missing");
+
+  const imageResponse = await fetch(imageUrl);
+  if (!imageResponse.ok) throw new Error(`Image fetch failed: ${imageResponse.statusText}`);
+  const mimeType = imageResponse.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+  const base64 = Buffer.from(await imageResponse.arrayBuffer()).toString("base64");
+  const schema: Schema = {
+    type: SchemaType.OBJECT,
+    properties: {
+      capture_scope: { type: SchemaType.STRING },
+      confidence: { type: SchemaType.NUMBER },
+      rationale: { type: SchemaType.STRING },
+    },
+    required: ["capture_scope", "confidence", "rationale"],
+  };
+  const prompt = `Route this wardrobe photo into exactly one capture scope.
+Return JSON only with capture_scope, confidence, and rationale.
+- capture_scope must be "single_piece" when the photo primarily presents one garment, shoe pair, bag, accessory, or coordinated set as one catalog item.
+- capture_scope must be "full_fit" when the photo shows a person wearing multiple garments together with enough outfit context to record what was worn.
+- A person may be visible. Do not identify or describe them and do not infer sensitive traits. Judge only the clothing composition and framing.
+- confidence must be from 0 to 1.
+- rationale must be a short, plain explanation of the clothing evidence, never a description of the person.`;
+
+  const routed = await runServerAction(
+    GeminiService.pipe(
+      Effect.flatMap((gemini) =>
+        gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: prompt },
+                { inlineData: { data: base64, mimeType } },
+              ],
+            },
+          ],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: schema,
+          },
+        })
+      ),
+      Effect.flatMap((result) =>
+        parseJson<{
+          capture_scope?: unknown;
+          confidence?: unknown;
+          rationale?: unknown;
+        }>(result.response.text(), "routeCapture")
+      ),
+      withRetries,
+      Effect.provide(GeminiLive)
+    )
+  );
+  const route = normalizeCaptureRoute(routed);
+
+  console.info("capture.routed", {
+    traceId,
+    traceparent,
+    userId,
+    scope: route.scope,
+    confidence: route.confidence,
+    needsReview: route.needsReview,
+  });
+  return route;
 };
 
 const analyzeImageFull = (base64: string) =>

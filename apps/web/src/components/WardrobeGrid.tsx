@@ -77,7 +77,7 @@ export default function WardrobeGrid({
                     Start with a few clear pieces
                 </h3>
                 <p className="mt-3 max-w-xl text-sm font-medium leading-relaxed text-[#56345c]">
-                    Upload 3-6 closet photos with good light. Each analyzed piece appears here as a rack card with a category tag, notes, and compatibility context.
+                    Start with one clear piece or a full fit. I&apos;ll recognize the photo type, connect familiar pieces, and place only owned items on your rack.
                 </p>
                 {onAddPiece && (
                     <Button
@@ -85,7 +85,7 @@ export default function WardrobeGrid({
                         onClick={onAddPiece}
                         className="mt-5 h-auto rounded-none border border-[var(--rack-line)] bg-[#DCE66E] px-4 py-3 text-sm font-extrabold text-[#241426] shadow-[3px_3px_0_var(--rack-panel-shadow)]"
                     >
-                        Add first piece
+                        Add a photo
                     </Button>
                 )}
             </section>

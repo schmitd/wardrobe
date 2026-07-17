@@ -71,6 +71,7 @@ const setupFetch = () => {
   global.fetch = mock(async () => ({
     ok: true,
     statusText: "OK",
+    headers: { get: () => "image/jpeg" },
     arrayBuffer: async () => new ArrayBuffer(8),
   })) as unknown as typeof fetch;
 };
@@ -128,6 +129,30 @@ describe("wardrobe server actions", () => {
     expect(args.traceId).toBeDefined();
     expect(args.traceparent).toBeDefined();
     expect(options).toEqual({ token: "token_123" });
+  });
+
+  it("routes a capture from clothing composition before choosing a workflow", async () => {
+    fetchMutationMock.mockResolvedValue({ ok: true });
+    fetchQueryMock.mockResolvedValue("https://example.com/capture.jpg");
+    queueRunServerAction({
+      capture_scope: "full_fit",
+      confidence: 0.91,
+      rationale: "Several garments are worn together.",
+    });
+
+    const result = await actions.routeCaptureAction({ storageId: "storage_1" });
+
+    expect(result).toEqual({
+      scope: "full_fit",
+      confidence: 0.91,
+      needsReview: false,
+      rationale: "Several garments are worn together.",
+    });
+    expect(fetchMutationMock).toHaveBeenCalledWith(
+      api.storage.registerUpload,
+      { storageId: "storage_1", purpose: "capture_router" },
+      { token: "token_123" }
+    );
   });
 
   it("deletes a wardrobe item", async () => {
