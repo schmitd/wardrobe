@@ -16,7 +16,7 @@ const navClass = (active: boolean) =>
 
 const mobileNavClass = (active: boolean) =>
   cn(
-    'flex min-h-14 min-w-0 flex-col items-center justify-center gap-1 px-1 text-[0.68rem] font-bold transition-colors',
+    'rack-mobile-tab-link flex min-w-0 flex-col items-center justify-center gap-1 px-1 text-[0.68rem] font-bold transition-colors',
     active ? 'bg-[var(--rack-action)] text-[var(--rack-ink)]' : 'text-[var(--rack-ink-soft)] hover:bg-white'
   );
 
@@ -83,7 +83,7 @@ export default function Navbar() {
                 <span>{label}</span>
               </Link>
             ))}
-            <div className="flex items-start justify-center">
+            <div className="rack-mobile-capture-slot flex items-start justify-center">
               <UnifiedCaptureTrigger variant="mobile" />
             </div>
             {signedInLinks.slice(2).map(({ href, label, icon: Icon }) => (
