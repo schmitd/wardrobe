@@ -439,11 +439,11 @@ h4 {
 }
 
 .rack-mobile-tabs-inner > .rack-mobile-tab-link--active:nth-child(2)::before {
-  right: -5rem;
+  right: -2.5rem;
 }
 
 .rack-mobile-tabs-inner > .rack-mobile-tab-link--active:nth-child(4)::before {
-  left: -5rem;
+  left: -2.5rem;
 }
 
 .rack-mobile-tab-link--active svg {
