@@ -20,19 +20,35 @@ const apiMock = {
     listItemsForSimilarity: {},
     getWardrobeItemsDisplayByIds: {},
     searchSimilarItems: {},
+    listWardrobeItems: {},
   },
   storage: {
     registerUpload: {},
     getStorageUrl: {},
+    getLatestUploadByPurpose: {},
   },
   profile: {
     getStyleBioContext: {},
     saveGeneratedBio: {},
     updateBio: {},
     updateProfileAttributes: {},
+    getProfile: {},
+    getCurrentUser: {},
   },
-  fitChecks: { recordFitCheck: {} },
-  candidates: { createInspiration: {} },
+  fitChecks: {
+    recordFitCheck: {},
+    listFitChecks: {},
+    resolveGarmentObservation: {},
+    promoteGarmentObservation: {},
+  },
+  candidates: { createInspiration: {}, listInspirationByWardrobe: {} },
+  wardrobes: {
+    listWardrobes: {},
+    getWardrobeDetail: {},
+    createWardrobe: {},
+    addItemToWardrobe: {},
+    removeItemFromWardrobe: {},
+  },
   zepSync: {
     getStyleBioGraphContext: {},
     searchStyleContext: {},
@@ -96,6 +112,51 @@ beforeEach(() => {
 });
 
 describe("wardrobe server actions", () => {
+  it("builds the mobile payload with collection context and without vector embeddings", async () => {
+    fetchQueryMock.mockImplementation(async (query) => {
+      if (query === api.wardrobe.listWardrobeItems) return [{ id: "item_1", imageUrl: "https://example.com/item.jpg" }];
+      if (query === api.fitChecks.listFitChecks) return [{
+        _id: "fit_1",
+        imageUrl: "https://example.com/fit.jpg",
+        type: "daily_fit_check",
+        description: "A layered fit",
+        createdAt: 123,
+        items: [{ _id: "item_1", category: "Jacket", description: "Olive jacket" }],
+        observations: [{
+          _id: "observation_1",
+          category: "Outerwear",
+          description: "Olive jacket",
+          cropUrl: "https://example.com/crop.jpg",
+          resolutionStatus: "candidate",
+          matchScore: 0.88,
+          embedding: Array.from({ length: 768 }, () => 0.1),
+          candidates: [{ id: "item_1", imageUrl: "https://example.com/item.jpg", category: "Jacket", description: "Olive jacket", score: 0.88 }],
+        }],
+      }];
+      if (query === api.wardrobes.listWardrobes) return [{ _id: "collection_1", name: "Soft utility", kind: "locus" }];
+      if (query === api.wardrobes.getWardrobeDetail) return { items: [{ _id: "membership_1", item: { id: "item_1", imageUrl: "https://example.com/item.jpg" } }] };
+      if (query === api.candidates.listInspirationByWardrobe) return [{ _id: "inspiration_1", imageUrl: "https://example.com/mood.jpg", styleTags: ["soft utility"], createdAt: 124 }];
+      if (query === api.profile.getProfile) return { bio: "Soft layers and useful details." };
+      if (query === api.profile.getCurrentUser) return { name: "David", email: "david@example.com" };
+      if (query === api.storage.getLatestUploadByPurpose) return { url: "https://example.com/selfie.jpg" };
+      return null;
+    });
+
+    const result = await actions.getMobileBootstrapAction();
+
+    expect(String(result.fitChecks[0]?.id)).toBe("fit_1");
+    expect(result.fitChecks[0]?.observations[0]).toEqual(expect.objectContaining({
+      id: "observation_1",
+      matchScore: 0.88,
+      candidates: [expect.objectContaining({ id: "item_1", score: 0.88 })],
+    }));
+    expect(result.fitChecks[0]?.observations[0]).not.toHaveProperty("embedding");
+    expect(result.wardrobes[0]?.items).toHaveLength(1);
+    expect(String(result.wardrobes[0]?.inspirations[0]?.id)).toBe("inspiration_1");
+    expect(result.profile?.bio).toBe("Soft layers and useful details.");
+    expect(result.latestSelfie?.url).toBe("https://example.com/selfie.jpg");
+  });
+
   it("generates an authenticated upload URL", async () => {
     fetchMutationMock.mockResolvedValue("https://uploads.example.test/upload");
 

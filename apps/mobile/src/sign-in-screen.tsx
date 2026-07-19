@@ -2,13 +2,12 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useAuth, useSignIn, useSignUp, useSSO } from "@clerk/expo";
 import { Effect } from "effect";
 import * as AuthSession from "expo-auth-session";
-import { Redirect, useRouter } from "expo-router";
+import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   Text,
@@ -41,6 +40,7 @@ const isMissingAccount = (error: ClerkLikeError) =>
 
 export function SignInScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ returnUri?: string; returnIntent?: string }>();
   const insets = useSafeAreaInsets();
   const { isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
   const { startSSOFlow } = useSSO();
@@ -54,12 +54,21 @@ export function SignInScreen() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (Platform.OS !== "android") return;
+    if (process.env.EXPO_OS !== "android") return;
     void WebBrowser.warmUpAsync();
     return () => { void WebBrowser.coolDownAsync(); };
   }, []);
 
-  if (isSignedIn) return <Redirect href="/(tabs)/rack" />;
+  const returnUri = Array.isArray(params.returnUri) ? params.returnUri[0] : params.returnUri;
+  const returnIntent = params.returnIntent === "just_trying" ? "just_trying" : "my_wardrobe";
+  const finishNavigation = () => {
+    if (returnUri) router.replace({ pathname: "/capture/review", params: { uri: returnUri, intent: returnIntent } });
+    else router.replace("/(tabs)/rack");
+  };
+
+  if (isSignedIn) return returnUri
+    ? <Redirect href={{ pathname: "/capture/review", params: { uri: returnUri, intent: returnIntent } }} />
+    : <Redirect href="/(tabs)/rack" />;
 
   const run = (task: () => Promise<void>, fallback: string) => {
     setBusy(true);
@@ -81,7 +90,7 @@ export function SignInScreen() {
     }
     await result.setActive({
       session: result.createdSessionId,
-      navigate: async () => { router.replace("/(tabs)/rack"); },
+      navigate: async () => { finishNavigation(); },
     });
   }, "Google sign-in could not start. Please try again.");
 
@@ -116,8 +125,8 @@ export function SignInScreen() {
     if (result.error) throw result.error;
 
     const finalizeResult = emailFlow === "sign_in"
-      ? await signIn.finalize({ navigate: async () => { router.replace("/(tabs)/rack"); } })
-      : await signUp.finalize({ navigate: async () => { router.replace("/(tabs)/rack"); } });
+      ? await signIn.finalize({ navigate: async () => { finishNavigation(); } })
+      : await signUp.finalize({ navigate: async () => { finishNavigation(); } });
     if (finalizeResult.error) throw finalizeResult.error;
   }, "That code could not be verified. Check it and try again.");
 
@@ -130,7 +139,7 @@ export function SignInScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={process.env.EXPO_OS === "ios" ? "padding" : undefined}>
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"

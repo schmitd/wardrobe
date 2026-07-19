@@ -1,5 +1,5 @@
 import type { PropsWithChildren, ReactNode } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 
 import { colors } from "@/theme";
 
@@ -8,25 +8,10 @@ export function Page({ children, refresh, refreshing = false }: PropsWithChildre
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
       contentContainerStyle={{ padding: 20, paddingBottom: 112, gap: 20 }}
-      refreshControl={undefined}
+      refreshControl={refresh ? <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.plum} colors={[colors.plum]} /> : undefined}
     >
-      {refresh ? (
-        <Pressable accessibilityRole="button" onPress={refresh} style={{ alignSelf: "flex-end", paddingVertical: 4 }}>
-          <Text style={{ color: colors.plum, fontWeight: "800" }}>{refreshing ? "Refreshing…" : "Refresh"}</Text>
-        </Pressable>
-      ) : null}
       {children}
     </ScrollView>
-  );
-}
-
-export function Intro({ eyebrow, title, body }: { eyebrow: string; title: string; body: string }) {
-  return (
-    <View style={{ gap: 7 }}>
-      <Text selectable style={{ color: colors.plum, fontSize: 13, fontWeight: "800", letterSpacing: 0.7, textTransform: "uppercase" }}>{eyebrow}</Text>
-      <Text selectable style={{ color: colors.ink, fontSize: 34, lineHeight: 38, fontWeight: "900" }}>{title}</Text>
-      <Text selectable style={{ color: colors.muted, fontSize: 15, lineHeight: 22 }}>{body}</Text>
-    </View>
   );
 }
 
