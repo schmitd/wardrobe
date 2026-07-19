@@ -16,7 +16,11 @@
     },
     "android": {
       "package": "com.wardrobe.app",
-      "permissions": ["android.permission.CAMERA", "android.permission.READ_MEDIA_IMAGES"],
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#f6f1f8"
       }
@@ -39,6 +43,13 @@
       "expo-secure-store",
       "expo-image",
       "expo-status-bar"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "9b4470c6-c65f-493d-9cfd-c309f304e63c"
+      }
+    },
+    "owner": "schmitd"
   }
 }
