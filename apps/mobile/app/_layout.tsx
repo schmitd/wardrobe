@@ -1,47 +1,23 @@
 import { ClerkProvider, useAuth } from "@clerk/expo";
-import { resourceCache } from "@clerk/expo/resource-cache";
+import { tokenCache } from "@clerk/expo/token-cache";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, View } from "react-native";
 
 import { CaptureProvider } from "@/capture-context";
-import { clerkTokenCache, clearClerkBootstrapState } from "@/clerk-token-cache";
 import { colors } from "@/theme";
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
-function Navigation({ resetAuth }: { resetAuth: () => void }) {
+function Navigation() {
   const { isLoaded } = useAuth({ treatPendingAsSignedOut: false });
-  const [timedOut, setTimedOut] = useState(false);
-
-  useEffect(() => {
-    if (isLoaded) {
-      setTimedOut(false);
-      return;
-    }
-    const timeout = setTimeout(() => setTimedOut(true), 8_000);
-    return () => clearTimeout(timeout);
-  }, [isLoaded]);
 
   if (!isLoaded) {
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", gap: 14, padding: 28, backgroundColor: colors.paper }}>
-        {timedOut ? (
-          <>
-            <Text selectable style={{ color: colors.ink, fontSize: 25, lineHeight: 29, fontWeight: "900", textAlign: "center" }}>Wardrobe could not finish signing in.</Text>
-            <Text selectable style={{ color: colors.muted, fontSize: 15, lineHeight: 22, textAlign: "center" }}>Reset the saved session on this device, then connect again.</Text>
-            <Pressable accessibilityRole="button" onPress={resetAuth} style={{ minHeight: 50, marginTop: 6, paddingHorizontal: 22, backgroundColor: colors.lime, borderColor: colors.line, borderWidth: 1, alignItems: "center", justifyContent: "center", borderRadius: 10, borderCurve: "continuous" }}>
-              <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>Reset sign-in</Text>
-            </Pressable>
-          </>
-        ) : (
-          <>
-            <ActivityIndicator color={colors.plum} />
-            <Text selectable style={{ color: colors.muted, fontWeight: "800" }}>Connecting your wardrobe…</Text>
-          </>
-        )}
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.paper }}>
+        <ActivityIndicator color={colors.plum} />
       </View>
     );
   }
@@ -62,7 +38,6 @@ function Navigation({ resetAuth }: { resetAuth: () => void }) {
 }
 
 export default function RootLayout() {
-  const [authGeneration, setAuthGeneration] = useState(0);
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: { queries: { staleTime: 20_000, retry: 2 } },
   }));
@@ -71,19 +46,12 @@ export default function RootLayout() {
     throw new Error("Add EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY to the mobile environment.");
   }
 
-  const resetAuth = () => {
-    void clearClerkBootstrapState().then(() => {
-      queryClient.clear();
-      setAuthGeneration((generation) => generation + 1);
-    });
-  };
-
   return (
-    <ClerkProvider key={authGeneration} publishableKey={publishableKey} tokenCache={clerkTokenCache} __experimental_resourceCache={resourceCache}>
+    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
       <QueryClientProvider client={queryClient}>
         <CaptureProvider>
           <StatusBar style="dark" />
-          <Navigation resetAuth={resetAuth} />
+          <Navigation />
         </CaptureProvider>
       </QueryClientProvider>
     </ClerkProvider>

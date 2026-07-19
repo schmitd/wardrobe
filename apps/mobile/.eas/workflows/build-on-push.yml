@@ -11,6 +11,10 @@ jobs:
     name: Build Android preview APK
     type: build
     environment: preview
+    hooks:
+      after_install_node_modules:
+        - name: Verify Clerk Native API
+          run: bun run preflight:native-auth
     params:
       platform: android
       profile: preview
@@ -19,6 +23,10 @@ jobs:
     name: Build iOS Simulator preview
     type: build
     environment: preview
+    hooks:
+      after_install_node_modules:
+        - name: Verify Clerk Native API
+          run: bun run preflight:native-auth
     params:
       platform: ios
       profile: preview-simulator
