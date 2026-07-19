@@ -13,17 +13,32 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@clerk/expo": "^3.7.8",
+    "@expo/vector-icons": "^15.0.2",
+    "@tanstack/react-query": "^5.101.2",
     "@wardrobe/context-client": "workspace:*",
     "@wardrobe/shared": "workspace:*",
-    "expo": "^56.0.12",
-    "expo-router": "^56.2.11",
-    "react": "19.2.0",
-    "react-native": "^0.86.0",
-    "react-native-safe-area-context": "^5.6.0",
+    "convex": "1.31.7",
+    "effect": "3.19.14",
+    "expo": "~56.0.16",
+    "expo-camera": "~56.0.8",
+    "expo-constants": "~56.0.21",
+    "expo-dev-client": "~56.0.23",
+    "expo-haptics": "~56.0.3",
+    "expo-image": "~56.0.11",
+    "expo-image-manipulator": "~56.0.22",
+    "expo-image-picker": "~56.0.21",
+    "expo-linking": "~56.0.15",
+    "expo-router": "~56.2.15",
+    "expo-secure-store": "~56.0.4",
+    "expo-status-bar": "~56.0.4",
+    "react": "19.2.3",
+    "react-native": "0.85.3",
+    "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "^4.18.0"
   },
   "devDependencies": {
-    "@types/react": "^19",
-    "typescript": "^5"
+    "@types/react": "~19.2.14",
+    "typescript": "~6.0.3"
   }
 }
