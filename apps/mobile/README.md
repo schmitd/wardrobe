@@ -5,8 +5,10 @@ The Expo app uses the same Clerk identity, Convex data, capture router, garment 
 ## Local development
 
 1. Copy `.env.example` to `.env.local` and use the Clerk publishable key for the environment you want to test.
-2. Enable Clerk Native API and register `com.wardrobe.app` as the iOS bundle identifier and Android package.
-3. From this directory, run `bunx expo run:ios` or `bunx expo run:android`. Clerk's native `AuthView` requires a development build rather than Expo Go.
+2. From this directory, run `bunx expo start`. The JavaScript auth flow works in Expo Go and uses the `wardrobe://continue` callback for Google SSO.
+3. Use `bunx expo run:ios` or `bunx expo run:android` when validating camera behavior in a development build.
+
+Authentication deliberately uses Clerk's JavaScript SSO and email-code hooks instead of the beta native `AuthView`. This keeps sign-in behavior consistent across Android and iOS and gives the app control over loading, cancellation, and error states.
 
 The API URL defaults to production. Override `EXPO_PUBLIC_WARDROBE_API_URL` to test a preview deployment that includes `/api/mobile/*`.
 

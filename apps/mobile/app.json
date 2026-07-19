@@ -45,7 +45,8 @@
       "@clerk/expo",
       "expo-secure-store",
       "expo-image",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "extra": {
       "router": {},

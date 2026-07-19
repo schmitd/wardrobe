@@ -30,6 +30,7 @@
 **/build
 **/dist/
 **/.turbo/
+**/.expo/
 
 # misc
 .DS_Store
