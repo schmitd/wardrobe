@@ -14,6 +14,7 @@ The API URL defaults to production. Override `EXPO_PUBLIC_WARDROBE_API_URL` to t
 
 - `development`: internal development client
 - `preview`: internal iOS build and installable Android APK
+- `preview-simulator`: installable iOS Simulator build without Apple signing credentials
 - `production`: store build; submission remains a separate explicit action
 
 Set `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` and `EXPO_PUBLIC_WARDROBE_API_URL` in the corresponding EAS environments before building.
