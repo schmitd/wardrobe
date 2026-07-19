@@ -1,5 +1,6 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { Tabs, useRouter } from "expo-router";
+import { useAuth } from "@clerk/expo";
+import { Redirect, Tabs, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Pressable, Text, View, type ColorValue } from "react-native";
 
@@ -14,6 +15,8 @@ const tabIcon = (name: keyof typeof MaterialCommunityIcons.glyphMap, focusedName
 
 export default function TabLayout() {
   const router = useRouter();
+  const { isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
+  if (!isSignedIn) return <Redirect href="/welcome" />;
   return (
     <Tabs
       initialRouteName="rack"
@@ -66,7 +69,7 @@ export default function TabLayout() {
           ),
         }}
       />
-      <Tabs.Screen name="collections" options={{ title: "Collections", tabBarIcon: tabIcon("cards-outline", "cards") }} />
+      <Tabs.Screen name="collections" options={{ title: "Collections", tabBarIcon: tabIcon("cards-outline", "cards"), headerRight: () => <Pressable accessibilityLabel="Create collection" onPress={() => router.push("/collection/new")} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}><MaterialCommunityIcons name="plus" size={25} color={colors.plum} /></Pressable> }} />
       <Tabs.Screen name="profile" options={{ title: "You", tabBarIcon: tabIcon("account-outline", "account") }} />
     </Tabs>
   );

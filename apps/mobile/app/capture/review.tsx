@@ -2,14 +2,14 @@ import { useAuth } from "@clerk/expo";
 import { useQueryClient } from "@tanstack/react-query";
 import { Effect, Exit } from "effect";
 import { Image } from "expo-image";
-import { manipulateAsync, SaveFormat } from "expo-image-manipulator";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
-import { getUploadUrl, routeCapture, runCaptureOperation, tryOn } from "@/api";
+import { routeCapture, runCaptureOperation, tryOn } from "@/api";
 import { useCaptureResult } from "@/capture-context";
+import { uploadPhoto } from "@/photo-upload";
 import { ErrorPanel, Panel } from "@/screen";
 import { colors } from "@/theme";
 import type { CaptureIntent, CaptureRoute, CaptureScope, CompatibilityResult } from "@/types";
@@ -19,7 +19,7 @@ const trace = () => `native-${Date.now().toString(36)}-${Math.random().toString(
 export default function CaptureReview() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { getToken } = useAuth();
+  const { getToken, isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
   const params = useLocalSearchParams<{ uri: string; intent: CaptureIntent }>();
   const uri = Array.isArray(params.uri) ? params.uri[0] : params.uri;
   const intent: CaptureIntent = params.intent === "just_trying" ? "just_trying" : "my_wardrobe";
@@ -35,15 +35,8 @@ export default function CaptureReview() {
 
   const upload = () => Effect.gen(function* () {
     setStatus("Preparing your photo…");
-    const prepared = yield* Effect.tryPromise({ try: () => manipulateAsync(uri, [{ resize: { width: 1600 } }], { compress: 0.78, format: SaveFormat.JPEG }), catch: () => new Error("This photo could not be prepared.") });
-    const { uploadUrl } = yield* Effect.tryPromise({ try: () => getUploadUrl(getToken), catch: (cause) => cause instanceof Error ? cause : new Error("Upload could not start.") });
-    const image = yield* Effect.tryPromise({ try: () => fetch(prepared.uri).then((response) => response.blob()), catch: () => new Error("This photo could not be opened.") });
     setStatus("Uploading securely…");
-    const response = yield* Effect.tryPromise({ try: () => fetch(uploadUrl, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: image }), catch: () => new Error("Upload failed. Check your connection.") });
-    if (!response.ok) return yield* Effect.fail(new Error("Upload failed. Please try again."));
-    const payload = yield* Effect.tryPromise({ try: () => response.json() as Promise<{ storageId?: string }>, catch: () => new Error("Upload response could not be read.") });
-    if (!payload.storageId) return yield* Effect.fail(new Error("Upload did not return a photo reference."));
-    return payload.storageId;
+    return yield* Effect.tryPromise({ try: () => uploadPhoto(getToken, uri), catch: (cause) => cause instanceof Error ? cause : new Error("Upload failed. Please try again.") });
   });
 
   const commit = (id: string, scope: CaptureScope) => Effect.gen(function* () {
@@ -76,6 +69,10 @@ export default function CaptureReview() {
   };
 
   const analyze = () => {
+    if (!isSignedIn) {
+      router.push({ pathname: "/sign-in", params: { returnUri: uri, returnIntent: intent } });
+      return;
+    }
     setResult(null);
     run(Effect.gen(function* () {
       const id = storageId ?? (yield* upload());
@@ -103,7 +100,7 @@ export default function CaptureReview() {
       {result && complete === "try_on" ? <View style={{ gap: 14 }}><Panel tint={!result.evaluation || result.evaluation.score >= 50 ? "#EDF5E9" : "#F8E6EE"}><View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}><View style={{ flex: 1 }}><Text selectable style={{ color: colors.plum, fontWeight: "900", fontSize: 12, textTransform: "uppercase" }}>Closet compatibility</Text><Text selectable style={{ color: colors.ink, fontSize: 23, fontWeight: "900", marginTop: 4 }}>{verdict}</Text></View>{result.evaluation ? <Text selectable style={{ color: colors.ink, fontSize: 38, fontWeight: "900" }}>{result.evaluation.score}<Text style={{ fontSize: 15 }}>/100</Text></Text> : null}</View><Text selectable style={{ color: colors.ink, lineHeight: 22 }}>{result.evaluation?.explanation ?? result.message ?? result.candidate.description}</Text></Panel>{result.similarItems.length ? <Panel><Text selectable style={{ color: colors.ink, fontWeight: "900" }}>Closet anchors</Text><View style={{ flexDirection: "row", gap: 9 }}>{result.similarItems.slice(0, 3).map((item) => <View key={item.id} style={{ flex: 1, gap: 5 }}><Image source={item.imageUrl} style={{ width: "100%", aspectRatio: 1, backgroundColor: colors.wash }} contentFit="cover" /><Text numberOfLines={1} style={{ color: colors.ink, fontWeight: "800", fontSize: 11 }}>{item.category ?? "Piece"}</Text></View>)}</View></Panel> : null}</View> : null}
       {complete && complete !== "try_on" ? <Panel tint="#EDF5E9"><Text selectable style={{ color: colors.success, fontSize: 20, fontWeight: "900" }}>{complete === "fit" ? "Fit recorded" : "Piece added"}</Text><Text selectable style={{ color: colors.ink }}>{complete === "fit" ? "The agent is connecting detected garments to pieces it already remembers." : "It is now part of your rack and style memory."}</Text></Panel> : null}
       {error ? <ErrorPanel message={error} /> : null}
-      {!route && !complete ? <Pressable disabled={Boolean(status)} onPress={analyze} style={{ backgroundColor: colors.lime, borderColor: colors.line, borderWidth: 1, padding: 15, alignItems: "center", opacity: status ? 0.7 : 1 }}>{status ? <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}><ActivityIndicator color={colors.ink} /><Text style={{ color: colors.ink, fontWeight: "900" }}>{status}</Text></View> : <Text style={{ color: colors.ink, fontWeight: "900" }}>{intent === "just_trying" ? "Try it with my wardrobe" : "Add to Wardrobe"}</Text>}</Pressable> : null}
+      {!route && !complete ? <Pressable disabled={Boolean(status)} onPress={analyze} style={{ backgroundColor: colors.lime, borderColor: colors.line, borderWidth: 1, padding: 15, alignItems: "center", opacity: status ? 0.7 : 1 }}>{status ? <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}><ActivityIndicator color={colors.ink} /><Text style={{ color: colors.ink, fontWeight: "900" }}>{status}</Text></View> : <Text style={{ color: colors.ink, fontWeight: "900" }}>{!isSignedIn ? "Sign in to save this fit" : intent === "just_trying" ? "Try it with my wardrobe" : "Add to Wardrobe"}</Text>}</Pressable> : null}
       {status && route ? <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", gap: 10, padding: 14 }}><ActivityIndicator color={colors.plum} /><Text selectable style={{ flex: 1, color: colors.muted, fontWeight: "800" }}>{status}</Text></View> : null}
       {complete ? <Pressable onPress={done} style={{ backgroundColor: colors.ink, padding: 15, alignItems: "center" }}><Text style={{ color: "white", fontWeight: "900" }}>Done</Text></Pressable> : null}
       {!status && !complete ? <Pressable onPress={() => router.back()} style={{ alignItems: "center", padding: 10 }}><Text style={{ color: colors.muted, fontWeight: "800" }}>Retake or choose another</Text></Pressable> : null}

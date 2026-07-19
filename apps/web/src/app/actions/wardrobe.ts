@@ -91,15 +91,143 @@ export const getConvexAuth = async (): Promise<ConvexAuthContext> => {
 
 export const getMobileBootstrapAction = async () => {
   const { token } = await getConvexAuth();
-  const [items, fitChecks, wardrobes, profile, currentUser] = await Promise.all([
+  const [items, rawFitChecks, wardrobes, profile, currentUser, latestSelfie] = await Promise.all([
     fetchQuery(api.wardrobe.listWardrobeItems, {}, { token }),
     fetchQuery(api.fitChecks.listFitChecks, { limit: 100 }, { token }),
     fetchQuery(api.wardrobes.listWardrobes, {}, { token }),
     fetchQuery(api.profile.getProfile, {}, { token }),
     fetchQuery(api.profile.getCurrentUser, {}, { token }),
+    fetchQuery(api.storage.getLatestUploadByPurpose, { purpose: "selfie" }, { token }),
   ]);
 
-  return { items, fitChecks, wardrobes, profile, currentUser };
+  const collectionDetails = await Promise.all(wardrobes.map(async (wardrobe) => {
+    const [detail, inspirations] = await Promise.all([
+      fetchQuery(api.wardrobes.getWardrobeDetail, { wardrobeId: wardrobe._id }, { token }),
+      fetchQuery(api.candidates.listInspirationByWardrobe, { wardrobeId: wardrobe._id }, { token }),
+    ]);
+    return {
+      ...wardrobe,
+      items: detail?.items ?? [],
+      inspirations: inspirations.map((inspiration) => ({
+        id: inspiration._id,
+        imageUrl: inspiration.imageUrl,
+        sourceUrl: inspiration.sourceUrl ?? null,
+        category: inspiration.category ?? null,
+        description: inspiration.description ?? null,
+        styleTags: inspiration.styleTags ?? [],
+        createdAt: inspiration.createdAt,
+      })),
+    };
+  }));
+
+  const fitChecks = rawFitChecks.map((fitCheck) => ({
+    id: fitCheck._id,
+    imageUrl: fitCheck.imageUrl,
+    type: fitCheck.type,
+    transcription: fitCheck.transcription ?? null,
+    description: fitCheck.description ?? null,
+    createdAt: fitCheck.createdAt,
+    items: fitCheck.items.map((item) => ({
+      id: item._id,
+      category: item.category ?? null,
+      description: item.description ?? null,
+    })),
+    observations: fitCheck.observations.map((observation) => ({
+      id: observation._id,
+      category: observation.category,
+      description: observation.description,
+      cropUrl: observation.cropUrl,
+      resolutionStatus: observation.resolutionStatus,
+      matchScore: observation.matchScore ?? null,
+      candidates: observation.candidates.map((candidate) => ({
+        id: candidate.id,
+        imageUrl: candidate.imageUrl,
+        category: candidate.category,
+        description: candidate.description,
+        score: candidate.score,
+      })),
+    })),
+  }));
+
+  return {
+    items,
+    fitChecks,
+    wardrobes: collectionDetails,
+    profile: profile ? {
+      bio: profile.bio ?? null,
+      skinTone: profile.skinTone ?? null,
+      complexion: profile.complexion ?? null,
+      hairColor: profile.hairColor ?? null,
+      colorSeason: profile.colorSeason ?? null,
+    } : null,
+    currentUser,
+    latestSelfie,
+  };
+};
+
+export const createCollectionAction = async (input: {
+  name: string;
+  description?: string;
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { token } = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+  const name = input.name.trim();
+  if (!name) throw new Error("Give this collection a name");
+  return fetchMutation(api.wardrobes.createWardrobe, {
+    name,
+    kind: "locus",
+    ...(input.description?.trim() ? { description: input.description.trim() } : {}),
+    traceId,
+    traceparent,
+  }, { token });
+};
+
+export const addCollectionItemAction = async (input: {
+  wardrobeId: string;
+  itemId: string;
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { token } = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+  return fetchMutation(api.wardrobes.addItemToWardrobe, {
+    wardrobeId: input.wardrobeId as Id<"wardrobes">,
+    itemId: input.itemId as Id<"wardrobeItems">,
+    membershipKind: "owned",
+    traceId,
+    traceparent,
+  }, { token });
+};
+
+export const removeCollectionItemAction = async (input: {
+  wardrobeId: string;
+  itemId: string;
+}) => {
+  const { token } = await getConvexAuth();
+  return fetchMutation(api.wardrobes.removeItemFromWardrobe, {
+    wardrobeId: input.wardrobeId as Id<"wardrobes">,
+    itemId: input.itemId as Id<"wardrobeItems">,
+  }, { token });
+};
+
+export const resolveFitObservationAction = async (input: {
+  observationId: string;
+  wardrobeItemId: string;
+}) => {
+  const { token } = await getConvexAuth();
+  return fetchMutation(api.fitChecks.resolveGarmentObservation, {
+    observationId: input.observationId as Id<"garmentObservations">,
+    wardrobeItemId: input.wardrobeItemId as Id<"wardrobeItems">,
+  }, { token });
+};
+
+export const promoteFitObservationAction = async (input: { observationId: string }) => {
+  const { token } = await getConvexAuth();
+  return fetchMutation(api.fitChecks.promoteGarmentObservation, {
+    observationId: input.observationId as Id<"garmentObservations">,
+  }, { token });
 };
 
 const runBestEffort = async <A>(
