@@ -19,6 +19,10 @@
   },
   "devDependencies": {
     "turbo": "^2.8.0",
-    "typescript": "^5"
+    "typescript": "~6.0.3"
+  },
+  "overrides": {
+    "@effect/platform": "0.94.4",
+    "effect": "3.19.14"
   }
 }

@@ -42,7 +42,7 @@ import { processWardrobeInference } from "@/server/wardrobeInference";
 
 type UserTier = "free" | "pro";
 type AuthenticatedScope = "upload" | "check" | "inference" | "onboarding";
-type ConvexAuthContext = {
+export type ConvexAuthContext = {
   userId: string;
   token: string;
   tier: UserTier;
@@ -77,7 +77,7 @@ const enforceGuestBatchProtection = () =>
     )
   );
 
-const getConvexAuth = async () => {
+export const getConvexAuth = async (): Promise<ConvexAuthContext> => {
   const { userId, getToken, has } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
@@ -87,6 +87,19 @@ const getConvexAuth = async () => {
   if (!token) throw new Error("Missing Convex token");
 
   return { userId, token, tier: resolveUserTier(has) };
+};
+
+export const getMobileBootstrapAction = async () => {
+  const { token } = await getConvexAuth();
+  const [items, fitChecks, wardrobes, profile, currentUser] = await Promise.all([
+    fetchQuery(api.wardrobe.listWardrobeItems, {}, { token }),
+    fetchQuery(api.fitChecks.listFitChecks, { limit: 100 }, { token }),
+    fetchQuery(api.wardrobes.listWardrobes, {}, { token }),
+    fetchQuery(api.profile.getProfile, {}, { token }),
+    fetchQuery(api.profile.getCurrentUser, {}, { token }),
+  ]);
+
+  return { items, fitChecks, wardrobes, profile, currentUser };
 };
 
 const runBestEffort = async <A>(
