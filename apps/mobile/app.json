@@ -18,8 +18,7 @@
       "package": "com.wardrobe.app",
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.READ_MEDIA_IMAGES"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#f6f1f8"
@@ -30,7 +29,10 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow Wardrobe to take fit checks and clothing photos."
+          "cameraPermission": "Allow Wardrobe to take fit checks and clothing photos.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": false
         }
       ],
       [
