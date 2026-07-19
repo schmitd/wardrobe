@@ -1,9 +1,9 @@
-import type { GetToken } from "@clerk/types";
 import { Effect } from "effect";
 
 import type { CaptureRoute, CompatibilityResult, MobileBootstrap } from "@/types";
 
 const baseUrl = (process.env.EXPO_PUBLIC_WARDROBE_API_URL ?? "https://wardrobe.davidcschmitt.com").replace(/\/$/, "");
+type GetToken = () => Promise<string | null>;
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
