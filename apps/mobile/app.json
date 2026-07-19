@@ -11,7 +11,8 @@
       "bundleIdentifier": "com.wardrobe.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Wardrobe uses the camera to record fit checks and add clothing you own or want to try.",
-        "NSPhotoLibraryUsageDescription": "Wardrobe lets you choose fit checks and clothing photos from your library."
+        "NSPhotoLibraryUsageDescription": "Wardrobe lets you choose fit checks and clothing photos from your library.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
