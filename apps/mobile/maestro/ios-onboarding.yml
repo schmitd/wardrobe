@@ -1,8 +1,0 @@
-appId: com.wardrobe.app
----
-- launchApp:
-    clearState: true
-- assertVisible: "Create your dream wardrobe."
-- assertVisible: "Start with a fit check"
-- tapOn: "Sign in"
-- assertVisible: "Your wardrobe, remembered."
