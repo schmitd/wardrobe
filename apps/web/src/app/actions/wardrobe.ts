@@ -38,10 +38,11 @@ import {
   type GarmentIdentityCandidate,
 } from "@/server/garmentIdentity";
 import { normalizeCaptureRoute } from "@/server/captureRouter";
+import { captureProtectionScopes } from "@/server/captureProtection";
 import { processWardrobeInference } from "@/server/wardrobeInference";
 
 type UserTier = "free" | "pro";
-type AuthenticatedScope = "upload" | "check" | "inference" | "onboarding";
+type AuthenticatedScope = "upload" | "routing" | "check" | "inference" | "onboarding";
 export type ConvexAuthContext = {
   userId: string;
   token: string;
@@ -278,7 +279,7 @@ export const routeCaptureAction = async (input: {
 }) => {
   const { userId, token, tier } = await getConvexAuth();
   const { traceId, traceparent } = ensureTraceContext(input);
-  await enforceAuthenticatedProtection({ scope: "inference", tier, userId });
+  await enforceAuthenticatedProtection({ scope: captureProtectionScopes.route, tier, userId });
 
   await fetchMutation(
     api.storage.registerUpload,
@@ -1165,7 +1166,7 @@ export const processWardrobeItemAction = async (input: {
   traceparent?: string;
 }) => {
   const { userId, token, tier } = await getConvexAuth();
-  await enforceAuthenticatedProtection({ scope: "inference", tier, userId });
+  await enforceAuthenticatedProtection({ scope: captureProtectionScopes.save, tier, userId });
   const { traceId, traceparent } = ensureTraceContext(input);
 
   console.info("inference.start", { traceId, traceparent, itemId: input.itemId, userId });

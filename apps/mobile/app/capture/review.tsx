@@ -1,6 +1,6 @@
 import { useAuth } from "@clerk/expo";
 import { useQueryClient } from "@tanstack/react-query";
-import { Effect, Exit } from "effect";
+import { Cause, Effect, Exit, Option } from "effect";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
@@ -62,7 +62,10 @@ export default function CaptureReview() {
   const run = (effect: Effect.Effect<void, Error>) => {
     setError(null);
     void Effect.runPromiseExit(effect).then((exit) => {
-      if (Exit.isFailure(exit)) setError("Could not save this photo right now. Please try again.");
+      if (Exit.isFailure(exit)) {
+        const failure = Option.getOrUndefined(Cause.failureOption(exit.cause));
+        setError(failure?.message ?? "Could not save this photo right now. Please try again.");
+      }
       else { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); void queryClient.invalidateQueries({ queryKey: ["mobile-bootstrap"] }); }
       setStatus(null);
     });

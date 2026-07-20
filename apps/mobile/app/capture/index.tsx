@@ -4,7 +4,7 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors } from "@/theme";
@@ -54,25 +54,24 @@ export default function Capture() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "black" }}>
-      <CameraView ref={camera} style={{ flex: 1 }} facing={facing} mirror={facing === "front"}>
-        <SafeAreaView style={{ flex: 1, justifyContent: "space-between" }}>
-          <View style={{ paddingHorizontal: 18, gap: 18 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Pressable accessibilityLabel="Close camera" onPress={() => router.back()} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,.55)", alignItems: "center", justifyContent: "center" }}><MaterialCommunityIcons name="close" size={27} color="white" /></Pressable>
-              <Pressable accessibilityLabel="Flip camera" onPress={() => setFacing((current) => current === "front" ? "back" : "front")} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,.55)", alignItems: "center", justifyContent: "center" }}><MaterialCommunityIcons name="camera-flip-outline" size={25} color="white" /></Pressable>
-            </View>
-            <View style={{ alignSelf: "center", maxWidth: 330, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "rgba(0,0,0,.58)", borderRadius: 8 }}><Text selectable style={{ color: "white", fontSize: 14, lineHeight: 20, textAlign: "center", fontWeight: "700" }}>{onboarding ? "Keep your whole outfit in frame and wear something that feels quintessentially you." : "Keep your whole outfit in frame, or move close for one piece. The agent will tell the difference."}</Text></View>
+      <CameraView ref={camera} style={StyleSheet.absoluteFill} facing={facing} mirror={facing === "front"} />
+      <SafeAreaView pointerEvents="box-none" style={{ flex: 1, justifyContent: "space-between" }}>
+        <View style={{ paddingHorizontal: 18, gap: 18 }}>
+          <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+            <Pressable accessibilityLabel="Close camera" onPress={() => router.back()} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,.55)", alignItems: "center", justifyContent: "center" }}><MaterialCommunityIcons name="close" size={27} color="white" /></Pressable>
+            <Pressable accessibilityLabel="Flip camera" onPress={() => setFacing((current) => current === "front" ? "back" : "front")} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,.55)", alignItems: "center", justifyContent: "center" }}><MaterialCommunityIcons name="camera-flip-outline" size={25} color="white" /></Pressable>
           </View>
-          <View style={{ paddingHorizontal: 24, paddingBottom: 20, gap: 20 }}>
-            {!onboarding ? <IntentControl value={intent} onChange={setIntent} /> : null}
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Pressable accessibilityLabel="Choose from photos" onPress={choosePhoto} style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(0,0,0,.62)", alignItems: "center", justifyContent: "center" }}><MaterialCommunityIcons name="image-outline" size={27} color="white" /></Pressable>
-              <Pressable accessibilityLabel="Take photo" disabled={taking} onPress={takePhoto} style={{ width: 82, height: 82, borderRadius: 41, borderWidth: 5, borderColor: "white", alignItems: "center", justifyContent: "center" }}><View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: taking ? colors.washStrong : colors.lime }} /></Pressable>
-              <View style={{ width: 52 }} />
-            </View>
+          <View style={{ alignSelf: "center", maxWidth: 330, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "rgba(0,0,0,.58)", borderRadius: 8 }}><Text selectable style={{ color: "white", fontSize: 14, lineHeight: 20, textAlign: "center", fontWeight: "700" }}>{onboarding ? "Keep your whole outfit in frame and wear something that feels quintessentially you." : "Keep your whole outfit in frame, or move close for one piece. The agent will tell the difference."}</Text></View>
+        </View>
+        <View style={{ paddingHorizontal: 24, paddingBottom: 20, gap: 20 }}>
+          {!onboarding ? <IntentControl value={intent} onChange={setIntent} /> : null}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Pressable accessibilityLabel="Choose from photos" onPress={choosePhoto} style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(0,0,0,.62)", alignItems: "center", justifyContent: "center" }}><MaterialCommunityIcons name="image-outline" size={27} color="white" /></Pressable>
+            <Pressable accessibilityLabel="Take photo" disabled={taking} onPress={takePhoto} style={{ width: 82, height: 82, borderRadius: 41, borderWidth: 5, borderColor: "white", alignItems: "center", justifyContent: "center" }}><View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: taking ? colors.washStrong : colors.lime }} /></Pressable>
+            <View style={{ width: 52 }} />
           </View>
-        </SafeAreaView>
-      </CameraView>
+        </View>
+      </SafeAreaView>
     </View>
   );
 }

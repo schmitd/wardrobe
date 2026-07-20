@@ -10,7 +10,7 @@
     "build": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "preflight:native-auth": "bun run scripts/check-native-auth.ts",
-    "test": "bun test src/native-auth-preflight.test.ts && tsc --noEmit",
+    "test": "bun test src/*.test.ts && tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -26,6 +26,7 @@
     "expo-camera": "~56.0.8",
     "expo-constants": "~56.0.21",
     "expo-dev-client": "~56.0.23",
+    "expo-file-system": "~56.0.8",
     "expo-haptics": "~56.0.3",
     "expo-image": "~56.0.11",
     "expo-image-manipulator": "~56.0.22",
