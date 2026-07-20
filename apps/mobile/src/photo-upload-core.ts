@@ -57,7 +57,7 @@ export const photoUploadEffect = <Body>(
     }));
   }
   const payload = yield* Effect.tryPromise({
-    try: response.json,
+    try: () => response.json(),
     catch: () => new PhotoUploadError({ stage: "response", message: "Upload response could not be read." }),
   });
   if (
