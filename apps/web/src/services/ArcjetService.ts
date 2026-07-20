@@ -2,15 +2,17 @@ import arcjet, { detectBot, fixedWindow, request, slidingWindow } from "@arcjet/
 import { Context, Effect, Layer } from "effect";
 
 export type UserTier = "free" | "pro";
-export type AuthenticatedScope = "upload" | "check" | "inference" | "onboarding";
+export type AuthenticatedScope = "upload" | "routing" | "check" | "inference" | "onboarding";
 
 const UPLOAD_DAILY_LIMIT: Record<UserTier, number> = { free: 5, pro: 20 };
+const ROUTING_DAILY_LIMIT: Record<UserTier, number> = { free: 15, pro: 60 };
 const CHECK_DAILY_LIMIT: Record<UserTier, number> = { free: 3, pro: 20 };
 const INFERENCE_DAILY_LIMIT: Record<UserTier, number> = { free: 5, pro: 20 };
 const ONBOARDING_DAILY_LIMIT: Record<UserTier, number> = { free: 2, pro: 10 };
 const RATE_LIMIT_WINDOW = "1d";
 const RATE_LIMIT_BURST_INTERVAL = "10s";
 const RATE_LIMIT_BURST_MAX: Partial<Record<AuthenticatedScope, number>> = {
+  routing: 4,
   check: 1,
   inference: 1,
 };
@@ -25,6 +27,8 @@ const SECURITY_UNAVAILABLE_MESSAGE = "Security checks are unavailable right now.
 const BOT_BLOCK_MESSAGE = "Request blocked because automated traffic was detected.";
 const UPLOAD_RATE_LIMIT_MESSAGE =
   "Upload limit reached for your plan. Please try again later or upgrade to continue.";
+const ROUTING_RATE_LIMIT_MESSAGE =
+  "Photo routing limit reached for your plan. Please try again later or upgrade to continue.";
 const CHECK_RATE_LIMIT_MESSAGE =
   "Compatibility check limit reached for your plan. Please try again later or upgrade to continue.";
 const INFERENCE_RATE_LIMIT_MESSAGE =
@@ -54,6 +58,8 @@ const deniedErrorForScope = (scope: AuthenticatedScope) => {
       return new Error(UPLOAD_RATE_LIMIT_MESSAGE);
     case "check":
       return new Error(CHECK_RATE_LIMIT_MESSAGE);
+    case "routing":
+      return new Error(ROUTING_RATE_LIMIT_MESSAGE);
     case "onboarding":
       return new Error(ONBOARDING_RATE_LIMIT_MESSAGE);
     case "inference":
@@ -100,6 +106,10 @@ const make = Effect.gen(function* () {
     upload: {
       free: createAuthenticatedProtection("upload", UPLOAD_DAILY_LIMIT.free, arcjetKey),
       pro: createAuthenticatedProtection("upload", UPLOAD_DAILY_LIMIT.pro, arcjetKey),
+    },
+    routing: {
+      free: createAuthenticatedProtection("routing", ROUTING_DAILY_LIMIT.free, arcjetKey),
+      pro: createAuthenticatedProtection("routing", ROUTING_DAILY_LIMIT.pro, arcjetKey),
     },
     check: {
       free: createAuthenticatedProtection("check", CHECK_DAILY_LIMIT.free, arcjetKey),
