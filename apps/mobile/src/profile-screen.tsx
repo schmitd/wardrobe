@@ -71,7 +71,7 @@ export function ProfileScreen() {
         <Pressable disabled={selfieMutation.isPending} onPress={chooseSelfie} style={{ minHeight: 48, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, opacity: selfieMutation.isPending ? 0.6 : 1, borderRadius: 10, borderCurve: "continuous" }}>{selfieMutation.isPending ? <ActivityIndicator color={colors.plum} /> : <MaterialCommunityIcons name="image-outline" size={20} color={colors.plum} />}<Text style={{ color: colors.ink, fontWeight: "900" }}>{selfieMutation.isPending ? "Reading color notes…" : query.data?.latestSelfie ? "Replace face photo" : "Choose face photo"}</Text></Pressable>
       </View>
 
-      <Pressable onPress={() => { void signOut().then(() => { queryClient.clear(); router.replace("/welcome"); }); }} style={{ alignSelf: "flex-start", borderColor: colors.line, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderRadius: 10, borderCurve: "continuous" }}><Text style={{ color: colors.ink, fontWeight: "900" }}>Sign out</Text></Pressable>
+      <Pressable onPress={() => { void signOut().then(() => { queryClient.clear(); router.replace("/sign-in"); }); }} style={{ alignSelf: "flex-start", borderColor: colors.line, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderRadius: 10, borderCurve: "continuous" }}><Text style={{ color: colors.ink, fontWeight: "900" }}>Sign out</Text></Pressable>
     </Page>
   );
 }

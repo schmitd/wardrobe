@@ -2,7 +2,7 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useAuth, useSignIn, useSignUp, useSSO } from "@clerk/expo";
 import { Effect } from "effect";
 import * as AuthSession from "expo-auth-session";
-import { Redirect, useLocalSearchParams, useRouter } from "expo-router";
+import { Redirect, useRouter } from "expo-router";
 import * as WebBrowser from "expo-web-browser";
 import { useEffect, useState } from "react";
 import {
@@ -40,7 +40,6 @@ const isMissingAccount = (error: ClerkLikeError) =>
 
 export function SignInScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ returnUri?: string; returnIntent?: string }>();
   const insets = useSafeAreaInsets();
   const { isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
   const { startSSOFlow } = useSSO();
@@ -59,16 +58,9 @@ export function SignInScreen() {
     return () => { void WebBrowser.coolDownAsync(); };
   }, []);
 
-  const returnUri = Array.isArray(params.returnUri) ? params.returnUri[0] : params.returnUri;
-  const returnIntent = params.returnIntent === "just_trying" ? "just_trying" : "my_wardrobe";
-  const finishNavigation = () => {
-    if (returnUri) router.replace({ pathname: "/capture/review", params: { uri: returnUri, intent: returnIntent } });
-    else router.replace("/(tabs)/rack");
-  };
+  const finishNavigation = () => router.replace("/(tabs)/rack");
 
-  if (isSignedIn) return returnUri
-    ? <Redirect href={{ pathname: "/capture/review", params: { uri: returnUri, intent: returnIntent } }} />
-    : <Redirect href="/(tabs)/rack" />;
+  if (isSignedIn) return <Redirect href="/(tabs)/rack" />;
 
   const run = (task: () => Promise<void>, fallback: string) => {
     setBusy(true);

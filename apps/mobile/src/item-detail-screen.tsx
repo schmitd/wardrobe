@@ -29,7 +29,7 @@ export function ItemDetailScreen() {
     onSuccess: async () => { await queryClient.invalidateQueries({ queryKey: ["mobile-bootstrap"] }); router.back(); },
   });
 
-  if (!isSignedIn) return <Redirect href="/welcome" />;
+  if (!isSignedIn) return <Redirect href="/sign-in" />;
   if (query.isLoading) return <Loading />;
   if (!item) return <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: 20 }}><ErrorPanel message="This piece could not be found." /></ScrollView>;
   return (
