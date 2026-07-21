@@ -81,7 +81,7 @@ export default function CaptureReview() {
       const id = storageId ?? (yield* upload());
       setStorageId(id);
       setStatus("Deciding whether this is one piece or a full fit…");
-      const detected = yield* Effect.tryPromise({ try: () => routeCapture(getToken, id), catch: (cause) => cause instanceof Error ? cause : new Error("Photo routing failed.") });
+      const detected = yield* Effect.tryPromise({ try: () => routeCapture(getToken, id, trace()), catch: (cause) => cause instanceof Error ? cause : new Error("Photo routing failed.") });
       setRoute(detected);
       if (detected.needsReview) { setStatus(null); return; }
       yield* commit(id, detected.scope);

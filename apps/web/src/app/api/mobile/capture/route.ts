@@ -5,6 +5,13 @@ import {
   recordDailyFitCheckAction,
   routeCaptureAction,
 } from "@/app/actions/wardrobe";
+import { Effect } from "effect";
+
+import {
+  MobileCaptureFailure,
+  publicCaptureError,
+  toMobileCaptureFailure,
+} from "@/server/mobileCaptureError";
 
 export const runtime = "nodejs";
 
@@ -17,36 +24,82 @@ type CaptureBody = {
   traceparent?: string;
 };
 
-export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as CaptureBody | null;
-  if (!body?.operation || !body.storageId) {
-    return Response.json({ error: "Missing capture operation or storageId." }, { status: 400 });
-  }
+type CompleteCaptureBody = CaptureBody & {
+  operation: NonNullable<CaptureBody["operation"]>;
+  storageId: string;
+};
 
-  const trace = { traceId: body.traceId, traceparent: body.traceparent };
-  try {
-    switch (body.operation) {
-      case "route":
-        return Response.json(await routeCaptureAction({ storageId: body.storageId, ...trace }));
-      case "record_fit":
-        return Response.json(await recordDailyFitCheckAction({ storageId: body.storageId, ...trace }));
-      case "try_on":
-        return Response.json(await checkCompatibilityAction({ storageId: body.storageId, ...trace }));
-      case "add_piece": {
-        const created = await createWardrobeItemAction({
-          storageId: body.storageId,
-          clientFileName: body.clientFileName,
-          contentType: body.contentType,
-          ...trace,
+export async function POST(request: Request) {
+  const parseBody = Effect.tryPromise({
+    try: () => request.json() as Promise<CaptureBody>,
+    catch: (cause) => toMobileCaptureFailure(cause),
+  }).pipe(
+    Effect.flatMap((body) =>
+      body?.operation && body.storageId
+        ? Effect.succeed(body as CompleteCaptureBody)
+        : Effect.fail(new MobileCaptureFailure({
+            cause: "invalid_request",
+            message: "Missing capture operation or storageId.",
+          }))
+    )
+  );
+
+  const execute = (body: CompleteCaptureBody) =>
+    Effect.tryPromise({
+      try: async () => {
+        const trace = { traceId: body.traceId, traceparent: body.traceparent };
+        switch (body.operation) {
+          case "route":
+            return routeCaptureAction({ storageId: body.storageId, ...trace });
+          case "record_fit":
+            return recordDailyFitCheckAction({ storageId: body.storageId, ...trace });
+          case "try_on":
+            return checkCompatibilityAction({ storageId: body.storageId, ...trace });
+          case "add_piece": {
+            const created = await createWardrobeItemAction({
+              storageId: body.storageId,
+              clientFileName: body.clientFileName,
+              contentType: body.contentType,
+              ...trace,
+            });
+            if (!created.created && created.analysisStatus === "ready") {
+              return { id: created.id, processed: true, reused: true };
+            }
+            const processed = await processWardrobeItemAction({ itemId: String(created.id), ...trace });
+            if (!processed.success) throw new Error(processed.error);
+            return { id: created.id, processed: true };
+          }
+        }
+      },
+      catch: (cause) => {
+        const failure = toMobileCaptureFailure(cause);
+        return new MobileCaptureFailure({
+          cause: failure.cause,
+          message: failure.message,
+          operation: body.operation,
+          traceId: body.traceId,
         });
-        const processed = await processWardrobeItemAction({ itemId: String(created.id), ...trace });
-        if (!processed.success) throw new Error(processed.error);
-        return Response.json({ id: created.id, processed: true });
-      }
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Capture failed.";
-    const status = message === "Unauthorized" || message === "Missing Convex token" ? 401 : 500;
-    return Response.json({ error: status === 401 ? message : "Could not save this photo right now." }, { status });
-  }
+      },
+    });
+
+  return Effect.runPromise(
+    parseBody.pipe(
+      Effect.flatMap(execute),
+      Effect.match({
+        onFailure: (failure) => {
+          const response = failure.message === "Missing capture operation or storageId."
+            ? { status: 400, message: failure.message }
+            : publicCaptureError(failure);
+          console.error("mobile.capture.failed", {
+            operation: failure.operation,
+            traceId: failure.traceId,
+            status: response.status,
+            message: failure.message,
+          });
+          return Response.json({ error: response.message }, { status: response.status });
+        },
+        onSuccess: (result) => Response.json(result),
+      })
+    )
+  );
 }

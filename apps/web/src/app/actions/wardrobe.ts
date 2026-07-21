@@ -279,13 +279,29 @@ export const routeCaptureAction = async (input: {
 }) => {
   const { userId, token, tier } = await getConvexAuth();
   const { traceId, traceparent } = ensureTraceContext(input);
-  await enforceAuthenticatedProtection({ scope: captureProtectionScopes.route, tier, userId });
 
   await fetchMutation(
     api.storage.registerUpload,
     { storageId: input.storageId as Id<"_storage">, purpose: "capture_router" },
     { token }
   );
+  const cachedRoute = await fetchQuery(
+    api.storage.getCaptureRoute,
+    { storageId: input.storageId as Id<"_storage"> },
+    { token }
+  );
+  if (cachedRoute) {
+    console.info("capture.route_cache_hit", {
+      traceId,
+      traceparent,
+      userId,
+      scope: cachedRoute.scope,
+    });
+    return cachedRoute;
+  }
+
+  await enforceAuthenticatedProtection({ scope: captureProtectionScopes.route, tier, userId });
+
   const imageUrl = await fetchQuery(
     api.storage.getStorageUrl,
     { storageId: input.storageId as Id<"_storage"> },
@@ -345,6 +361,12 @@ Return JSON only with capture_scope, confidence, and rationale.
     )
   );
   const route = normalizeCaptureRoute(routed);
+
+  await fetchMutation(
+    api.storage.saveCaptureRoute,
+    { storageId: input.storageId as Id<"_storage">, route },
+    { token }
+  );
 
   console.info("capture.routed", {
     traceId,
