@@ -141,7 +141,11 @@ export const createWardrobeItem = mutation({
         itemId: existing._id,
         userId,
       });
-      return { id: existing._id, created: false as const };
+      return {
+        id: existing._id,
+        created: false as const,
+        analysisStatus: existing.analysisStatus,
+      };
     }
 
     const timestamp = now();
@@ -159,7 +163,7 @@ export const createWardrobeItem = mutation({
 
     console.info("wardrobe.create", { traceId, traceparent, itemId, userId });
 
-    return { id: itemId, created: true as const };
+    return { id: itemId, created: true as const, analysisStatus: "queued" as const };
   },
 });
 

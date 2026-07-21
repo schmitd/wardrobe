@@ -62,6 +62,9 @@ export async function POST(request: Request) {
               contentType: body.contentType,
               ...trace,
             });
+            if (!created.created && created.analysisStatus === "ready") {
+              return { id: created.id, processed: true, reused: true };
+            }
             const processed = await processWardrobeItemAction({ itemId: String(created.id), ...trace });
             if (!processed.success) throw new Error(processed.error);
             return { id: created.id, processed: true };
