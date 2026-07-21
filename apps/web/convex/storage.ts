@@ -68,6 +68,52 @@ export const getStorageUrl = query({
   },
 });
 
+export const getCaptureRoute = query({
+  args: {
+    storageId: v.id("_storage"),
+  },
+  handler: async (ctx, { storageId }) => {
+    const userId = await getUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const upload = await ctx.db
+      .query("uploads")
+      .withIndex("by_user_storage", (q) =>
+        q.eq("userId", userId).eq("storageId", storageId)
+      )
+      .first();
+
+    return upload?.captureRoute ?? null;
+  },
+});
+
+export const saveCaptureRoute = mutation({
+  args: {
+    storageId: v.id("_storage"),
+    route: v.object({
+      scope: v.union(v.literal("single_piece"), v.literal("full_fit")),
+      confidence: v.number(),
+      needsReview: v.boolean(),
+      rationale: v.string(),
+    }),
+  },
+  handler: async (ctx, { storageId, route }) => {
+    const userId = await getUserId(ctx);
+    if (!userId) throw new Error("Unauthorized");
+
+    const upload = await ctx.db
+      .query("uploads")
+      .withIndex("by_user_storage", (q) =>
+        q.eq("userId", userId).eq("storageId", storageId)
+      )
+      .first();
+    if (!upload) throw new Error("Not found");
+
+    await ctx.db.patch(upload._id, { captureRoute: route });
+    return route;
+  },
+});
+
 export const getLatestUploadByPurpose = query({
   args: {
     purpose: v.string(),

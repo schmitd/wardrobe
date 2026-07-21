@@ -47,8 +47,8 @@ export const runCaptureOperation = <T>(
   }
 ) => Effect.runPromise(request<T>(getToken, "/api/mobile/capture", { method: "POST", body: JSON.stringify(input) }));
 
-export const routeCapture = (getToken: GetToken, storageId: string) =>
-  runCaptureOperation<CaptureRoute>(getToken, { operation: "route", storageId });
+export const routeCapture = (getToken: GetToken, storageId: string, traceId?: string) =>
+  runCaptureOperation<CaptureRoute>(getToken, { operation: "route", storageId, traceId });
 
 export const tryOn = (getToken: GetToken, storageId: string) =>
   runCaptureOperation<CompatibilityResult>(getToken, { operation: "try_on", storageId });

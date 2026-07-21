@@ -24,6 +24,8 @@ const apiMock = {
   },
   storage: {
     registerUpload: {},
+    getCaptureRoute: {},
+    saveCaptureRoute: {},
     getStorageUrl: {},
     getLatestUploadByPurpose: {},
   },
@@ -194,7 +196,9 @@ describe("wardrobe server actions", () => {
 
   it("routes a capture from clothing composition before choosing a workflow", async () => {
     fetchMutationMock.mockResolvedValue({ ok: true });
-    fetchQueryMock.mockResolvedValue("https://example.com/capture.jpg");
+    fetchQueryMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce("https://example.com/capture.jpg");
     queueRunServerAction({
       capture_scope: "full_fit",
       confidence: 0.91,
@@ -214,6 +218,28 @@ describe("wardrobe server actions", () => {
       { storageId: "storage_1", purpose: "capture_router" },
       { token: "token_123" }
     );
+    expect(fetchMutationMock).toHaveBeenCalledWith(
+      api.storage.saveCaptureRoute,
+      { storageId: "storage_1", route: result },
+      { token: "token_123" }
+    );
+  });
+
+  it("reuses a cached capture route without spending another inference allowance", async () => {
+    const cached = {
+      scope: "single_piece" as const,
+      confidence: 0.97,
+      needsReview: false,
+      rationale: "One garment fills the frame.",
+    };
+    fetchMutationMock.mockResolvedValue({ ok: true });
+    fetchQueryMock.mockResolvedValueOnce(cached);
+
+    const result = await actions.routeCaptureAction({ storageId: "storage_1" });
+
+    expect(result).toEqual(cached);
+    expect(runServerActionMock).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it("deletes a wardrobe item", async () => {

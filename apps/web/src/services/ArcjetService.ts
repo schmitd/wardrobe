@@ -5,9 +5,13 @@ export type UserTier = "free" | "pro";
 export type AuthenticatedScope = "upload" | "routing" | "check" | "inference" | "onboarding";
 
 const UPLOAD_DAILY_LIMIT: Record<UserTier, number> = { free: 5, pro: 20 };
-const ROUTING_DAILY_LIMIT: Record<UserTier, number> = { free: 15, pro: 60 };
+// Upload creation is already rate limited. Routing needs extra headroom for retries and
+// review corrections so a valid uploaded photo cannot become permanently unsavable.
+const ROUTING_DAILY_LIMIT: Record<UserTier, number> = { free: 60, pro: 240 };
 const CHECK_DAILY_LIMIT: Record<UserTier, number> = { free: 3, pro: 20 };
-const INFERENCE_DAILY_LIMIT: Record<UserTier, number> = { free: 5, pro: 20 };
+// A normal day can include pieces, fits, and inspiration enrichment. Sharing one
+// five-request bucket across those workflows made valid saves block one another.
+const INFERENCE_DAILY_LIMIT: Record<UserTier, number> = { free: 20, pro: 80 };
 const ONBOARDING_DAILY_LIMIT: Record<UserTier, number> = { free: 2, pro: 10 };
 const RATE_LIMIT_WINDOW = "1d";
 const RATE_LIMIT_BURST_INTERVAL = "10s";

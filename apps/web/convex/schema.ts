@@ -237,6 +237,12 @@ export default defineSchema({
     storageId: v.id("_storage"),
     purpose: v.string(),
     createdAt: v.number(),
+    captureRoute: v.optional(v.object({
+      scope: v.union(v.literal("single_piece"), v.literal("full_fit")),
+      confidence: v.number(),
+      needsReview: v.boolean(),
+      rationale: v.string(),
+    })),
   })
     .index("by_user", ["userId"])
     .index("by_user_storage", ["userId", "storageId"])
