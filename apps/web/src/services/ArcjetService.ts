@@ -1,4 +1,4 @@
-import arcjet, { detectBot, fixedWindow, request, slidingWindow } from "@arcjet/next";
+import arcjet, { fixedWindow, request, slidingWindow } from "@arcjet/next";
 import { Context, Effect, Layer } from "effect";
 
 export type UserTier = "free" | "pro";
@@ -28,7 +28,6 @@ const GUEST_BATCH_UPLOAD_LIMIT = process.env.VERCEL_ENV === "preview" ? 8 : 2;
 const GUEST_BATCH_LIMIT_WINDOW = "7d";
 
 const SECURITY_UNAVAILABLE_MESSAGE = "Security checks are unavailable right now. Please try again.";
-const BOT_BLOCK_MESSAGE = "Request blocked because automated traffic was detected.";
 const UPLOAD_RATE_LIMIT_MESSAGE =
   "Upload limit reached for your plan. Please try again later or upgrade to continue.";
 const ROUTING_RATE_LIMIT_MESSAGE =
@@ -77,10 +76,6 @@ const createAuthenticatedProtection = (scope: AuthenticatedScope, dailyLimit: nu
     key,
     characteristics: ["userId"],
     rules: [
-      detectBot({
-        mode: "LIVE",
-        allow: [],
-      }),
       fixedWindow({
         mode: "LIVE",
         max: dailyLimit,
@@ -152,7 +147,6 @@ const make = Effect.gen(function* () {
           const decision = await authenticatedProtection[scope][tier].protect(req, { userId });
 
           if (!decision.isDenied()) return;
-          if (decision.reason.isBot()) throw new Error(BOT_BLOCK_MESSAGE);
           if (decision.reason.isRateLimit()) throw deniedErrorForScope(scope);
           throw new Error("Request denied. Please try again.");
         },
