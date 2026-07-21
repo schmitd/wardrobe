@@ -1,7 +1,5 @@
 export type CaptureScope = "single_piece" | "full_fit";
 
-export const CAPTURE_ROUTE_AUTO_CONFIDENCE = 0.74;
-
 export type CaptureRoute = {
   scope: CaptureScope;
   confidence: number;
@@ -26,7 +24,7 @@ export const normalizeCaptureRoute = (input: {
   return {
     scope: recognizedScope ?? "single_piece",
     confidence,
-    needsReview: recognizedScope === null || confidence < CAPTURE_ROUTE_AUTO_CONFIDENCE,
+    needsReview: false,
     rationale:
       typeof input.rationale === "string" && input.rationale.trim()
         ? input.rationale.trim().slice(0, 180)

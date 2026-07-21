@@ -297,7 +297,7 @@ export const routeCaptureAction = async (input: {
       userId,
       scope: cachedRoute.scope,
     });
-    return cachedRoute;
+    return { ...cachedRoute, needsReview: false as const };
   }
 
   await enforceAuthenticatedProtection({ scope: captureProtectionScopes.route, tier, userId });
