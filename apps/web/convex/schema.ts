@@ -54,6 +54,7 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_user", ["userId"])
+    .index("by_user_storage", ["userId", "storageId"])
     .index("by_user_wardrobe", ["userId", "wardrobeId"])
     .index("by_user_createdAt", ["userId", "createdAt"])
     .vectorIndex("by_embedding", {

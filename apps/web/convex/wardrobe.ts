@@ -128,6 +128,22 @@ export const createWardrobeItem = mutation({
       traceId: args.traceId,
       traceparent: args.traceparent,
     });
+    const existing = await ctx.db
+      .query("wardrobeItems")
+      .withIndex("by_user_storage", (q) =>
+        q.eq("userId", userId).eq("storageId", args.storageId)
+      )
+      .first();
+    if (existing) {
+      console.info("wardrobe.create_reused", {
+        traceId,
+        traceparent,
+        itemId: existing._id,
+        userId,
+      });
+      return { id: existing._id, created: false as const };
+    }
+
     const timestamp = now();
     const itemId = await ctx.db.insert("wardrobeItems", {
       userId,
@@ -143,7 +159,7 @@ export const createWardrobeItem = mutation({
 
     console.info("wardrobe.create", { traceId, traceparent, itemId, userId });
 
-    return { id: itemId };
+    return { id: itemId, created: true as const };
   },
 });
 
