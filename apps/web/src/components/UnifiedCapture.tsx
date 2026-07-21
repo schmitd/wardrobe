@@ -3,13 +3,11 @@
 import Link from 'next/link';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import {
-  Camera,
   Check,
   DoorClosed,
   ImagePlus,
   Loader2,
   Plus,
-  Shirt,
   ScanSearch,
   Sparkles,
   X,
@@ -187,7 +185,6 @@ export function UnifiedCaptureController() {
   const [pending, setPending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
-  const [reviewCapture, setReviewCapture] = useState<PendingCapture | null>(null);
   const [tryOnOpen, setTryOnOpen] = useState(false);
   const [tryOnPreview, setTryOnPreview] = useState<string | null>(null);
   const tryOn = useCompatibilityCheck();
@@ -228,7 +225,6 @@ export function UnifiedCaptureController() {
   };
 
   const completeCapture = async (capture: PendingCapture, scope: CaptureScope) => {
-    setReviewCapture(null);
     setPending(true);
 
     if (capture.intent === 'just_trying') {
@@ -337,18 +333,7 @@ export function UnifiedCaptureController() {
       return;
     }
 
-    if (outcome.right.route.needsReview) {
-      setPending(false);
-      setStatus(null);
-      setReviewCapture(outcome.right);
-      return;
-    }
     void completeCapture(outcome.right, outcome.right.route.scope);
-  };
-
-  const dismissReview = () => {
-    if (reviewCapture?.previewUrl) URL.revokeObjectURL(reviewCapture.previewUrl);
-    setReviewCapture(null);
   };
 
   return (
@@ -382,30 +367,6 @@ export function UnifiedCaptureController() {
           <button type="button" onClick={() => setToast(null)} aria-label="Dismiss notification" className="grid h-8 w-8 shrink-0 place-items-center hover:bg-black/5"><X className="h-4 w-4" /></button>
         </div>
       )}
-
-      <Dialog open={reviewCapture !== null} onOpenChange={(open) => { if (!open) dismissReview(); }}>
-        <DialogContent className="max-w-md rounded-none border border-[var(--rack-line)] bg-[var(--rack-paper)] p-5 shadow-[4px_4px_0_var(--rack-panel-shadow)]">
-          <DialogHeader className="pr-8 text-left">
-            <DialogTitle className="text-2xl font-extrabold">A quick nudge</DialogTitle>
-            <DialogDescription>I’m not fully certain how this photo is framed. Choose once and I’ll handle the rest.</DialogDescription>
-          </DialogHeader>
-          {reviewCapture && (
-            <>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={reviewCapture.previewUrl} alt="Capture awaiting classification" className="max-h-64 w-full border border-[var(--rack-line)] bg-white object-contain" />
-              <p className="text-sm font-medium text-[var(--rack-ink-soft)]">{reviewCapture.route.rationale}</p>
-              <div className="grid grid-cols-2 gap-3">
-                <Button type="button" variant="outline" onClick={() => void completeCapture(reviewCapture, 'single_piece')} className="h-auto min-h-20 rounded-none border border-[var(--rack-line)] bg-white px-3 py-4 text-[var(--rack-ink)]">
-                  <Shirt className="h-5 w-5" /><span className="text-sm font-extrabold">One piece</span>
-                </Button>
-                <Button type="button" variant="outline" onClick={() => void completeCapture(reviewCapture, 'full_fit')} className="h-auto min-h-20 rounded-none border border-[var(--rack-line)] bg-[var(--rack-action-wash)] px-3 py-4 text-[var(--rack-ink)]">
-                  <Camera className="h-5 w-5" /><span className="text-sm font-extrabold">Full fit</span>
-                </Button>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
 
       <Dialog open={tryOnOpen} onOpenChange={setTryOnOpen}>
         <DialogContent className="max-h-[92dvh] max-w-5xl overflow-y-auto rounded-none border border-[var(--rack-line)] bg-[var(--rack-paper)] p-5 sm:p-7">

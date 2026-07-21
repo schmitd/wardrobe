@@ -229,7 +229,7 @@ describe("wardrobe server actions", () => {
     const cached = {
       scope: "single_piece" as const,
       confidence: 0.97,
-      needsReview: false,
+      needsReview: true,
       rationale: "One garment fills the frame.",
     };
     fetchMutationMock.mockResolvedValue({ ok: true });
@@ -237,7 +237,7 @@ describe("wardrobe server actions", () => {
 
     const result = await actions.routeCaptureAction({ storageId: "storage_1" });
 
-    expect(result).toEqual(cached);
+    expect(result).toEqual({ ...cached, needsReview: false });
     expect(runServerActionMock).not.toHaveBeenCalled();
     expect(global.fetch).not.toHaveBeenCalled();
   });
