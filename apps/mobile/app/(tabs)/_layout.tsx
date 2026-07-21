@@ -16,7 +16,7 @@ const tabIcon = (name: keyof typeof MaterialCommunityIcons.glyphMap, focusedName
 export default function TabLayout() {
   const router = useRouter();
   const { isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
-  if (!isSignedIn) return <Redirect href="/welcome" />;
+  if (!isSignedIn) return <Redirect href="/sign-in" />;
   return (
     <Tabs
       initialRouteName="rack"

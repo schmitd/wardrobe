@@ -24,7 +24,7 @@ export function NewCollectionScreen() {
     },
   });
 
-  if (!isSignedIn) return <Redirect href="/welcome" />;
+  if (!isSignedIn) return <Redirect href="/sign-in" />;
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.paper }} behavior={process.env.EXPO_OS === "ios" ? "padding" : undefined}>
       <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, gap: 20 }}>

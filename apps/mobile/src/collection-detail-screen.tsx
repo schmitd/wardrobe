@@ -50,7 +50,7 @@ export function CollectionDetailScreen() {
     });
   };
 
-  if (!isSignedIn) return <Redirect href="/welcome" />;
+  if (!isSignedIn) return <Redirect href="/sign-in" />;
   if (query.isLoading) return <Loading />;
   if (query.error) return <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: 20 }}><ErrorPanel message={query.error.message} retry={() => void query.refetch()} /></ScrollView>;
   if (!collection) return <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: 20 }}><ErrorPanel message="This collection could not be found." /></ScrollView>;
