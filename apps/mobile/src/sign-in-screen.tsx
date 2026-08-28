@@ -58,9 +58,9 @@ export function SignInScreen() {
     return () => { void WebBrowser.coolDownAsync(); };
   }, []);
 
-  const finishNavigation = () => router.replace("/(tabs)/rack");
+  const finishNavigation = () => router.replace("/(tabs)/wardrobe");
 
-  if (isSignedIn) return <Redirect href="/(tabs)/rack" />;
+  if (isSignedIn) return <Redirect href="/(tabs)/wardrobe" />;
 
   const run = (task: () => Promise<void>, fallback: string) => {
     setBusy(true);

@@ -15,6 +15,17 @@ export type GarmentIdentityCandidate = {
   description?: string | null;
 };
 
+export type GarmentIdentityDecision =
+  | { status: "auto_matched"; confidence: number; margin: number; wardrobeItemId: string }
+  | { status: "needs_confirmation"; confidence: number; margin: number }
+  | { status: "unresolved"; confidence: number; margin: number };
+
+export type DirectGarmentComparison = {
+  matchIndex: number;
+  confidence: number;
+  rationale: string;
+};
+
 export const GARMENT_AUTO_MATCH_SCORE = 0.92;
 export const GARMENT_AUTO_MATCH_MARGIN = 0.06;
 export const GARMENT_CONFIRM_SCORE = 0.72;
@@ -31,7 +42,7 @@ export const normalizeGarmentCategory = (value: string) => {
   return normalized.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "unknown";
 };
 
-export const classifyGarmentMatch = (candidates: GarmentIdentityCandidate[]) => {
+export const classifyGarmentMatch = (candidates: GarmentIdentityCandidate[]): GarmentIdentityDecision => {
   const [best, second] = candidates;
   if (!best) return { status: "unresolved" as const, confidence: 0, margin: 0 };
   const margin = best.score - (second?.score ?? 0);
@@ -42,6 +53,35 @@ export const classifyGarmentMatch = (candidates: GarmentIdentityCandidate[]) => 
     return { status: "needs_confirmation" as const, confidence: best.score, margin };
   }
   return { status: "unresolved" as const, confidence: best.score, margin };
+};
+
+export const shouldDirectlyCompareGarments = (
+  decision: GarmentIdentityDecision,
+  candidates: GarmentIdentityCandidate[]
+) => decision.status === "needs_confirmation" && candidates.some((candidate) => Boolean(candidate.imageUrl));
+
+export const applyDirectGarmentComparison = (
+  embeddingDecision: GarmentIdentityDecision,
+  candidates: GarmentIdentityCandidate[],
+  comparison: DirectGarmentComparison
+): GarmentIdentityDecision => {
+  const matchIndex = Number.isInteger(comparison.matchIndex) ? comparison.matchIndex : -1;
+  const confidence = Math.max(0, Math.min(1, comparison.confidence));
+  if (matchIndex === -1 && confidence >= 0.92) {
+    return {
+      status: "unresolved",
+      confidence,
+      margin: embeddingDecision.margin,
+    };
+  }
+  const candidate = candidates[matchIndex];
+  if (!candidate || confidence < 0.92) return embeddingDecision;
+  return {
+    status: "auto_matched",
+    confidence,
+    margin: embeddingDecision.margin,
+    wardrobeItemId: candidate.wardrobeItemId,
+  };
 };
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));

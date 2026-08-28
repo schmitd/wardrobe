@@ -15,22 +15,22 @@ import { Label } from '@/components/ui/label';
 import { Either, promiseEffect, runBackground, runEffectResult } from '@/lib/effect-result';
 
 export default function TryOnFeedback({ result, previewUrl }: { result: CompatibilityCheckResult; previewUrl?: string | null }) {
-  const collections = useQuery(api.wardrobes.listWardrobes, {});
-  const [collectionId, setCollectionId] = useState('');
+  const plans = useQuery(api.wardrobes.listWardrobes, {});
+  const [planId, setPlanId] = useState('');
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [message, setMessage] = useState('');
-  const activeCollectionId = collectionId || String(collections?.[0]?._id ?? '');
-  const selected = useMemo(() => collections?.find((collection) => String(collection._id) === activeCollectionId), [activeCollectionId, collections]);
+  const activePlanId = planId || String(plans?.[0]?._id ?? '');
+  const selected = useMemo(() => plans?.find((plan) => String(plan._id) === activePlanId), [activePlanId, plans]);
   const evaluation = result.evaluation;
   const verdict = !evaluation ? 'A new direction' : evaluation.score >= 75 ? 'Strong closet fit' : evaluation.score >= 50 ? 'Useful with limits' : 'Harder to integrate';
   const tone = !evaluation || evaluation.score >= 50 ? 'rack-panel--success' : 'rack-panel--danger';
 
   const save = async () => {
-    if (!activeCollectionId) return;
+    if (!activePlanId) return;
     setSaveState('saving');
     const outcome = await runEffectResult(
       promiseEffect(() => saveInspirationAction({
-        wardrobeId: activeCollectionId,
+        wardrobeId: activePlanId,
         storageId: result.storageId,
         candidate: result.candidate,
         ...createTraceContext(),
@@ -42,7 +42,7 @@ export default function TryOnFeedback({ result, previewUrl }: { result: Compatib
       return;
     }
     setSaveState('saved');
-    setMessage(`Saved to ${selected?.name ?? 'your collection'} as inspiration.`);
+    setMessage(`Saved to ${selected?.name ?? 'your plan'} as inspiration.`);
     runBackground('style_bio.background_refresh.failed', () => refreshStyleBioAction());
   };
 
@@ -52,7 +52,7 @@ export default function TryOnFeedback({ result, previewUrl }: { result: Compatib
         <div className="space-y-3">
           {previewUrl && <Image src={previewUrl} alt={`Try-on candidate: ${result.candidate.category}`} width={640} height={800} unoptimized className="aspect-[4/5] w-full border border-[var(--rack-line)] bg-[var(--rack-wash)] object-cover shadow-[3px_3px_0_var(--rack-panel-shadow)]" />}
           <div className="border border-[var(--rack-line)] bg-white p-3">
-            <p className="text-xs font-extrabold uppercase tracking-[.14em] text-[#56345c]">Candidate · not in your rack</p>
+            <p className="text-xs font-extrabold uppercase tracking-[.14em] text-[#56345c]">Candidate · not in your Wardrobe</p>
             <p className="mt-2 text-sm font-semibold text-[#241426]">{result.candidate.description}</p>
             <p className="mt-2 text-xs font-medium text-[#56345c]">Saved in your Fits history as a try-on.</p>
           </div>
@@ -70,8 +70,8 @@ export default function TryOnFeedback({ result, previewUrl }: { result: Compatib
       </div>
       <section className="border border-[var(--rack-line)] bg-[var(--rack-action-wash)] p-4 shadow-[3px_3px_0_var(--rack-panel-shadow)]">
         <h4 className="text-sm font-extrabold text-[#241426]">Keep the idea, not the item</h4>
-        <p className="mt-1 text-sm font-medium text-[#56345c]">Save the useful direction to a Collection without adding it to your rack.</p>
-        {collections && collections.length > 0 ? <div className="mt-4 flex flex-wrap items-end gap-3"><div className="min-w-52"><Label htmlFor="try-on-collection">Collection</Label><select id="try-on-collection" value={activeCollectionId} onChange={(event) => setCollectionId(event.target.value)} className="mt-2 h-10 w-full border border-[var(--rack-line)] bg-white px-3 text-sm font-semibold">{collections.map((collection) => <option key={String(collection._id)} value={String(collection._id)}>{collection.name}</option>)}</select></div><Button type="button" onClick={save} disabled={saveState === 'saving' || saveState === 'saved'} className="h-10 rounded-none border border-[var(--rack-line)] bg-[#DCE66E] text-[#241426]">{saveState === 'saved' ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : 'Save to collection'}</Button>{message && <p role={saveState === 'error' ? 'alert' : 'status'} className={`text-sm font-semibold ${saveState === 'error' ? 'text-[#B93267]' : 'text-[#3F7C5D]'}`}>{message}</p>}</div> : <div className="mt-4 flex items-center justify-between gap-3 border border-[var(--rack-line)] bg-white p-3"><p className="text-sm font-semibold">Create a Collection before saving inspiration.</p><Button asChild variant="outline" className="rounded-none"><Link href="/wardrobes">Create collection</Link></Button></div>}
+        <p className="mt-1 text-sm font-medium text-[#56345c]">Save the useful direction to a Plan without adding it to your Wardrobe.</p>
+        {plans && plans.length > 0 ? <div className="mt-4 flex flex-wrap items-end gap-3"><div className="min-w-52"><Label htmlFor="try-on-plan">Plan</Label><select id="try-on-plan" value={activePlanId} onChange={(event) => setPlanId(event.target.value)} className="mt-2 h-10 w-full border border-[var(--rack-line)] bg-white px-3 text-sm font-semibold">{plans.map((plan) => <option key={String(plan._id)} value={String(plan._id)}>{plan.name}</option>)}</select></div><Button type="button" onClick={save} disabled={saveState === 'saving' || saveState === 'saved'} className="h-10 rounded-none border border-[var(--rack-line)] bg-[#DCE66E] text-[#241426]">{saveState === 'saved' ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : 'Save to plan'}</Button>{message && <p role={saveState === 'error' ? 'alert' : 'status'} className={`text-sm font-semibold ${saveState === 'error' ? 'text-[#B93267]' : 'text-[#3F7C5D]'}`}>{message}</p>}</div> : <div className="mt-4 flex items-center justify-between gap-3 border border-[var(--rack-line)] bg-white p-3"><p className="text-sm font-semibold">Create a Plan before saving inspiration.</p><Button asChild variant="outline" className="rounded-none"><Link href="/fits?view=plans#plans">Create plan</Link></Button></div>}
       </section>
     </div>
   );

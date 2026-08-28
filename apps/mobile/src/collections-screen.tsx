@@ -20,12 +20,12 @@ export function CollectionsScreen() {
           <MaterialCommunityIcons name="cards-outline" size={30} color={colors.plum} />
           <Text selectable style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>Start with a direction</Text>
           <Text selectable style={{ color: colors.muted, lineHeight: 21 }}>A phrase, a trip, or a feeling is enough. Add references and closet pieces as the idea takes shape.</Text>
-          <Link href="/collection/new" asChild><Pressable style={{ alignSelf: "flex-start", backgroundColor: colors.lime, borderColor: colors.line, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12 }}><Text style={{ color: colors.ink, fontWeight: "900" }}>Create collection</Text></Pressable></Link>
+          <Link href="/plan/new" asChild><Pressable style={{ alignSelf: "flex-start", backgroundColor: colors.lime, borderColor: colors.line, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12 }}><Text style={{ color: colors.ink, fontWeight: "900" }}>Create plan</Text></Pressable></Link>
         </Panel>
       ) : null}
       <View style={{ gap: 12 }}>
         {query.data?.wardrobes.map((collection) => (
-          <Link key={collection._id} href={{ pathname: "/collection/[id]", params: { id: collection._id } }} asChild>
+          <Link key={collection._id} href={{ pathname: "/plan/[id]", params: { id: collection._id } }} asChild>
             <Pressable style={({ pressed }) => ({ borderColor: colors.line, borderWidth: 1, backgroundColor: pressed ? colors.wash : colors.surface, padding: 17, gap: 9, borderRadius: 14, borderCurve: "continuous", boxShadow: "2px 3px 0 rgba(67,40,63,.15)" })}>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
                 <Text selectable numberOfLines={1} style={{ flex: 1, color: colors.ink, fontSize: 21, fontWeight: "900" }}>{collection.name}</Text>

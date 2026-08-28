@@ -1,5 +1,6 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
-import { useAuth } from "@clerk/expo";
+import { useAuth, useUser } from "@clerk/expo";
+import { Image } from "expo-image";
 import { Redirect, Tabs, useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { Pressable, Text, View, type ColorValue } from "react-native";
@@ -13,13 +14,33 @@ const tabIcon = (name: keyof typeof MaterialCommunityIcons.glyphMap, focusedName
     </View>
   );
 
+function AccountButton() {
+  const router = useRouter();
+  const { user } = useUser();
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Open account settings"
+      onPress={() => router.push("/account")}
+      style={{ width: 48, height: 44, alignItems: "center", justifyContent: "center" }}
+    >
+      {user?.imageUrl ? (
+        <Image source={user.imageUrl} style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.wash }} contentFit="cover" />
+      ) : (
+        <MaterialCommunityIcons name="account-circle-outline" size={30} color={colors.plum} />
+      )}
+    </Pressable>
+  );
+}
+
 export default function TabLayout() {
   const router = useRouter();
   const { isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
   if (!isSignedIn) return <Redirect href="/sign-in" />;
   return (
     <Tabs
-      initialRouteName="rack"
+      initialRouteName="wardrobe"
       screenOptions={{
         headerStyle: { backgroundColor: colors.paper },
         headerTintColor: colors.ink,
@@ -30,12 +51,11 @@ export default function TabLayout() {
         tabBarLabelStyle: { fontSize: 11, fontWeight: "800", marginBottom: 7 },
       }}
     >
-      <Tabs.Screen name="rack" options={{ title: "Rack", tabBarIcon: tabIcon("hanger", "hanger") }} />
-      <Tabs.Screen name="fits" options={{ title: "Fits", tabBarIcon: tabIcon("calendar-blank-outline", "calendar") }} />
+      <Tabs.Screen name="wardrobe" options={{ title: "Wardrobe", tabBarIcon: tabIcon("hanger", "hanger"), headerRight: () => <AccountButton /> }} />
       <Tabs.Screen
         name="capture-entry"
         options={{
-          title: "Add",
+          title: "Capture",
           headerShown: false,
           tabBarLabel: () => null,
           tabBarIcon: () => null,
@@ -43,7 +63,7 @@ export default function TabLayout() {
             <View style={{ flex: 1, alignItems: "center" }}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Add a wardrobe photo"
+                accessibilityLabel="Capture a wardrobe photo"
                 onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/capture"); }}
                 style={({ pressed }) => ({
                   width: 62,
@@ -64,13 +84,15 @@ export default function TabLayout() {
               >
                 <MaterialCommunityIcons name="plus" size={35} color={colors.ink} />
               </Pressable>
-              <Text style={{ marginTop: 4, color: colors.muted, fontSize: 11, fontWeight: "800" }}>Add</Text>
+              <Text style={{ marginTop: 4, color: colors.muted, fontSize: 11, fontWeight: "800" }}>Capture</Text>
             </View>
           ),
         }}
       />
-      <Tabs.Screen name="collections" options={{ title: "Collections", tabBarIcon: tabIcon("cards-outline", "cards"), headerRight: () => <Pressable accessibilityLabel="Create collection" onPress={() => router.push("/collection/new")} style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center" }}><MaterialCommunityIcons name="plus" size={25} color={colors.plum} /></Pressable> }} />
-      <Tabs.Screen name="profile" options={{ title: "You", tabBarIcon: tabIcon("account-outline", "account") }} />
+      <Tabs.Screen name="fits" options={{ title: "Fits", tabBarIcon: tabIcon("calendar-blank-outline", "calendar"), headerRight: () => <AccountButton /> }} />
+      <Tabs.Screen name="rack" options={{ href: null }} />
+      <Tabs.Screen name="collections" options={{ href: null }} />
+      <Tabs.Screen name="profile" options={{ href: null }} />
     </Tabs>
   );
 }

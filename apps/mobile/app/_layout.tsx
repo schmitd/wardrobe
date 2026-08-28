@@ -31,9 +31,12 @@ function Navigation() {
       <Stack.Protected guard={Boolean(isSignedIn)}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="capture/index" options={{ headerShown: false, presentation: "fullScreenModal" }} />
-        <Stack.Screen name="capture/review" options={{ title: "Review photo", presentation: "modal" }} />
-        <Stack.Screen name="collection/new" options={{ title: "New collection", presentation: "formSheet", sheetGrabberVisible: true, sheetAllowedDetents: [0.72, 1] }} />
-        <Stack.Screen name="collection/[id]" options={{ title: "Collection", headerBackButtonDisplayMode: "minimal" }} />
+        <Stack.Screen name="capture/processing" options={{ title: "Processing", presentation: "fullScreenModal", headerBackVisible: false }} />
+        <Stack.Screen name="account" options={{ title: "Account", headerBackButtonDisplayMode: "minimal" }} />
+        <Stack.Screen name="plan/new" options={{ title: "New plan", presentation: "formSheet", sheetGrabberVisible: true, sheetAllowedDetents: [0.72, 1] }} />
+        <Stack.Screen name="plan/[id]" options={{ title: "Plan", headerBackButtonDisplayMode: "minimal" }} />
+        <Stack.Screen name="collection/new" options={{ title: "New plan", presentation: "formSheet", sheetGrabberVisible: true, sheetAllowedDetents: [0.72, 1] }} />
+        <Stack.Screen name="collection/[id]" options={{ title: "Plan", headerBackButtonDisplayMode: "minimal" }} />
         <Stack.Screen name="item/[id]" options={{ title: "Closet piece", headerBackButtonDisplayMode: "minimal" }} />
       </Stack.Protected>
     </Stack>

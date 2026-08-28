@@ -56,17 +56,23 @@ The bottom rack action stack should float above content like app controls, but s
 
 The rack action stack contains `Add piece`, `Fit check`, and `Try on`. Use the citron action surface only for the primary add action; the two fit actions are quieter white controls. Do not use a generic “Check fit” label.
 
-## Fits And Collections
+## Navigation And Hierarchy
+
+Signed-in navigation is deliberately limited to **Wardrobe** and **Fits**, with **Add** as a prominent global action. On mobile, keep Add centered between those two destinations. On wider screens, keep the same order and hierarchy. Account, privacy, and sign-out live behind the header account affordance; do not restore Profile, Plans, or settings as peer tabs.
+
+Style notes are a compact, secondary surface inside Wardrobe. Use one editable note for fit, color, comfort, body, and lifestyle context. Do not render complexion, hair color, season, or body type as separate profile cards, scores, or navigation.
+
+## Fits And Plans
 
 The Fits page is a visual diary. Its calendar uses the user’s own outfit photos as the primary activity signal and leaves unrecorded days quiet. Avoid numerical streak counters, longest-streak language, progress badges, or other gamified score surfaces.
 
-Fit check, Try on, profile, and inspiration use one direct photo button. It opens the device-native picker so mobile platforms can offer camera or library and desktop uses its normal file picker. Do not use drag-and-drop zones, two competing camera/library controls, or an upload form modal for a single photo.
+Fit check, Try on, and inspiration use one direct photo button. It opens the device-native picker so mobile platforms can offer camera or library and desktop uses its normal file picker. Do not use drag-and-drop zones, two competing camera/library controls, or an upload form modal for a single photo.
 
 Try-on feedback should read like a considered styling note, not a shopping scorecard. Lead with the verdict and explanation, ground it in a few owned closet anchors, and make the ownership boundary explicit. Compatibility colors are semantic: green for strong fit, pink only for a genuinely difficult fit, and neutral mauve/ink for mixed results.
 
-Collections are named, user-described loci. Do not expose preset collection kinds. A collection member may be `Owned`, `Trying`, or `Inspiration`, and the user must be able to add, reclassify, and remove members directly. Keep membership controls compact and readable beside the photo rather than treating relationship labels as decorative badges.
+Plans are named, user-described loci inside Fits. Do not expose preset plan kinds. A plan member may be `Owned`, `Trying`, or `Inspiration`, and the user must be able to add, reclassify, and remove members directly. Keep membership controls compact and readable beside the photo rather than treating relationship labels as decorative badges.
 
-Show saved inspiration in its own visual lane inside the selected Collection. Label it `Inspiration · not owned`; do not offer owned-item relationship controls on candidate references. A photo is the input: avoid asking the user to write a label or explain what it means before saving it.
+Show saved inspiration in its own visual lane inside the selected Plan. Label it `Inspiration · not owned`; do not offer owned-item relationship controls on candidate references. A photo is the input: avoid asking the user to write a label or explain what it means before saving it.
 
 ## Accessibility
 
