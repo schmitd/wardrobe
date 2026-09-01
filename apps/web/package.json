@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "bun test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "benchmark:garment-identity": "bun run scripts/benchmark-garment-identity.ts"
   },
   "dependencies": {
     "@arcjet/next": "^1.1.0",

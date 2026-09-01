@@ -255,7 +255,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
           <div className="mt-6 border-t border-[var(--rack-line)] pt-5">
             <div className="mb-3 flex items-center gap-2">
               <Sparkles className="h-4 w-4" />
-              <p className="text-sm font-semibold text-[var(--rack-ink)]">Your closet bio</p>
+              <p className="text-sm font-semibold text-[var(--rack-ink)]">Your style notes</p>
             </div>
             <Textarea
               value={bio}
@@ -314,7 +314,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       )}
 
       {demoComplete && !limitMessage && (
-        <section className="rack-panel" aria-label="Save demo profile">
+        <section className="rack-panel" aria-label="Save demo Wardrobe">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <SignUpButton mode="modal" forceRedirectUrl="/" fallbackRedirectUrl="/">
               <Button
@@ -322,7 +322,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
                 onClick={() => posthog.capture('guest_signup_prompted', { source: 'demo_complete' })}
                 className="h-auto w-full rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)] sm:w-auto"
               >
-                Save my style profile
+                Save my Wardrobe
               </Button>
             </SignUpButton>
             <p className="text-sm font-medium text-[var(--rack-ink-soft)]">

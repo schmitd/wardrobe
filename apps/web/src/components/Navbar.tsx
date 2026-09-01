@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { SignInButton, SignedIn, SignedOut } from '@clerk/nextjs';
-import { Layers3, Sparkles, Shirt, UserRound } from 'lucide-react';
+import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
+import { Sparkles, Shirt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UnifiedCaptureController, UnifiedCaptureTrigger } from '@/components/UnifiedCapture';
 import { cn } from '@/lib/utils';
@@ -23,10 +23,8 @@ const mobileNavClass = (active: boolean) =>
   );
 
 const signedInLinks = [
-  { href: '/', label: 'Rack', icon: Shirt },
+  { href: '/', label: 'Wardrobe', icon: Shirt },
   { href: '/fits', label: 'Fits', icon: Sparkles },
-  { href: '/wardrobes', label: 'Wardrobes', icon: Layers3 },
-  { href: '/profile', label: 'Profile', icon: UserRound },
 ] as const;
 
 export default function Navbar() {
@@ -43,14 +41,14 @@ export default function Navbar() {
             <span className="text-sm font-extrabold text-[#241426]">Wardrobe</span>
           </Link>
 
-          <div className="hidden items-center justify-end gap-2 md:flex">
-            <Button asChild variant="outline" className={navClass(pathname === '/')}>
-              <Link href="/">
-                <Shirt className="h-3.5 w-3.5" />
-                <span>Rack</span>
-              </Link>
-            </Button>
+          <div className="hidden flex-1 items-center justify-end gap-2 md:flex">
             <SignedIn>
+              <Button asChild variant="outline" className={navClass(pathname === '/')}>
+                <Link href="/">
+                  <Shirt className="h-3.5 w-3.5" />
+                  <span>Wardrobe</span>
+                </Link>
+              </Button>
               <UnifiedCaptureTrigger variant="desktop" />
               {signedInLinks.slice(1).map(({ href, label, icon: Icon }) => (
                 <Button key={href} asChild variant="outline" className={navClass(pathname === href)}>
@@ -62,6 +60,12 @@ export default function Navbar() {
               ))}
             </SignedIn>
           </div>
+
+          <SignedIn>
+            <div className="grid min-h-11 min-w-11 place-items-center border border-[var(--rack-line)] bg-white shadow-[2px_2px_0_var(--rack-panel-shadow)]" aria-label="Account, privacy, and sign out">
+              <UserButton />
+            </div>
+          </SignedIn>
 
           <SignedOut>
             <SignInButton mode="modal">
@@ -79,21 +83,17 @@ export default function Navbar() {
           aria-label="Primary navigation"
         >
           <div className="rack-mobile-tabs-inner mx-auto max-w-md">
-            {signedInLinks.slice(0, 2).map(({ href, label, icon: Icon }) => (
-              <Link key={href} href={href} className={mobileNavClass(pathname === href)} aria-current={pathname === href ? 'page' : undefined}>
-                <Icon className="h-5 w-5" />
-                <span>{label}</span>
-              </Link>
-            ))}
+            <Link href="/" className={mobileNavClass(pathname === '/')} aria-current={pathname === '/' ? 'page' : undefined}>
+              <Shirt className="h-5 w-5" />
+              <span>Wardrobe</span>
+            </Link>
             <div className="rack-mobile-capture-slot flex items-start justify-center">
               <UnifiedCaptureTrigger variant="mobile" />
             </div>
-            {signedInLinks.slice(2).map(({ href, label, icon: Icon }) => (
-              <Link key={href} href={href} className={mobileNavClass(pathname === href)} aria-current={pathname === href ? 'page' : undefined}>
-                <Icon className="h-5 w-5" />
-                <span>{label}</span>
-              </Link>
-            ))}
+            <Link href="/fits" className={mobileNavClass(pathname === '/fits')} aria-current={pathname === '/fits' ? 'page' : undefined}>
+              <Sparkles className="h-5 w-5" />
+              <span>Fits</span>
+            </Link>
           </div>
         </nav>
       </SignedIn>

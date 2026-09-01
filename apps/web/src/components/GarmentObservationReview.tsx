@@ -51,12 +51,13 @@ export default function GarmentObservationReview({ observations }: { observation
     <div className="mt-4 space-y-4 border-t border-[var(--rack-line)] pt-4">
       <div>
         <p className="text-xs font-extrabold uppercase tracking-[.14em] text-[#56345c]">Detected pieces</p>
-        <p className="mt-1 text-xs font-medium text-[#56345c]">Confirm uncertain matches so repeat-wear history stays accurate.</p>
+        <p className="mt-1 text-xs font-medium text-[#56345c]">Wardrobe asks only when a repeat match stays genuinely ambiguous.</p>
       </div>
       {error && <p role="alert" className="text-xs font-semibold text-[#B93267]">{error}</p>}
       <div className="space-y-3">
         {observations.map((observation) => {
           const resolved = ['auto_matched', 'confirmed', 'promoted_new'].includes(observation.resolutionStatus);
+          const needsConfirmation = observation.resolutionStatus === 'needs_confirmation';
           return (
             <article key={String(observation._id)} className="border border-[var(--rack-line)] bg-[var(--rack-paper)] p-3">
               <div className="flex gap-3">
@@ -67,11 +68,12 @@ export default function GarmentObservationReview({ observations }: { observation
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-extrabold text-[#241426]">{observation.category}</p>
                     {resolved && <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-[#3F7C5D]"><Check className="h-3 w-3" />{observation.resolutionStatus === 'promoted_new' ? 'Added as new' : 'Repeat recognized'}</span>}
+                    {observation.resolutionStatus === 'unresolved' && <span className="text-[11px] font-extrabold text-[#56345c]">No repeat recognized</span>}
                   </div>
                   <p className="mt-1 text-xs font-medium leading-relaxed text-[#56345c]">{observation.description}</p>
                 </div>
               </div>
-              {!resolved && (
+              {needsConfirmation && (
                 <div className="mt-3 space-y-2">
                   {observation.candidates.slice(0, 3).map((candidate) => (
                     <button
@@ -96,6 +98,17 @@ export default function GarmentObservationReview({ observations }: { observation
                     <Plus className="h-3.5 w-3.5" /> This is a new closet item
                   </Button>
                 </div>
+              )}
+              {observation.resolutionStatus === 'unresolved' && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={pendingId === String(observation._id)}
+                  onClick={() => run(observation._id, () => promoteObservation({ observationId: observation._id }))}
+                  className="mt-3 h-9 rounded-none border-[var(--rack-line)] bg-white text-xs font-extrabold text-[#241426]"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add as a new wardrobe piece
+                </Button>
               )}
             </article>
           );

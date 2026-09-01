@@ -1,5 +1,5 @@
-import { ProfileScreen } from "@/profile-screen";
+import { Redirect } from "expo-router";
 
 export default function Profile() {
-  return <ProfileScreen />;
+  return <Redirect href="/(tabs)/wardrobe" />;
 }

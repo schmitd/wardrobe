@@ -25,7 +25,7 @@ export default function InspirationIntake({ collectionId, collectionName }: { co
     if (!file) return;
     if (!file.type.startsWith('image/')) {
       setState('error');
-      setMessage('Choose a photo to add to this collection.');
+      setMessage('Choose a photo to add to this plan.');
       return;
     }
     setState('saving');
@@ -65,7 +65,7 @@ export default function InspirationIntake({ collectionId, collectionName }: { co
           ? 'The photo could not upload. Please try again.'
           : stage === 'register'
             ? 'The photo uploaded but could not be linked to your account. Please try again.'
-            : 'The photo uploaded but could not be added to this collection. Please try again.'
+            : 'The photo uploaded but could not be added to this plan. Please try again.'
       ));
       return;
     }

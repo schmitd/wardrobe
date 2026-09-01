@@ -1,5 +1,5 @@
-import { CollectionsScreen } from "@/collections-screen";
+import { Redirect } from "expo-router";
 
 export default function Collections() {
-  return <CollectionsScreen />;
+  return <Redirect href="/(tabs)/fits?view=plans" />;
 }

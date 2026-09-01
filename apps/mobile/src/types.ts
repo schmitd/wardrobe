@@ -77,6 +77,7 @@ export type MobileBootstrap = {
     complexion: string | null;
     hairColor: string | null;
     colorSeason: string | null;
+    bodyType?: string | null;
   } | null;
   currentUser: { name?: string | null; email?: string | null } | null;
   latestSelfie: { storageId: string; url: string; createdAt: number } | null;

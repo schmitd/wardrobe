@@ -10,7 +10,7 @@ export default function PricingPage() {
                     Upgrade your closet companion
                 </h1>
                 <p className="mx-auto mt-5 max-w-xl text-base font-medium text-slate-700 sm:text-lg">
-                    Unlock unlimited compatibility checks, saved profiles, and deeper personalization.
+                    Unlock unlimited compatibility checks, saved Style notes, and deeper personalization.
                 </p>
             </div>
 

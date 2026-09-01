@@ -32,11 +32,14 @@ import {
   withRetries,
 } from "@/server/inference/shared";
 import {
+  applyDirectGarmentComparison,
   classifyGarmentMatch,
   cropGarmentRegion,
   normalizeGarmentCategory,
+  shouldDirectlyCompareGarments,
   type GarmentIdentityCandidate,
 } from "@/server/garmentIdentity";
+import { compareGarmentCrops } from "@/server/garmentIdentityDisambiguation";
 import { normalizeCaptureRoute } from "@/server/captureRouter";
 import { captureProtectionScopes } from "@/server/captureProtection";
 import { processWardrobeInference } from "@/server/wardrobeInference";
@@ -1713,7 +1716,40 @@ export const recordFitCheckForAuth = async (
               { visualEmbedding, categoryKey, limit: 5 },
               { token }
             ) as GarmentIdentityCandidate[];
-            const decision = classifyGarmentMatch(candidates);
+            const embeddingDecision = classifyGarmentMatch(candidates);
+            const comparison = shouldDirectlyCompareGarments(embeddingDecision, candidates)
+              ? await runBestEffort("fit_check.garment_identity.direct_comparison_failed", { traceId, userId }, async () => {
+                  const candidatesWithImages = candidates.slice(0, 3).filter((candidate) => Boolean(candidate.imageUrl));
+                  const directCandidates = await Promise.all(candidatesWithImages.map(async (candidate) => {
+                    const imageUrl = candidate.imageUrl!;
+                    const response = await fetch(imageUrl);
+                    if (!response.ok) throw new Error(`Candidate image fetch failed: ${response.statusText}`);
+                    const mimeType = response.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+                    return {
+                      wardrobeItemId: candidate.wardrobeItemId,
+                      category: candidate.category,
+                      description: candidate.description,
+                      image: { data: Buffer.from(await response.arrayBuffer()).toString("base64"), mimeType },
+                    };
+                  }));
+                  const result = await runServerAction(compareGarmentCrops({
+                    query: { data: cropBase64, mimeType: "image/jpeg" },
+                    candidates: directCandidates,
+                  }).pipe(Effect.provide(GeminiLive)));
+                  console.info("fit_check.garment_identity.direct_comparison_complete", {
+                    traceId,
+                    userId,
+                    model: result.model,
+                    inputTokens: result.inputTokens,
+                    outputTokens: result.outputTokens,
+                    confidence: result.confidence,
+                  });
+                  return { result, candidates: candidatesWithImages };
+                })
+              : undefined;
+            const decision = comparison
+              ? applyDirectGarmentComparison(embeddingDecision, comparison.candidates, comparison.result)
+              : embeddingDecision;
 
             const uploadUrl = await fetchMutation(api.wardrobe.getUploadUrl, {}, { token });
             const cropUpload = await fetch(uploadUrl, {

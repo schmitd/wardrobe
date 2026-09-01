@@ -8,6 +8,7 @@ import { api } from '@convex/_generated/api';
 import AddItemSection from '@/components/AddItemSection';
 import GuestClosetDemo from '@/components/GuestClosetDemo';
 import WardrobeGrid from '@/components/WardrobeGrid';
+import StyleNotes from '@/components/StyleNotes';
 import {
   completeGuestOnboardingAction,
   createWardrobeItemAction,
@@ -110,12 +111,12 @@ export default function Home() {
 
     setImportStatus(`Importing ${queue.length} item${queue.length === 1 ? '' : 's'} from guest demo...`);
 
-    // Preserve the guest bio as the signed-in profile draft.
+    // Preserve the guest bio as the signed-in Style notes draft.
     try {
       const trace = createTraceContext();
       await updateProfileBioAction({ bio: snapshot.bio, source: 'guest_import', ...trace });
     } catch {
-      // Non-blocking; the user can still edit/save on Profile.
+      // Non-blocking; the user can still edit/save in Style notes.
     }
 
     let allItemsPrepared = true;
@@ -305,6 +306,14 @@ export default function Home() {
 
           {isSignedIn ? (
             <>
+              <div>
+                <p className="text-sm font-semibold text-[#56345c]">Your closet</p>
+                <h1 className="mt-2 text-4xl font-extrabold text-[#241426]">Wardrobe</h1>
+                <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-[#56345c]">
+                  Everything you own, with the context that makes it yours.
+                </p>
+              </div>
+              <StyleNotes />
               <AddItemSection
                 onOptimisticAdd={handleOptimisticAdd}
                 onOptimisticUpdate={handleOptimisticUpdate}

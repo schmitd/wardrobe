@@ -6,11 +6,21 @@ product
 
 ## Users
 
-Style-curious, savvy consumers who want a more useful view of their closet than a generic upload grid. They care about fit, visual compatibility, and shopping decisions, but they are not looking for a luxury editorial experience or a blank AI assistant wrapper. They use the app to build a personal rack of clothing, understand individual items, and compare whether a garment works with their wardrobe or styling goals.
+Style-curious, savvy consumers who want a more useful view of their closet than a generic upload grid. They care about fit, visual compatibility, and shopping decisions, but they are not looking for a luxury editorial experience or a blank AI assistant wrapper. They use the app to build a personal Wardrobe, understand individual items, and compare whether a garment works with their Wardrobe or styling goals.
 
 ## Product Purpose
 
 Wardrobe is a closet manager and shopping companion. It helps users upload clothing items, retain structured style analysis, and compare pieces against their wardrobe context. Success means users can quickly recognize their items, trust the analysis, and make better outfit or shopping decisions without the interface getting in the way.
+
+## Product Architecture
+
+The signed-in experience has two primary destinations and one global action:
+
+- **Wardrobe** is the owned catalog. It contains the user’s pieces and compact, editable **Style notes**. Fit, color, comfort, body, and lifestyle context belong in this living note and the supporting knowledge graph; they are not separate profile features.
+- **Fits** contains the outfit diary, try-ons, and **Plans**. Plans combine owned pieces with inspiration for trips, occasions, capsules, and future outfit directions.
+- **Add** is a global capture action, not a destination.
+
+Account, privacy, authentication, and sign-out stay behind the header account affordance. Do not add Profile or Plans as primary navigation destinations. “Collection” and the underlying wardrobe/collection data model are legacy implementation terms; user-facing product copy uses **Plans**. Legacy `/profile` and `/wardrobes` links should continue to route users to their new home.
 
 ## Brand Personality
 

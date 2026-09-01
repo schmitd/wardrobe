@@ -1,11 +1,13 @@
 'use client';
 
 import Image from 'next/image';
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { ChangeEvent, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Camera, ImagePlus, Shirt } from 'lucide-react';
+import { CalendarDays, Camera, FolderHeart, ImagePlus, Shirt } from 'lucide-react';
 import { getUploadUrlAction, recordDailyFitCheckAction, refreshStyleBioAction } from '@/app/actions/wardrobe';
 import TryOnFeedback from '@/components/TryOnFeedback';
 import { useCompatibilityCheck } from '@/hooks/useCompatibilityCheck';
@@ -14,6 +16,7 @@ import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import GarmentObservationReview from '@/components/GarmentObservationReview';
+import PlansView from '@/components/PlansView';
 
 type FitCheckMode = 'daily_fit_check' | 'try_on';
 
@@ -49,10 +52,12 @@ function CaptureCard({ mode, onComplete }: { mode: FitCheckMode; onComplete: (mo
 }
 
 export default function FitsPage() {
-  return <FitsContent />;
+  return <Suspense fallback={<div className="p-8 text-sm font-semibold">Loading fits…</div>}><FitsContent /></Suspense>;
 }
 
 function FitsContent() {
+  const searchParams = useSearchParams();
+  const activeView = searchParams.get('view') === 'plans' ? 'plans' : 'diary';
   const { isLoaded, isSignedIn } = useUser();
   const fitChecks = useQuery(api.fitChecks.listFitChecks, isLoaded && isSignedIn ? { limit: 100 } : 'skip');
   const [status, setStatus] = useState<string | null>(null);
@@ -88,7 +93,7 @@ function FitsContent() {
       if (mode === 'try_on') {
         if (tryOnPreview) URL.revokeObjectURL(tryOnPreview);
         setTryOnPreview(URL.createObjectURL(file));
-        await tryOn.runCompatibilityCheck(storageId, { startMessage: 'Reading your Collections, then finding closet anchors…', fallbackErrorMessage: 'Try-on feedback failed.' });
+        await tryOn.runCompatibilityCheck(storageId, { startMessage: 'Reading your Plans, then finding Wardrobe anchors…', fallbackErrorMessage: 'Try-on feedback failed.' });
         setStatus(null);
       } else {
         await recordDailyFitCheckAction({ storageId, ...trace });
@@ -108,8 +113,16 @@ function FitsContent() {
 
   return (
     <main className="mx-auto w-full max-w-[1320px] space-y-6 px-6 py-10 lg:px-10">
+      <section>
+        <p className="text-sm font-semibold text-[#56345c]">Outfit memory</p><h1 className="mt-2 text-4xl font-extrabold text-[#241426]">Fits</h1><p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-[#56345c]">Remember what you wore, consider what comes next, and shape plans around the pieces you own.</p>
+        <nav className="mt-5 inline-grid grid-cols-2 border border-[var(--rack-line)] bg-white p-1 shadow-[2px_2px_0_var(--rack-panel-shadow)]" aria-label="Fits views">
+          <Link href="/fits" aria-current={activeView === 'diary' ? 'page' : undefined} className={`flex min-h-10 items-center justify-center gap-2 px-4 text-sm font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2 ${activeView === 'diary' ? 'bg-[#241426] text-white' : 'text-[#56345c] hover:bg-[var(--rack-wash)]'}`}><CalendarDays className="h-4 w-4" /> Diary</Link>
+          <Link href="/fits?view=plans#plans" aria-current={activeView === 'plans' ? 'page' : undefined} className={`flex min-h-10 items-center justify-center gap-2 px-4 text-sm font-extrabold focus-visible:outline-2 focus-visible:outline-offset-2 ${activeView === 'plans' ? 'bg-[#241426] text-white' : 'text-[#56345c] hover:bg-[var(--rack-wash)]'}`}><FolderHeart className="h-4 w-4" /> Plans</Link>
+        </nav>
+      </section>
+
+      {activeView === 'plans' ? <PlansView /> : <div id="fits-diary" className="space-y-6">
       <section className="space-y-4">
-        <div><p className="text-sm font-semibold text-[#56345c]">Outfit memory</p><h1 className="mt-2 text-4xl font-extrabold text-[#241426]">Fits</h1><p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-[#56345c]">A visual record of what you wore and what you considered.</p></div>
         <div className="grid gap-4 md:grid-cols-2"><CaptureCard mode="daily_fit_check" onComplete={record} /><CaptureCard mode="try_on" onComplete={record} /></div>
         {(status || error) && <p role="status" className={`border p-3 text-sm font-semibold ${error ? 'border-[#B93267] bg-[var(--rack-danger-wash)] text-[#B93267]' : 'border-[var(--rack-line)] bg-[var(--rack-success-wash)] text-[#241426]'}`}>{error ?? status}</p>}
       </section>
@@ -132,6 +145,7 @@ function FitsContent() {
       </section>
 
       <section><h2 className="text-xl font-extrabold text-[#241426]">Recent fits</h2><div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{(fitChecks ?? []).map((fitCheck) => <article id={`fit-${String(fitCheck._id)}`} key={String(fitCheck._id)} className="overflow-hidden border border-[var(--rack-line)] bg-white shadow-[3px_3px_0_var(--rack-panel-shadow)]"><div className="relative aspect-[4/3] bg-[var(--rack-wash)]">{fitCheck.imageUrl && <Image src={fitCheck.imageUrl} alt={fitCheck.transcription ?? fitCheck.type} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />}</div><div className="p-4"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#56345c]">{fitCheck.type === 'try_on' ? 'Try on' : 'Fit check'} · {new Date(fitCheck.createdAt).toLocaleDateString()}</p><p className="mt-2 text-sm font-medium leading-relaxed text-[#241426]">{fitCheck.transcription ?? fitCheck.description ?? 'No notes yet.'}</p>{fitCheck.type === 'daily_fit_check' && <GarmentObservationReview observations={fitCheck.observations} />}</div></article>)}</div></section>
+      </div>}
     </main>
   );
 }
