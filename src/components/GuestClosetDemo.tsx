@@ -1,5 +1,6 @@
 'use client';
 
+import posthog from 'posthog-js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SignUpButton } from '@clerk/nextjs';
 import { Loader2, Sparkles } from 'lucide-react';
@@ -80,6 +81,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
     if (files.length === 0) return;
     if (demoComplete) {
       setShowSignupPrompt(true);
+      posthog.capture('guest_signup_prompted', { trigger: 'upload_after_demo' });
       return;
     }
 
@@ -120,6 +122,10 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       );
       setBio(result.suggestedBio);
       setDemoComplete(true);
+      posthog.capture('guest_demo_analyzed', {
+        item_count: result.items.length,
+        capped: result.capped,
+      });
       if (result.capped) {
         setLimitMessage(`Demo capped at ${result.limit} photos. Create an account to continue.`);
       }
@@ -185,7 +191,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
           type="button"
           onClick={() => fileInputRef.current?.click()}
           variant="secondary"
-          className="h-auto w-full rounded-none border-4 border-black bg-[#c6b9cd] px-6 py-8 text-left shadow-[8px_8px_0_#000] transition-transform hover:-translate-y-1 hover:bg-[#c6b9cd]/95"
+          className="h-auto w-full flex-col items-start whitespace-normal rounded-none border-4 border-black bg-[#c6b9cd] px-6 py-8 text-left shadow-[8px_8px_0_#000] transition-transform hover:-translate-y-1 hover:bg-[#c6b9cd]/95"
         >
           <p className="text-lg font-black uppercase text-[#310A31]">
             {isAnalyzing ? 'Analyzing your first batch...' : 'Upload photos from your closet'}
@@ -227,7 +233,10 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
           <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <Button
               type="button"
-              onClick={() => setShowSignupPrompt(true)}
+              onClick={() => {
+                setShowSignupPrompt(true);
+                posthog.capture('guest_signup_prompted', { trigger: 'save_profile' });
+              }}
               className="h-auto w-full rounded-none border-4 border-black bg-[#310A31] px-5 py-3 text-sm font-black uppercase tracking-wide text-white shadow-[6px_6px_0_#000] sm:w-auto"
             >
               Save my style profile

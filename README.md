@@ -43,10 +43,13 @@ A Single Page Application (SPA) that acts as a "Virtual Wardrobe Stylist". The a
     ZEP_KEY=your_zep_key
     AXIOM_TOKEN=your_axiom_token
     AXIOM_DATASET=your_axiom_dataset
+    NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=your_posthog_project_token
+    NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
     ```
     Notes:
     - The Clerk JWT template must include the `aud` claim matching `CLERK_JWT_AUDIENCE` (default `convex`).
     - Server actions export OTLP telemetry to Axiom via Effect runtime; enable Convex log streaming separately if you want Convex logs in Axiom.
+    - Axiom owns operational logs and traces. PostHog owns product analytics, feature flags, surveys, and privacy-masked session replay; avoid sending prompts, uploaded content, or raw logs to PostHog.
 5.  **Run the app**:
     ```bash
     bun dev

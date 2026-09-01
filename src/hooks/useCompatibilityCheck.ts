@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import posthog from 'posthog-js';
 import { checkCompatibilityAction } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
 
@@ -30,6 +31,13 @@ export function useCompatibilityCheck() {
       try {
         const trace = createTraceContext();
         const response = await checkCompatibilityAction({ storageId, ...trace });
+        posthog.capture('compatibility_check_completed', {
+          candidate_category: response.candidate.category,
+          score: response.evaluation?.score ?? null,
+          verdict: response.evaluation?.verdict ?? 'no_match',
+          similar_item_count: response.similarItems.length,
+          memory_used: Boolean(response.memoryUsed),
+        });
         setResult(response);
         setStatus(null);
         return response;

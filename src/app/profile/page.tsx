@@ -1,5 +1,6 @@
 'use client';
 
+import posthog from 'posthog-js';
 import { useMemo, useState } from 'react';
 import { useClerk, useUser } from '@clerk/nextjs';
 import { useQuery } from 'convex/react';
@@ -46,7 +47,9 @@ export default function ProfilePage() {
       const trace = createTraceContext();
       await updateProfileBioAction({ bio, ...trace });
       setSaveStatus('success');
+      posthog.capture('profile_bio_saved');
     } catch (error) {
+      posthog.captureException(error);
       setSaveStatus('error');
       setErrorMessage(String(error));
     }
@@ -134,7 +137,9 @@ export default function ProfilePage() {
                   hairColor: result.hair_color,
                 });
                 setSaveStatus('success');
+                posthog.capture('selfie_analyzed');
               } catch (error) {
+                posthog.captureException(error);
                 console.error('selfie.analyze.failed', error);
                 setSaveStatus('error');
                 setErrorMessage('Failed to analyze selfie');

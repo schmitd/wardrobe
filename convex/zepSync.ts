@@ -5,8 +5,11 @@ import { internal } from "./_generated/api";
 import { internalAction } from "./_generated/server";
 import { ensureTraceContext } from "./trace";
 import {
+  addInspirationMemory,
+  addTryOnMemory,
   addWardrobeItemsMemory,
   deleteWardrobeItemMemory,
+  searchStyleMemory,
   updateProfileMemory,
 } from "./zep";
 
@@ -99,4 +102,67 @@ export const syncProfileUpdate = internalAction({
       hairColor: args.hairColor ?? null,
     });
   },
+});
+
+export const syncInspirationAdd = internalAction({
+  args: {
+    userId: v.string(),
+    inspirationId: v.id("inspirations"),
+    sourceUrl: v.optional(v.string()),
+    note: v.optional(v.string()),
+    category: v.optional(v.string()),
+    description: v.optional(v.string()),
+    styleTags: v.optional(v.array(v.string())),
+    traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const { traceId } = ensureTraceContext(args);
+    console.info("zep.sync.inspiration_add", {
+      traceId,
+      userId: redactUserId(args.userId),
+      inspirationId: args.inspirationId,
+    });
+
+    await addInspirationMemory(args.userId, {
+      inspirationId: String(args.inspirationId),
+      sourceUrl: args.sourceUrl ?? null,
+      note: args.note ?? null,
+      category: args.category ?? null,
+      description: args.description ?? null,
+      styleTags: args.styleTags ?? null,
+    });
+  },
+});
+
+export const recordTryOn = internalAction({
+  args: {
+    userId: v.string(),
+    category: v.string(),
+    description: v.string(),
+    styleTags: v.array(v.string()),
+    score: v.number(),
+    verdict: v.optional(v.string()),
+    explanation: v.string(),
+    closetAnchors: v.array(v.string()),
+    traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const { traceId } = ensureTraceContext(args);
+    console.info("zep.sync.try_on", {
+      traceId,
+      userId: redactUserId(args.userId),
+      score: args.score,
+    });
+    await addTryOnMemory(args.userId, args);
+  },
+});
+
+export const searchContext = internalAction({
+  args: {
+    userId: v.string(),
+    query: v.string(),
+  },
+  handler: async (_ctx, args) => searchStyleMemory(args.userId, args.query),
 });

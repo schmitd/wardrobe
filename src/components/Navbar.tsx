@@ -36,7 +36,7 @@ export default function Navbar() {
             <Button asChild variant="outline" className={navClass(pathname === '/check')}>
               <Link href="/check">
                 <Sparkles className="h-3.5 w-3.5" />
-                <span>Compare</span>
+                <span>Try on</span>
               </Link>
             </Button>
             <Button asChild variant="outline" className={navClass(pathname === '/profile')}>

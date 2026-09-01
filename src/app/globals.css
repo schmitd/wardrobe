@@ -95,6 +95,72 @@ body {
   font-family: var(--font-body), sans-serif;
 }
 
+.cl-card,
+.cl-modalContent {
+  color: #1a1020 !important;
+}
+
+.cl-headerTitle {
+  color: #1a1020 !important;
+}
+
+.cl-headerSubtitle,
+.cl-dividerText,
+.cl-footerActionText,
+.cl-identityPreviewText {
+  color: #4e1e51 !important;
+}
+
+.cl-socialButtonsBlockButton {
+  border: 2px solid #000 !important;
+  background: #fff !important;
+  color: #1a1020 !important;
+  box-shadow: 3px 3px 0 #000 !important;
+}
+
+.cl-socialButtonsBlockButtonText {
+  color: #1a1020 !important;
+  font-weight: 700 !important;
+}
+
+.cl-dividerLine {
+  background: #4e1e51 !important;
+}
+
+.cl-formFieldLabel {
+  color: #1a1020 !important;
+  font-weight: 700 !important;
+}
+
+.cl-formFieldInput {
+  border: 2px solid #000 !important;
+  background: #fff !important;
+  color: #1a1020 !important;
+}
+
+.cl-formFieldInput::placeholder {
+  color: #5f5268 !important;
+  opacity: 1 !important;
+}
+
+.cl-formButtonPrimary {
+  border: 2px solid #000 !important;
+  background: #310a31 !important;
+  color: #fff !important;
+}
+
+.cl-footerActionLink,
+.cl-formFieldAction,
+.cl-formResendCodeLink {
+  color: #1a1020 !important;
+  font-weight: 700 !important;
+}
+
+.cl-developmentModeText {
+  color: #8a2e00 !important;
+  font-weight: 700 !important;
+}
+
 h1,
 h2,
 h3,

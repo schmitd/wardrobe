@@ -55,6 +55,13 @@ export const getStorageUrl = query({
 
     if (item && item.userId === userId) return ctx.storage.getUrl(storageId);
 
+    const inspiration = await ctx.db
+      .query("inspirations")
+      .filter((q) => q.eq(q.field("storageId"), storageId))
+      .first();
+
+    if (inspiration && inspiration.userId === userId) return ctx.storage.getUrl(storageId);
+
     const upload = await ctx.db
       .query("uploads")
       .withIndex("by_user_storage", (q) =>

@@ -28,6 +28,13 @@ const apiMock = {
     updateBio: {},
     updateProfileAttributes: {},
   },
+  inspirations: {
+    createInspiration: {},
+  },
+  zepContext: {
+    searchStyleContext: {},
+    rememberTryOn: {},
+  },
 };
 
 mock.module("convex/nextjs", () => ({
@@ -200,9 +207,18 @@ describe("wardrobe server actions", () => {
   });
 
   it("checks compatibility using generated embeddings", async () => {
-    fetchActionMock.mockResolvedValue([
-      { _id: "item_1", _score: 0.98 },
-    ]);
+    fetchActionMock.mockImplementation(async (action) => {
+      if (action === api.zepContext.searchStyleContext) {
+        return "The user prefers clean, versatile layers.";
+      }
+      if (action === api.wardrobe.searchSimilarItems) {
+        return [{ _id: "item_1", _score: 0.98 }];
+      }
+      if (action === api.zepContext.rememberTryOn) {
+        return { remembered: true };
+      }
+      return null;
+    });
 
     fetchQueryMock.mockImplementation(async (query) => {
       if (query === api.storage.getStorageUrl) {
@@ -257,7 +273,10 @@ describe("wardrobe server actions", () => {
       [1, 0, 0],
       {
         score: 80,
+        verdict: "strong_fit",
         explanation: "Works well",
+        closet_summary: "Adds a versatile top.",
+        considerations: ["Check the fabric weight."],
         best_pairings: [0],
         worst_clashes: [],
       }
@@ -277,6 +296,40 @@ describe("wardrobe server actions", () => {
     );
     expect(result.similarItems.length).toBeGreaterThan(0);
     expect(result.dissimilarItems.length).toBeGreaterThan(0);
+    expect(result.memoryUsed).toBe(true);
+    expect(fetchActionMock).toHaveBeenCalledWith(
+      api.zepContext.rememberTryOn,
+      expect.objectContaining({
+        score: 80,
+        verdict: "strong_fit",
+      }),
+      expect.objectContaining({ token: "token_123" })
+    );
+  });
+
+  it("saves inspiration separately from closet inventory", async () => {
+    fetchMutationMock.mockImplementation(async (mutation) => {
+      if (mutation === api.inspirations.createInspiration) return { id: "inspiration_1" };
+      return { ok: true };
+    });
+    queueRunServerAction([0.2, 0.4, 0.6]);
+
+    const result = await actions.saveInspirationAction({
+      sourceUrl: "https://example.com/look",
+      note: "Warm neutral tailoring",
+    });
+
+    expect(String(result.id)).toBe("inspiration_1");
+    expect(fetchMutationMock).toHaveBeenCalledWith(
+      api.inspirations.createInspiration,
+      expect.objectContaining({
+        sourceUrl: "https://example.com/look",
+        note: "Warm neutral tailoring",
+        storageId: undefined,
+      }),
+      expect.objectContaining({ token: "token_123" })
+    );
+    expect(fetchMutationMock.mock.calls.some(([mutation]) => mutation === api.wardrobe.createWardrobeItem)).toBe(false);
   });
 
   it("analyzes selfie and syncs profile", async () => {

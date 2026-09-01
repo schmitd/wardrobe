@@ -20,3 +20,14 @@ export type OptimisticWardrobeItem = {
   serverId?: string;
   error?: string | null;
 };
+
+export type InspirationItem = {
+  id: string;
+  imageUrl: string | null;
+  sourceUrl: string | null;
+  note: string | null;
+  category: string | null;
+  description: string | null;
+  styleTags: string[] | null;
+  createdAt: number;
+};

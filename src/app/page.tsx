@@ -1,14 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { SignInButton, SignedOut, useAuth } from '@clerk/nextjs';
-import { Plus, Sparkles } from 'lucide-react';
+import { SignInButton, useAuth } from '@clerk/nextjs';
+import { BookmarkPlus, Plus, Shirt } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import AddItemSection from '@/components/AddItemSection';
 import GuestClosetDemo from '@/components/GuestClosetDemo';
 import QuickCompareAction from '@/components/QuickCompareAction';
 import WardrobeGrid from '@/components/WardrobeGrid';
+import InspirationDialog from '@/components/InspirationDialog';
+import InspirationShelf from '@/components/InspirationShelf';
 import {
   createWardrobeItemAction,
   getUploadUrlAction,
@@ -21,14 +23,16 @@ import { dataUrlToFile } from '@/lib/imageClient';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import type { OptimisticWardrobeItem, WardrobeItem } from '@/types/wardrobe';
+import type { InspirationItem, OptimisticWardrobeItem, WardrobeItem } from '@/types/wardrobe';
 
 export default function Home() {
   const { isSignedIn } = useAuth();
   const uploadInputId = 'rack-upload-input';
   const compareInputId = 'rack-compare-input';
   const items = useQuery(api.wardrobe.listWardrobeItems, isSignedIn ? {} : 'skip');
+  const inspirations = useQuery(api.inspirations.listInspirations, isSignedIn ? {} : 'skip');
   const [optimisticItems, setOptimisticItems] = useState<OptimisticWardrobeItem[]>([]);
+  const [inspirationOpen, setInspirationOpen] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const importedSnapshotRef = useRef<number | null>(null);
   const isImportingSnapshotRef = useRef(false);
@@ -217,6 +221,21 @@ export default function Home() {
     [hiddenServerIds, items]
   );
 
+  const displayInspirations = useMemo<InspirationItem[]>(
+    () =>
+      (inspirations ?? []).map((item) => ({
+        id: String(item.id),
+        imageUrl: item.imageUrl,
+        sourceUrl: item.sourceUrl,
+        note: item.note,
+        category: item.category,
+        description: item.description,
+        styleTags: item.styleTags,
+        createdAt: item.createdAt,
+      })),
+    [inspirations]
+  );
+
   const triggerInput = (inputId: string, fallback?: string) => {
     const input = document.getElementById(inputId) as HTMLInputElement | null;
     if (input) {
@@ -268,6 +287,7 @@ export default function Home() {
                 uploaderInputId={uploadInputId}
               />
               <WardrobeGrid items={displayItems} optimisticItems={filteredOptimisticItems} />
+              <InspirationShelf items={displayInspirations} />
               <QuickCompareAction inputId={compareInputId} />
             </>
           ) : (
@@ -276,35 +296,71 @@ export default function Home() {
         </section>
       </div>
 
-      <div className="fixed bottom-6 right-4 z-30 flex flex-col gap-3 sm:right-8">
+      <div
+        aria-label="Wardrobe actions"
+        className="rack-action-dock fixed bottom-4 left-1/2 z-30 grid w-[calc(100%-2rem)] max-w-[560px] -translate-x-1/2 grid-cols-3 gap-2 border-4 border-black bg-[#f6f1f8] p-2 shadow-[6px_6px_0_#000] sm:bottom-6 sm:left-auto sm:right-8 sm:w-auto sm:translate-x-0"
+      >
         <Button
           type="button"
           onClick={() => triggerInput(uploadInputId, 'rack-uploader')}
-          className="rack-fab rounded-none border-2 border-black"
+          className="rack-fab min-h-12 rounded-none border-2 border-black px-3"
         >
           <Plus className="h-4 w-4" />
-          <span>Add to closet</span>
+          <span className="hidden sm:inline">Add closet</span>
+          <span className="sm:hidden">Add</span>
         </Button>
-        <Button
-          type="button"
-          onClick={() => triggerInput(isSignedIn ? compareInputId : uploadInputId, 'rack-uploader')}
-          variant="outline"
-          className="rack-fab rack-fab-secondary rounded-none border-2 border-black"
-        >
-          <Sparkles className="h-4 w-4" />
-          <span>{isSignedIn ? 'Check fit' : 'Try check'}</span>
-        </Button>
+
+        {isSignedIn ? (
+          <>
+            <Button
+              type="button"
+              onClick={() => triggerInput(compareInputId)}
+              variant="outline"
+              className="rack-fab rack-fab-secondary min-h-12 rounded-none border-2 border-black px-3"
+            >
+              <Shirt className="h-4 w-4" />
+              <span>Try on</span>
+            </Button>
+            <Button
+              type="button"
+              onClick={() => setInspirationOpen(true)}
+              variant="outline"
+              className="rack-fab rack-fab-secondary min-h-12 rounded-none border-2 border-black px-3"
+            >
+              <BookmarkPlus className="h-4 w-4" />
+              <span>Inspire</span>
+            </Button>
+          </>
+        ) : (
+          <>
+            <SignInButton mode="modal" forceRedirectUrl="/" fallbackRedirectUrl="/">
+              <Button
+                type="button"
+                variant="outline"
+                className="rack-fab rack-fab-secondary min-h-12 rounded-none border-2 border-black px-3"
+              >
+                <Shirt className="h-4 w-4" />
+                <span>Try on</span>
+              </Button>
+            </SignInButton>
+            <SignInButton mode="modal" forceRedirectUrl="/" fallbackRedirectUrl="/">
+              <Button
+                type="button"
+                variant="outline"
+                className="rack-fab rack-fab-secondary min-h-12 rounded-none border-2 border-black px-3"
+              >
+                <BookmarkPlus className="h-4 w-4" />
+                <span>Inspire</span>
+              </Button>
+            </SignInButton>
+          </>
+        )}
       </div>
 
-      <SignedOut>
-        <div className="fixed bottom-6 left-4 z-30 sm:left-8">
-          <SignInButton mode="modal" forceRedirectUrl="/" fallbackRedirectUrl="/">
-            <Button className="rounded-full border-2 border-black bg-white px-4 py-2 text-xs font-black uppercase tracking-wide text-[#310A31] shadow-[4px_4px_0_#000]">
-              Sign in
-            </Button>
-          </SignInButton>
-        </div>
-      </SignedOut>
+      {isSignedIn && (
+        <InspirationDialog open={inspirationOpen} onOpenChange={setInspirationOpen} />
+      )}
+
     </main>
   );
 }

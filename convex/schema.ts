@@ -35,6 +35,21 @@ export default defineSchema({
       filterFields: ["userId"],
     }),
 
+  inspirations: defineTable({
+    userId: v.string(),
+    storageId: v.optional(v.id("_storage")),
+    sourceUrl: v.optional(v.string()),
+    note: v.optional(v.string()),
+    category: v.optional(v.string()),
+    description: v.optional(v.string()),
+    styleTags: v.optional(v.array(v.string())),
+    embedding: v.optional(v.array(v.float64())),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_createdAt", ["userId", "createdAt"]),
+
   profiles: defineTable({
     userId: v.string(),
     bio: v.optional(v.string()),

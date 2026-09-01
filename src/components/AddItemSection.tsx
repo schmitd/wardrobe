@@ -1,5 +1,6 @@
 'use client';
 
+import posthog from 'posthog-js';
 import { useState } from 'react';
 import ImageUploader, { type UploadedFile } from './ImageUploader';
 import { Loader2 } from 'lucide-react';
@@ -172,6 +173,9 @@ export default function AddItemSection({ onOptimisticAdd, onOptimisticUpdate, up
                         continue;
                     }
 
+                    posthog.capture('wardrobe_item_added', {
+                      content_type: upload.file.type,
+                    });
                     successCount += 1;
                 } catch (error) {
                     console.error('wardrobe.create.failed', error);

@@ -9,12 +9,14 @@
  */
 
 import type * as http from "../http.js";
+import type * as inspirations from "../inspirations.js";
 import type * as profile from "../profile.js";
 import type * as retrier from "../retrier.js";
 import type * as storage from "../storage.js";
 import type * as trace from "../trace.js";
 import type * as wardrobe from "../wardrobe.js";
 import type * as zep from "../zep.js";
+import type * as zepContext from "../zepContext.js";
 import type * as zepSync from "../zepSync.js";
 
 import type {
@@ -25,12 +27,14 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   http: typeof http;
+  inspirations: typeof inspirations;
   profile: typeof profile;
   retrier: typeof retrier;
   storage: typeof storage;
   trace: typeof trace;
   wardrobe: typeof wardrobe;
   zep: typeof zep;
+  zepContext: typeof zepContext;
   zepSync: typeof zepSync;
 }>;
 

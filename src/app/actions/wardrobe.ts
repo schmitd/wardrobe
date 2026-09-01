@@ -1,5 +1,6 @@
 "use server";
 
+import { getPostHogClient } from "@/lib/posthog-server";
 import { Effect } from "effect";
 import { SchemaType, type Schema } from "@google/generative-ai";
 import type { Id } from "@convex/_generated/dataModel";
@@ -146,6 +147,7 @@ const evaluateCompatibility = (input: {
   candidate: { category: string; description: string; style_tags: string[] };
   similarItems: { category: string | null; description: string | null; similarity: number }[];
   dissimilarItems: { category: string | null; description: string | null; similarity: number }[];
+  memoryContext?: string | null;
 }) =>
   Effect.gen(function* () {
     const gemini = yield* GeminiService;
@@ -153,7 +155,13 @@ const evaluateCompatibility = (input: {
       type: SchemaType.OBJECT,
       properties: {
         score: { type: SchemaType.NUMBER },
+        verdict: { type: SchemaType.STRING },
         explanation: { type: SchemaType.STRING },
+        closet_summary: { type: SchemaType.STRING },
+        considerations: {
+          type: SchemaType.ARRAY,
+          items: { type: SchemaType.STRING },
+        },
         best_pairings: {
           type: SchemaType.ARRAY,
           items: { type: SchemaType.NUMBER },
@@ -163,13 +171,24 @@ const evaluateCompatibility = (input: {
           items: { type: SchemaType.NUMBER },
         },
       },
-      required: ["score", "explanation", "best_pairings", "worst_clashes"],
+      required: [
+        "score",
+        "verdict",
+        "explanation",
+        "closet_summary",
+        "considerations",
+        "best_pairings",
+        "worst_clashes",
+      ],
     };
 
     const prompt = `You are a professional fashion stylist with high standards. Your job is to critically evaluate whether a candidate clothing item fits well with an existing wardrobe.
 
 CANDIDATE ITEM:
 ${JSON.stringify(input.candidate)}
+
+RELEVANT STYLE MEMORY FROM THE USER'S ZEP GRAPH:
+${input.memoryContext || "No additional style memory is available yet."}
 
 WARDROBE ITEMS (Most Compatible):
 ${input.similarItems.length > 0
@@ -196,6 +215,8 @@ ${input.dissimilarItems.length > 0
 
 CRITICAL EVALUATION GUIDELINES:
 - Focus ONLY on how well this candidate fits with the EXISTING WARDROBE ITEMS listed above
+- Use style memory to explain durable preferences, prior inspiration, and earlier try-on decisions, but never invent a closet item from memory
+- Treat the wardrobe items below as the source of truth for concrete pairings
 - Do NOT evaluate the candidate item's internal consistency or standalone quality
 - Be CRITICAL and HONEST - most items should score 40-70%, not 90%+
 - Score 90-100%: Perfect match, complements multiple wardrobe items, fills a gap
@@ -206,7 +227,10 @@ CRITICAL EVALUATION GUIDELINES:
 
 Return JSON with keys:
 - score (number 0-100): Your critical compatibility score
+- verdict (string): exactly one of "strong_fit", "consider", or "skip"
 - explanation (string): Focus on how it compares to the WARDROBE, not its internal quality
+- closet_summary (string): one concise sentence about the gap filled or redundancy created
+- considerations (array of strings): 1-3 specific cautions, styling constraints, or missing closet support
 - best_pairings (array of indices): Which wardrobe items it pairs best with
 - worst_clashes (array of indices): Which wardrobe items it clashes with most (if any)`;
 
@@ -220,7 +244,10 @@ Return JSON with keys:
 
     return yield* parseJson<{
       score: number;
+      verdict: "strong_fit" | "consider" | "skip";
       explanation: string;
+      closet_summary: string;
+      considerations: string[];
       best_pairings: number[];
       worst_clashes: number[];
     }>(result.response.text(), "evaluateCompatibility");
@@ -337,6 +364,7 @@ export const createWardrobeItemAction = async (input: {
   );
 
   console.info("wardrobe.create.request", { traceId, traceparent, itemId: result.id, userId });
+
   return result;
 };
 
@@ -445,6 +473,15 @@ export const deleteWardrobeItemAction = async (input: {
   );
 
   console.info("wardrobe.delete.request", { traceId, traceparent, itemId: input.itemId, userId });
+
+  const posthog = getPostHogClient();
+  posthog.capture({
+    distinctId: userId,
+    event: "wardrobe_item_deleted",
+    properties: { item_id: input.itemId, reason: input.reason },
+  });
+  await posthog.flush();
+
   return { success: true };
 };
 
@@ -540,6 +577,12 @@ export const checkCompatibilityAction = async (input: {
     )
   );
 
+  const memoryContext = await fetchAction(
+    api.zepContext.searchStyleContext,
+    { query: styleQuery },
+    { token }
+  );
+
   const embedding = await runServerAction(
     embedText(styleQuery).pipe(Effect.provide(GeminiLive))
   );
@@ -621,6 +664,7 @@ export const checkCompatibilityAction = async (input: {
   const evaluation = await runServerAction(
     evaluateCompatibility({
       candidate,
+      memoryContext,
       similarItems: hydratedSimilar.map((entry) => ({
         category: entry.category,
         description: entry.description,
@@ -634,12 +678,131 @@ export const checkCompatibilityAction = async (input: {
     }).pipe(Effect.provide(GeminiLive))
   );
 
+  await fetchAction(
+    api.zepContext.rememberTryOn,
+    {
+      category: candidate.category,
+      description: candidate.description,
+      styleTags: candidate.style_tags,
+      score: evaluation.score,
+      verdict: evaluation.verdict,
+      explanation: evaluation.explanation,
+      closetAnchors: hydratedSimilar
+        .slice(0, 3)
+        .map((entry) => entry.description ?? entry.category ?? "Closet item"),
+      traceId,
+      traceparent,
+    },
+    { token }
+  );
+
   return {
     candidate,
     similarItems: hydratedSimilar,
     dissimilarItems: hydratedDissimilar,
     evaluation,
+    memoryUsed: Boolean(memoryContext),
   };
+};
+
+const normalizeOptionalText = (value?: string | null) => {
+  const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+};
+
+const normalizeSourceUrl = (value?: string | null) => {
+  const normalized = normalizeOptionalText(value);
+  if (!normalized) return undefined;
+
+  const parsed = new URL(normalized);
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Inspiration links must use http or https");
+  }
+  return parsed.toString();
+};
+
+export const saveInspirationAction = async (input: {
+  storageId?: string | null;
+  sourceUrl?: string | null;
+  note?: string | null;
+  candidate?: {
+    category: string;
+    description: string;
+    styleTags: string[];
+  };
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { userId, token, tier } = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+  await enforceAuthenticatedProtection({ scope: "upload", tier, userId });
+
+  const storageId = normalizeOptionalText(input.storageId);
+  const sourceUrl = normalizeSourceUrl(input.sourceUrl);
+  const note = normalizeOptionalText(input.note);
+  if (!storageId && !sourceUrl) {
+    throw new Error("Add a photo or source link for this inspiration");
+  }
+
+  let candidate = input.candidate;
+  if (storageId) {
+    await fetchMutation(
+      api.storage.registerUpload,
+      { storageId: storageId as Id<"_storage">, purpose: "inspiration" },
+      { token }
+    );
+
+    if (!candidate) {
+      const imageUrl = await fetchQuery(
+        api.storage.getStorageUrl,
+        { storageId: storageId as Id<"_storage"> },
+        { token }
+      );
+      if (!imageUrl) throw new Error("Uploaded inspiration image is missing");
+
+      const base64 = await fetchImageBase64(imageUrl);
+      const analysis = await runServerAction(
+        analyzeImageFull(base64).pipe(Effect.provide(GeminiLive))
+      );
+      candidate = {
+        category: analysis.category,
+        description: analysis.description,
+        styleTags: analysis.style_tags,
+      };
+    }
+  }
+
+  const description = candidate?.description ?? note ?? `Inspiration from ${sourceUrl}`;
+  const styleTags = candidate?.styleTags ?? [];
+  const embedding = await runServerAction(
+    embedText(`${description} ${styleTags.join(" ")}`.trim()).pipe(
+      Effect.provide(GeminiLive)
+    )
+  );
+
+  const result = await fetchMutation(
+    api.inspirations.createInspiration,
+    {
+      storageId: storageId as Id<"_storage"> | undefined,
+      sourceUrl,
+      note,
+      category: candidate?.category,
+      description,
+      styleTags,
+      embedding,
+      traceId,
+      traceparent,
+    },
+    { token }
+  );
+
+  console.info("inspiration.create.request", {
+    traceId,
+    inspirationId: result.id,
+    userId,
+  });
+
+  return result;
 };
 
 export const analyzeSelfieAction = async (input: {

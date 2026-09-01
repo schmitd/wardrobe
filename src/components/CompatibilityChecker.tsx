@@ -22,15 +22,15 @@ export default function CompatibilityChecker() {
     <div className="mx-auto max-w-5xl space-y-8">
       <div id="rack-uploader" className="rack-panel">
         <h2 className="text-3xl font-black uppercase tracking-tight text-[#310A31]">
-          Does this fit your closet?
+          Try it against your closet
         </h2>
         <p className="mt-2 text-sm font-medium text-slate-700">
-          Upload one candidate piece and compare it against your saved wardrobe.
+          Upload one candidate for closet-based feedback. It will not be added to your rack.
         </p>
         <div className="mt-5">
           <ImageUploader
             onUploadComplete={handleCheck}
-            label="Upload Candidate Piece"
+            label="Choose a try-on piece"
             allowMultiple={false}
           />
         </div>
