@@ -28,6 +28,11 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "davidschmittemail@gmail.com",
+        "appleTeamId": "B8N4335RXK"
+      }
+    }
   }
 }
