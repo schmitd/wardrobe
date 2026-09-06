@@ -5,7 +5,7 @@ The native app is linked to the `@schmitd/wardrobe` EAS project. Production buil
 ## Already configured
 
 - App name: `Wardrobe`
-- Bundle identifier: `com.wardrobe.app`
+- iOS bundle identifier: `com.davidcschmitt.wardrobe`
 - EAS project: `9b4470c6-c65f-493d-9cfd-c309f304e63c`
 - URL scheme: `wardrobe://`
 - Camera and photo-library purpose strings
@@ -16,7 +16,7 @@ The native app is linked to the `@schmitd/wardrobe` EAS project. Production buil
 ## Required before the first upload
 
 1. Add the final opaque 1024x1024 PNG icon and set `expo.icon` in `app.json`. Do not use rounded corners or transparency; iOS applies the mask.
-2. Confirm that `com.wardrobe.app` is the permanent bundle identifier. Changing it after creating the App Store Connect record creates a different app identity.
+2. Use `com.davidcschmitt.wardrobe` as the iOS bundle identifier; Apple rejected `com.wardrobe.app` as unavailable. Changing it after creating the App Store Connect record creates a different app identity.
 3. Confirm access to the Apple Developer team and let EAS create or reuse the distribution certificate and provisioning profile during the first production build.
 4. Create the Wardrobe app record in App Store Connect if EAS does not find one automatically.
 5. Complete App Store Connect agreements, tax/banking items that apply, age rating, app privacy answers, and export-compliance questions.
