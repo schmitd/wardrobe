@@ -2,6 +2,7 @@
   "expo": {
     "name": "Wardrobe",
     "slug": "wardrobe",
+    "icon": "./assets/icon.png",
     "scheme": "wardrobe",
     "version": "0.1.2",
     "orientation": "portrait",

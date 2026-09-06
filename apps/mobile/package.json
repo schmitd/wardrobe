@@ -10,6 +10,10 @@
     "build": "tsc --noEmit",
     "lint": "tsc --noEmit",
     "preflight:native-auth": "bun run scripts/check-native-auth.ts",
+    "preflight:testflight": "bun run scripts/check-testflight.ts",
+    "preflight:testflight:eas": "bunx eas-cli@latest env:exec production 'bun run preflight:testflight'",
+    "testflight:build": "bun run preflight:testflight:eas && bunx eas-cli@latest build --platform ios --profile production --auto-submit",
+    "testflight:status": "bunx eas-cli@latest submit:status --platform ios",
     "test": "bun test src/*.test.ts && tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },
