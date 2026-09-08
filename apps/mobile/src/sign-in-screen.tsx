@@ -17,11 +17,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { colors } from "@/theme";
+import { track } from "@/analytics";
 
 WebBrowser.maybeCompleteAuthSession();
 
 type EmailFlow = "sign_in" | "sign_up";
-type Step = "choose" | "email" | "code";
+type Step = "choose" | "email" | "code" | "password";
 
 type ClerkLikeError = {
   code?: string;
@@ -49,6 +50,7 @@ export function SignInScreen() {
   const [emailFlow, setEmailFlow] = useState<EmailFlow>("sign_in");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,12 +64,14 @@ export function SignInScreen() {
 
   if (isSignedIn) return <Redirect href="/(tabs)/wardrobe" />;
 
-  const run = (task: () => Promise<void>, fallback: string) => {
+  const run = (task: () => Promise<void>, fallback: string, stage: "google" | "send_code" | "verify_code" | "password") => {
+    if (busy) return;
+    track("native_auth_attempted", { stage });
     setBusy(true);
     setError(null);
     void Effect.runPromise(Effect.tryPromise({ try: task, catch: (cause) => cause }).pipe(
       Effect.match({
-        onFailure: (cause) => { setError(errorMessage(cause, fallback)); setBusy(false); },
+        onFailure: (cause) => { track("native_auth_failed", { stage }); setError(errorMessage(cause, fallback)); setPassword(""); setBusy(false); },
         onSuccess: () => { setBusy(false); },
       })
     ));
@@ -84,7 +88,21 @@ export function SignInScreen() {
       session: result.createdSessionId,
       navigate: async () => { finishNavigation(); },
     });
-  }, "Google sign-in could not start. Please try again.");
+    track("native_sign_in_completed", { method: "google" });
+  }, "Google sign-in could not start. Please try again.", "google");
+
+  const signInWithPassword = () => run(async () => {
+    if (!email.trim() || !password) throw new Error("Enter your email and password.");
+    const result = await signIn.password({ emailAddress: email.trim().toLowerCase(), password });
+    if (result.error) throw result.error;
+    if (signIn.status !== "complete") {
+      throw new Error("This account needs additional verification. Use email sign-in to continue.");
+    }
+    const finalized = await signIn.finalize({ navigate: async () => { finishNavigation(); } });
+    if (finalized.error) throw finalized.error;
+    setPassword("");
+    track("native_sign_in_completed", { method: "password" });
+  }, "Could not sign in. Check your email and password.", "password");
 
   const sendCode = () => run(async () => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -106,7 +124,7 @@ export function SignInScreen() {
     if (verificationResult.error) throw verificationResult.error;
     setEmailFlow("sign_up");
     setStep("code");
-  }, "We could not send a sign-in code. Please try again.");
+  }, "We could not send a sign-in code. Please try again.", "send_code");
 
   const verifyCode = () => run(async () => {
     const normalizedCode = code.replace(/\s/g, "");
@@ -120,11 +138,13 @@ export function SignInScreen() {
       ? await signIn.finalize({ navigate: async () => { finishNavigation(); } })
       : await signUp.finalize({ navigate: async () => { finishNavigation(); } });
     if (finalizeResult.error) throw finalizeResult.error;
-  }, "That code could not be verified. Check it and try again.");
+    track(emailFlow === "sign_up" ? "native_sign_up_completed" : "native_sign_in_completed", { method: "email_code" });
+  }, "That code could not be verified. Check it and try again.", "verify_code");
 
   const reset = () => {
     setStep("choose");
     setCode("");
+    setPassword("");
     setError(null);
     void signIn.reset();
     void signUp.reset();
@@ -173,6 +193,20 @@ export function SignInScreen() {
                   <Pressable accessibilityRole="button" disabled={busy} onPress={() => { setStep("email"); setError(null); }} style={{ minHeight: 50, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.lime, alignItems: "center", justifyContent: "center" }}>
                     <Text style={{ color: colors.ink, fontSize: 16, fontWeight: "900" }}>Continue with email</Text>
                   </Pressable>
+                  <Pressable accessibilityRole="button" disabled={busy} onPress={() => { setStep("password"); setError(null); }} style={{ minHeight: 44, alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ color: colors.plum, fontWeight: "800" }}>Sign in with a password</Text>
+                  </Pressable>
+                </>
+              ) : step === "password" ? (
+                <>
+                  <Text style={{ color: colors.ink, fontSize: 22, fontWeight: "900" }}>Sign in with a password</Text>
+                  <TextInput accessibilityLabel="Email address" autoCapitalize="none" autoCorrect={false} autoComplete="email" keyboardType="email-address" editable={!busy} value={email} onChangeText={setEmail} placeholder="you@example.com" style={{ minHeight: 52, borderWidth: 1, borderColor: colors.line, color: colors.ink, paddingHorizontal: 14, backgroundColor: "white" }} />
+                  <TextInput accessibilityLabel="Password" autoCapitalize="none" autoCorrect={false} autoComplete="current-password" textContentType="password" secureTextEntry editable={!busy} value={password} onChangeText={setPassword} onSubmitEditing={signInWithPassword} placeholder="Password" style={{ minHeight: 52, borderWidth: 1, borderColor: colors.line, color: colors.ink, paddingHorizontal: 14, backgroundColor: "white" }} />
+                  <Pressable accessibilityRole="button" disabled={busy} onPress={signInWithPassword} style={{ minHeight: 50, backgroundColor: colors.lime, alignItems: "center", justifyContent: "center", opacity: busy ? 0.65 : 1 }}>
+                    {busy ? <ActivityIndicator color={colors.ink} /> : <Text style={{ color: colors.ink, fontWeight: "900" }}>Sign in</Text>}
+                  </Pressable>
+                  <Pressable accessibilityRole="button" disabled={busy} onPress={() => { reset(); setStep("email"); }} style={{ minHeight: 44, justifyContent: "center" }}><Text style={{ color: colors.plum, textAlign: "center", fontWeight: "800" }}>Forgot password? Use an email code</Text></Pressable>
+                  <Pressable accessibilityRole="button" disabled={busy} onPress={reset} style={{ minHeight: 44, justifyContent: "center" }}><Text style={{ color: colors.plum, textAlign: "center" }}>Back</Text></Pressable>
                 </>
               ) : step === "email" ? (
                 <>

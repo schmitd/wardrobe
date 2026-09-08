@@ -37,6 +37,8 @@ if (production.autoIncrement !== true) {
 for (const variable of [
   "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY",
   "EXPO_PUBLIC_WARDROBE_API_URL",
+  "EXPO_PUBLIC_POSTHOG_PROJECT_TOKEN",
+  "EXPO_PUBLIC_POSTHOG_HOST",
 ]) {
   if (!process.env[variable]) {
     failures.push(`Missing ${variable} in the production build environment.`);

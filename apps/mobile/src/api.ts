@@ -1,6 +1,8 @@
 import { Effect } from "effect";
 
 import type { CaptureRoute, CompatibilityResult, MobileBootstrap, SelfieAnalysis } from "@/types";
+import { analyticsHeaders, track } from "@/analytics";
+import { createTraceId } from "@/trace";
 
 const baseUrl = (process.env.EXPO_PUBLIC_WARDROBE_API_URL ?? "https://wardrobe.davidcschmitt.com").replace(/\/$/, "");
 type GetToken = () => Promise<string | null>;
@@ -11,14 +13,15 @@ export class ApiError extends Error {
   }
 }
 
-const request = <T>(getToken: GetToken, path: string, init?: RequestInit) =>
-  Effect.gen(function* () {
+const request = <T>(getToken: GetToken, path: string, init?: RequestInit, operation = "bootstrap", traceId = createTraceId()) => {
+  const started = Date.now();
+  return Effect.gen(function* () {
     const token = yield* Effect.tryPromise({ try: () => getToken(), catch: () => new ApiError("Your session could not be read.", 401) });
     if (!token) return yield* Effect.fail(new ApiError("Sign in to continue.", 401));
     const response = yield* Effect.tryPromise({
       try: () => fetch(`${baseUrl}${path}`, {
         ...init,
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...init?.headers },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...analyticsHeaders(), "X-Wardrobe-Trace-ID": traceId, ...init?.headers },
       }),
       catch: () => new ApiError("Wardrobe could not be reached. Check your connection.", 0),
     });
@@ -28,12 +31,16 @@ const request = <T>(getToken: GetToken, path: string, init?: RequestInit) =>
     });
     if (!response.ok) return yield* Effect.fail(new ApiError(payload.error ?? "Request failed.", response.status));
     return payload;
-  });
+  }).pipe(
+    Effect.tap(() => Effect.sync(() => track("native_request_completed", { operation, trace_id: traceId, duration_ms: Date.now() - started }))),
+    Effect.tapError((error) => Effect.sync(() => track("native_request_failed", { operation, trace_id: traceId, status: error.status, duration_ms: Date.now() - started }))),
+  );
+};
 
 export const loadBootstrap = (getToken: GetToken) => Effect.runPromise(request<MobileBootstrap>(getToken, "/api/mobile/bootstrap"));
 
 export const getUploadUrl = (getToken: GetToken) =>
-  Effect.runPromise(request<{ uploadUrl: string }>(getToken, "/api/mobile/upload-url", { method: "POST" }));
+  Effect.runPromise(request<{ uploadUrl: string }>(getToken, "/api/mobile/upload-url", { method: "POST" }, "upload_url"));
 
 export const runCaptureOperation = <T>(
   getToken: GetToken,
@@ -45,13 +52,16 @@ export const runCaptureOperation = <T>(
     traceId?: string;
     traceparent?: string;
   }
-) => Effect.runPromise(request<T>(getToken, "/api/mobile/capture", { method: "POST", body: JSON.stringify(input) }));
+) => {
+  const traceId = input.traceId && /^[a-f0-9]{32}$/.test(input.traceId) ? input.traceId : createTraceId();
+  return Effect.runPromise(request<T>(getToken, "/api/mobile/capture", { method: "POST", body: JSON.stringify({ ...input, traceId }) }, input.operation, traceId));
+};
 
 export const routeCapture = (getToken: GetToken, storageId: string, traceId?: string) =>
   runCaptureOperation<CaptureRoute>(getToken, { operation: "route", storageId, traceId });
 
-export const tryOn = (getToken: GetToken, storageId: string) =>
-  runCaptureOperation<CompatibilityResult>(getToken, { operation: "try_on", storageId });
+export const tryOn = (getToken: GetToken, storageId: string, traceId?: string) =>
+  runCaptureOperation<CompatibilityResult>(getToken, { operation: "try_on", storageId, traceId });
 
 type ManageInput = {
   operation: "create_collection" | "add_collection_item" | "remove_collection_item" | "save_inspiration" | "update_bio" | "delete_item" | "analyze_selfie" | "resolve_observation" | "promote_observation";
@@ -67,8 +77,10 @@ type ManageInput = {
   traceparent?: string;
 };
 
-export const runManageOperation = <T>(getToken: GetToken, input: ManageInput) =>
-  Effect.runPromise(request<T>(getToken, "/api/mobile/manage", { method: "POST", body: JSON.stringify(input) }));
+export const runManageOperation = <T>(getToken: GetToken, input: ManageInput) => {
+  const traceId = input.traceId && /^[a-f0-9]{32}$/.test(input.traceId) ? input.traceId : createTraceId();
+  return Effect.runPromise(request<T>(getToken, "/api/mobile/manage", { method: "POST", body: JSON.stringify({ ...input, traceId }) }, input.operation, traceId));
+};
 
 export const createCollection = (getToken: GetToken, input: { name: string; description?: string; traceId?: string }) =>
   runManageOperation<{ id: string }>(getToken, { operation: "create_collection", ...input });

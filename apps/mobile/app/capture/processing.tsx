@@ -13,8 +13,10 @@ import { uploadPhoto } from "@/photo-upload";
 import { ErrorPanel, Panel } from "@/screen";
 import { colors } from "@/theme";
 import type { CaptureIntent, CaptureScope } from "@/types";
+import { track, trackFailure } from "@/analytics";
+import { createTraceId } from "@/trace";
 
-const makeTraceId = () => `native-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+const makeTraceId = createTraceId;
 
 export default function CaptureProcessing() {
   const router = useRouter();
@@ -27,6 +29,8 @@ export default function CaptureProcessing() {
   const traceId = useRef(makeTraceId()).current;
   const storageId = useRef<string | null>(null);
   const started = useRef(false);
+  const attempt = useRef(0);
+  const stage = useRef("upload");
   const [status, setStatus] = useState("Preparing your photo…");
   const [error, setError] = useState<string | null>(null);
   const [complete, setComplete] = useState<"fit" | "piece" | "try_on" | null>(null);
@@ -39,9 +43,10 @@ export default function CaptureProcessing() {
   });
 
   const commit = (id: string, scope: CaptureScope) => Effect.gen(function* () {
+    stage.current = "commit";
     if (intent === "just_trying") {
       setStatus("Reading your wardrobe and finding useful anchors…");
-      const feedback = yield* Effect.tryPromise({ try: () => tryOn(getToken, id), catch: (cause) => cause instanceof Error ? cause : new Error("Try-on feedback failed.") });
+      const feedback = yield* Effect.tryPromise({ try: () => tryOn(getToken, id, traceId), catch: (cause) => cause instanceof Error ? cause : new Error("Try-on feedback failed.") });
       setResult(feedback);
       setComplete("try_on");
       return;
@@ -64,20 +69,29 @@ export default function CaptureProcessing() {
       return;
     }
     setResult(null);
+    attempt.current += 1;
+    const attemptStarted = Date.now();
+    track("native_capture_started", { intent, onboarding, trace_id: traceId, attempt: attempt.current });
+    stage.current = storageId.current ? "route" : "upload";
     setError(null);
     setStatus(storageId.current ? "Placing your photo…" : "Preparing your photo…");
     const workflow = Effect.gen(function* () {
       const id = storageId.current ?? (yield* upload(uri));
       storageId.current = id;
+      stage.current = "route";
       setStatus("Deciding whether this is one piece or a full fit…");
       const detected = yield* Effect.tryPromise({ try: () => routeCapture(getToken, id, traceId), catch: (cause) => cause instanceof Error ? cause : new Error("Photo routing failed.") });
+      track("native_capture_routed", { intent, scope: detected.scope, confidence: detected.confidence, needs_review: detected.needsReview, trace_id: traceId });
       yield* commit(id, detected.scope);
     });
     void Effect.runPromiseExit(workflow).then((exit) => {
       if (Exit.isFailure(exit)) {
+        track("native_capture_failed", { intent, stage: stage.current, attempt: attempt.current, duration_ms: Date.now() - attemptStarted, trace_id: traceId });
+        trackFailure(stage.current, { trace_id: traceId, intent });
         const failure = Option.getOrUndefined(Cause.failureOption(exit.cause));
         setError(failure?.message ?? "Could not save this photo right now. Please try again.");
       } else {
+        track("native_capture_completed", { intent, onboarding, attempt: attempt.current, duration_ms: Date.now() - attemptStarted, trace_id: traceId });
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         void queryClient.invalidateQueries({ queryKey: ["mobile-bootstrap"] });
       }

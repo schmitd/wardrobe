@@ -8,6 +8,7 @@ import { ActivityIndicator, View } from "react-native";
 
 import { CaptureProvider } from "@/capture-context";
 import { colors } from "@/theme";
+import { AnalyticsObserver, AnalyticsErrorBoundary } from "@/analytics-provider";
 
 const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
@@ -55,10 +56,13 @@ export default function RootLayout() {
   return (
     <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
       <QueryClientProvider client={queryClient}>
+        <AnalyticsObserver />
+        <AnalyticsErrorBoundary>
         <CaptureProvider>
           <StatusBar style="dark" />
           <Navigation />
         </CaptureProvider>
+        </AnalyticsErrorBoundary>
       </QueryClientProvider>
     </ClerkProvider>
   );

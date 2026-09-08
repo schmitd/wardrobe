@@ -18,6 +18,7 @@ import { readLastCameraFacing, rememberCameraFacing } from "@/camera-preferences
 import { colors } from "@/theme";
 import type { CaptureIntent } from "@/types";
 import { useVolumeShutter } from "@/use-volume-shutter";
+import { track, trackFailure } from "@/analytics";
 
 function IntentControl({ value, onChange }: { value: CaptureIntent; onChange: (intent: CaptureIntent) => void }) {
   return (
@@ -58,6 +59,10 @@ export default function Capture() {
     if (permission?.status === "undetermined") void requestPermission();
   }, [permission?.status, requestPermission]);
 
+  useEffect(() => {
+    if (permission) track("native_camera_permission_observed", { permission: permission.status, can_ask_again: permission.canAskAgain, onboarding });
+  }, [permission?.status, permission?.canAskAgain, onboarding]);
+
   const processPhoto = useCallback((uri: string) => {
     router.replace({ pathname: "/capture/processing", params: { uri, intent, onboarding: onboarding ? "1" : undefined } });
   }, [intent, onboarding, router]);
@@ -71,8 +76,10 @@ export default function Capture() {
     try {
       const photo = await camera.current.takePictureAsync({ quality: 0.86, skipProcessing: false });
       if (!photo?.uri) throw new Error("The camera did not return a photo.");
+      track("native_photo_selected", { source: "camera", intent, onboarding });
       processPhoto(photo.uri);
     } catch {
+      trackFailure("camera");
       operationLocked.current = false;
       setBusy(false);
       setError("That photo could not be taken. Check camera access and try again.");
@@ -96,10 +103,13 @@ export default function Capture() {
         selectionLimit: 1,
       });
       if (!result.canceled && result.assets[0]) {
+        track("native_photo_selected", { source: "library", intent, onboarding });
         processPhoto(result.assets[0].uri);
         return;
       }
+      track("native_photo_selection_cancelled", { source: "library" });
     } catch {
+      trackFailure("picker");
       setError("Photos could not be opened. You can try again or check access in Settings.");
     }
     operationLocked.current = false;
