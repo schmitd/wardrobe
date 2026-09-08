@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   return observeMobileRequest(request, "capture", handleCapture);
 }
 
-async function handleCapture(request: Request) {
+async function handleCapture(request: Request, traceId: string) {
   const parseBody = Effect.tryPromise({
     try: () => request.json() as Promise<CaptureBody>,
     catch: (cause) => toMobileCaptureFailure(cause),
@@ -52,7 +52,7 @@ async function handleCapture(request: Request) {
   const execute = (body: CompleteCaptureBody) =>
     Effect.tryPromise({
       try: async () => {
-        const trace = { traceId: request.headers.get("X-Wardrobe-Trace-ID") ?? body.traceId };
+        const trace = { traceId };
         switch (body.operation) {
           case "route":
             return routeCaptureAction({ storageId: body.storageId, ...trace });
@@ -82,7 +82,7 @@ async function handleCapture(request: Request) {
           cause: failure.cause,
           message: failure.message,
           operation: body.operation,
-          traceId: request.headers.get("X-Wardrobe-Trace-ID") ?? undefined,
+          traceId,
         });
       },
     });
