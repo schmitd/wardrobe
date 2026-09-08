@@ -6,7 +6,7 @@ import { linkedAnalyticsSession, safeMobileOperation } from "./mobileTelemetryCo
 
 // API boundaries report only bounded operation names, never request/response bodies.
 
-export async function observeMobileRequest(request: Request, endpoint: "capture" | "manage" | "bootstrap" | "upload_url", execute: (request: Request) => Promise<Response>) {
+export async function observeMobileRequest(request: Request, endpoint: "capture" | "manage" | "bootstrap" | "upload_url", execute: (request: Request, traceId: string) => Promise<Response>) {
   const started = Date.now();
   const trace = ensureTraceContext({ traceId: request.headers.get("X-Wardrobe-Trace-ID") });
   let operation: string = endpoint;
@@ -18,11 +18,11 @@ export async function observeMobileRequest(request: Request, endpoint: "capture"
   }
   let userId: string | null = null;
   try { userId = (await auth()).userId; } catch { /* actual handler owns auth */ }
-  const headers = new Headers(request.headers);
-  headers.set("X-Wardrobe-Trace-ID", trace.traceId);
-  const forwarded = new Request(request, { headers });
+  // Next.js may pass a proxied Request. Reconstructing it with the native
+  // Request constructor trips Undici's private-field brand checks in Node.
+  // Preserve the framework request and pass normalized trace context separately.
   let response: Response;
-  try { response = await execute(forwarded); }
+  try { response = await execute(request, trace.traceId); }
   catch { response = Response.json({ error: "Wardrobe could not complete this request." }, { status: 500 }); }
   response.headers.set("X-Wardrobe-Trace-ID", trace.traceId);
   const properties = {
