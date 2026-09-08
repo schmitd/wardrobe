@@ -24,3 +24,14 @@ The API URL defaults to production. Override `EXPO_PUBLIC_WARDROBE_API_URL` to t
 - `production`: store build; submission remains a separate explicit action
 
 Set `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` and `EXPO_PUBLIC_WARDROBE_API_URL` in the corresponding EAS environments before building.
+
+## TestFlight
+
+See [TESTFLIGHT.md](./TESTFLIGHT.md) for the release checklist. A production build and submission can be started manually from the EAS dashboard with `.eas/workflows/testflight.yml`, or locally after the preflight passes:
+
+```bash
+bun run preflight:testflight:eas
+bun run testflight:build
+```
+
+The build command creates a signed App Store build and submits it to App Store Connect. It is intentionally separate from the push-triggered simulator workflow.

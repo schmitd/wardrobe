@@ -3,7 +3,9 @@ import { useAuth, useUser } from "@clerk/expo";
 import { useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { Pressable, Text, View } from "react-native";
+import { useState } from "react";
+import { Pressable, Switch, Text, View } from "react-native";
+import { analytics } from "@/analytics";
 
 import { Page, Panel } from "@/screen";
 import { colors } from "@/theme";
@@ -15,6 +17,8 @@ export function AccountScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const query = useWardrobe();
+  const [analyticsEnabled, setAnalyticsEnabled] = useState(!analytics.optedOut);
+  const [analyticsError, setAnalyticsError] = useState(false);
   const name = user?.fullName ?? query.data?.currentUser?.name ?? "Wardrobe member";
   const email = user?.primaryEmailAddress?.emailAddress ?? query.data?.currentUser?.email;
 
@@ -45,6 +49,15 @@ export function AccountScreen() {
       >
         <Text style={{ color: colors.ink, fontWeight: "900" }}>Sign out</Text>
       </Pressable>
+      <Panel>
+        <Text style={{ color: colors.ink, fontWeight: "900" }}>Help improve Wardrobe</Text>
+        <Text style={{ color: colors.muted, lineHeight: 20 }}>Share usage events and sanitized errors with PostHog. Photos, passwords, and style notes are never included. Screen recording is off. Essential server reliability logs remain enabled.</Text>
+        <Switch accessibilityLabel="Share usage analytics" value={analyticsEnabled} onValueChange={(enabled) => {
+          setAnalyticsError(false);
+          void (enabled ? analytics.optIn() : analytics.optOut()).then(() => setAnalyticsEnabled(enabled)).catch(() => setAnalyticsError(true));
+        }} />
+        {analyticsError ? <Text accessibilityRole="alert">Could not save this preference. Please try again.</Text> : null}
+      </Panel>
     </Page>
   );
 }

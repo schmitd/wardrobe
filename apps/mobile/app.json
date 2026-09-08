@@ -2,13 +2,14 @@
   "expo": {
     "name": "Wardrobe",
     "slug": "wardrobe",
+    "icon": "./assets/icon.png",
     "scheme": "wardrobe",
     "version": "0.1.2",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.wardrobe.app",
+      "bundleIdentifier": "com.davidcschmitt.wardrobe",
       "infoPlist": {
         "NSCameraUsageDescription": "Wardrobe uses the camera to record fit checks and add clothing you own or want to try.",
         "NSPhotoLibraryUsageDescription": "Wardrobe lets you choose fit checks and clothing photos from your library.",
@@ -52,7 +53,8 @@
       "expo-secure-store",
       "expo-image",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-localization"
     ],
     "extra": {
       "router": {},

@@ -30,6 +30,8 @@ The official PostHog plugin/MCP and Axiom MCP are connected in Codex. Vercel inj
 
 ## Product event contract
 
+Native TestFlight instrumentation and release checks are documented in [TESTFLIGHT_ANALYTICS.md](./TESTFLIGHT_ANALYTICS.md).
+
 | Event | Safe properties | Product question |
 | --- | --- | --- |
 | `guest_demo_analyzed` | `item_count` | Did a guest reach first value? |

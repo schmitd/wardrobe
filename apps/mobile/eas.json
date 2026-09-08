@@ -28,6 +28,12 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "ascAppId": "6809096693",
+        "appleId": "davidschmittemail@gmail.com",
+        "appleTeamId": "B8N4335RXK"
+      }
+    }
   }
 }

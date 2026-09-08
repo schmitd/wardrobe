@@ -6,6 +6,7 @@ import {
   routeCaptureAction,
 } from "@/app/actions/wardrobe";
 import { Effect } from "effect";
+import { observeMobileRequest } from "@/server/mobileTelemetry";
 
 import {
   MobileCaptureFailure,
@@ -30,6 +31,10 @@ type CompleteCaptureBody = CaptureBody & {
 };
 
 export async function POST(request: Request) {
+  return observeMobileRequest(request, "capture", handleCapture);
+}
+
+async function handleCapture(request: Request) {
   const parseBody = Effect.tryPromise({
     try: () => request.json() as Promise<CaptureBody>,
     catch: (cause) => toMobileCaptureFailure(cause),
@@ -47,7 +52,7 @@ export async function POST(request: Request) {
   const execute = (body: CompleteCaptureBody) =>
     Effect.tryPromise({
       try: async () => {
-        const trace = { traceId: body.traceId, traceparent: body.traceparent };
+        const trace = { traceId: request.headers.get("X-Wardrobe-Trace-ID") ?? body.traceId };
         switch (body.operation) {
           case "route":
             return routeCaptureAction({ storageId: body.storageId, ...trace });
@@ -77,7 +82,7 @@ export async function POST(request: Request) {
           cause: failure.cause,
           message: failure.message,
           operation: body.operation,
-          traceId: body.traceId,
+          traceId: request.headers.get("X-Wardrobe-Trace-ID") ?? undefined,
         });
       },
     });
@@ -94,7 +99,6 @@ export async function POST(request: Request) {
             operation: failure.operation,
             traceId: failure.traceId,
             status: response.status,
-            message: failure.message,
           });
           return Response.json({ error: response.message }, { status: response.status });
         },

@@ -1,8 +1,13 @@
 import { getUploadUrlAction } from "@/app/actions/wardrobe";
+import { observeMobileRequest } from "@/server/mobileTelemetry";
 
 export const runtime = "nodejs";
 
-export async function POST() {
+export async function POST(request: Request) {
+  return observeMobileRequest(request, "upload_url", handleUpload);
+}
+
+async function handleUpload() {
   try {
     return Response.json({ uploadUrl: await getUploadUrlAction() });
   } catch (error) {
