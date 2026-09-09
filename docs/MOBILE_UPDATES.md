@@ -1,5 +1,9 @@
 # Native builds and OTA updates
 
+## React Native 0.86.3 build compatibility
+
+`patches/react-native@0.86.3.patch` backports React Native PR #57576 (commit 1cdf784). The SPM post-install hook must skip occupied UUIDs instead of overwriting the CocoaPods root project. Build 3 failed with `XCRemoteSwiftPackageReference _setSavedArchiveVersion:` and package UUID `46EB2E00000000`, followed by missing module maps. Bun applies the pinned patch during dependency installation. Remove it only after adopting a React Native release that contains the upstream fix. Run `ruby apps/mobile/scripts/check-spm-uuid.rb` from the repository root to check the collision regression; a successful cloud archive is still required.
+
 Version 0.1.3 introduces expo-updates. Testers on 0.1.2 must first install the new TestFlight binary; the old binary cannot receive OTA updates.
 
 Production builds use the `production` channel, previews use `preview`. The `fingerprint` runtime policy prevents bundles targeting different native dependencies/configuration from being delivered to incompatible binaries. Native changes still require a new build.

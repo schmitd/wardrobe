@@ -156,6 +156,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "react-native@0.86.3": "patches/react-native@0.86.3.patch",
+  },
   "overrides": {
     "@effect/platform": "0.94.4",
     "effect": "3.19.14",
