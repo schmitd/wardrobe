@@ -34,6 +34,16 @@ if (production.autoIncrement !== true) {
   failures.push("Enable build.production.autoIncrement to prevent duplicate build numbers.");
 }
 
+if (production.channel !== "production") {
+  failures.push("Production builds must use the production OTA channel.");
+}
+if (expo.runtimeVersion.policy !== "fingerprint") {
+  failures.push("Use fingerprint runtime compatibility for OTA updates.");
+}
+if (expo.updates.url !== `https://u.expo.dev/${expo.extra.eas.projectId}`) {
+  failures.push("OTA updates must point to this app's EAS project.");
+}
+
 for (const variable of [
   "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY",
   "EXPO_PUBLIC_WARDROBE_API_URL",
