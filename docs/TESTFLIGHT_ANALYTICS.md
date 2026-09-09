@@ -37,6 +37,19 @@ Event properties are explicitly allowlisted. Exceptions are replaced with generi
 photos, passwords, style notes, filenames and original error messages are excluded.
 Native replay and automatic console/error capture remain disabled until real-device masking is verified.
 
+## Masked replay preparation (2026-09-08)
+
+David authorized session replay with photos censored on both web and native. This is not authorization for unmasked content or autonomous UX edits.
+
+- Web: PostHog 1.408.1 blocks media (images/pictures, video, canvas, iframes, objects, SVG images), private regions, file/hidden inputs, and inline image backgrounds. All text and input values are masked; content-bearing attributes are redacted. Console, network body/header, canvas and JSON-LD capture are disabled. Future photo-bearing CSS backgrounds must be wrapped in `ph-no-capture`; avoid putting user photo URLs in CSS rules.
+- Native: the optional replay plugin is installed, with all images/text/inputs/sandboxed pickers masked and an explicit `PostHogMaskView` around the live camera preview. Network telemetry, native console capture and push registration remain disabled.
+- Native recording never autostarts. The new Account switch is separate from usage analytics, defaults off, and requires `EXPO_PUBLIC_REPLAY_MASKING_VERIFIED=true`. That release gate remains OFF until iOS and Android masking verification passes. Signing out revokes recording consent; analytics opt-out stops recording.
+- The plugin requires a new binary. Build 0.1.3 (4) does NOT include it and cannot gain it through OTA. Keep the existing tester delivery watcher scoped to that release.
+
+Validation: 23 mobile tests and 3 replay policy tests pass. `bun run apps/web/scripts/replay-privacy-server.ts` serves a local-only synthetic fixture using the actual PostHog recorder. The browser reported `passed:true`, zero leaked markers, one full snapshot and two mutation events. This verifies serialization, not an ingested replay or native masking.
+
+Before enabling native recordings, use a dedicated test build and synthetic photos/notes to verify masking during image loading, camera transitions, photo picker, scrolling, plan entry, account view, opt-out/relaunch, and sign-out on both iOS and Android. Inspect the uploaded replay, including transition frames. Never use real customer photos for the initial test. Keep the production gate off if any frame or URL leaks. Verify web replay ingestion after deploy too.
+
 The Account screen has a usage-analytics opt-out. Opted-out clients omit PostHog correlation
 headers and therefore suppress backend product events too. Essential Axiom reliability logs
 remain enabled and contain bounded operation/status/duration and random trace IDs, not user content.

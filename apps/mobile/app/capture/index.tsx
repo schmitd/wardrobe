@@ -1,5 +1,6 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { CameraView, useCameraPermissions, type CameraType } from "expo-camera";
+import { PostHogMaskView } from "posthog-react-native";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -158,6 +159,7 @@ export default function Capture() {
 
   return (
     <View style={{ flex: 1, backgroundColor: "black", alignItems: "center", justifyContent: "center" }}>
+      <PostHogMaskView style={{ width: previewWidth, height: previewHeight }}>
       <CameraView
         ref={camera}
         style={{ width: previewWidth, height: previewHeight }}
@@ -166,6 +168,7 @@ export default function Capture() {
         onCameraReady={() => setCameraReady(true)}
         onMountError={() => setError("The camera could not start. Try again, choose a photo, or check access in Settings.")}
       />
+      </PostHogMaskView>
       <SafeAreaView pointerEvents="box-none" style={{ position: "absolute", inset: 0, justifyContent: "space-between" }}>
         <View style={{ paddingHorizontal: 18, gap: 18 }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
