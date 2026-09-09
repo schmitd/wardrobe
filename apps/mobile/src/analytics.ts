@@ -2,6 +2,7 @@ import PostHog from "posthog-react-native";
 import { nativeApplicationVersion, nativeBuildVersion } from "expo-application";
 import { Platform } from "react-native";
 import { safeProperties } from "./analytics-core";
+import { nativeReplayPrivacy } from "./replay-privacy";
 
 const token = process.env.EXPO_PUBLIC_POSTHOG_PROJECT_TOKEN;
 const host = process.env.EXPO_PUBLIC_POSTHOG_HOST;
@@ -10,6 +11,9 @@ export const analytics = new PostHog(token || "disabled", {
   disabled: !token || !host || __DEV__,
   captureAppLifecycleEvents: false,
   enableSessionReplay: false,
+  sessionReplayConfig: nativeReplayPrivacy,
+  capturePushNotificationSubscriptions: false,
+  capturePushNotificationOpened: false,
   disableGeoip: true,
   preloadFeatureFlags: false,
   flushAt: 10,
