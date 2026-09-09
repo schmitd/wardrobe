@@ -15,6 +15,7 @@ import { colors } from "@/theme";
 import type { CaptureIntent, CaptureScope } from "@/types";
 import { track, trackFailure } from "@/analytics";
 import { createTraceId } from "@/trace";
+import { captureCompletionDestination } from "@/capture-completion";
 
 const makeTraceId = createTraceId;
 
@@ -33,7 +34,7 @@ export default function CaptureProcessing() {
   const stage = useRef("upload");
   const [status, setStatus] = useState("Preparing your photo…");
   const [error, setError] = useState<string | null>(null);
-  const [complete, setComplete] = useState<"fit" | "piece" | "try_on" | null>(null);
+  const [complete, setComplete] = useState<"try_on" | null>(null);
   const { result, setResult } = useCaptureResult();
   const verdict = useMemo(() => !result?.evaluation ? "A new direction" : result.evaluation.score >= 75 ? "Strong closet fit" : result.evaluation.score >= 50 ? "Useful with limits" : "Harder to integrate", [result]);
 
@@ -48,18 +49,16 @@ export default function CaptureProcessing() {
       setStatus("Reading your wardrobe and finding useful anchors…");
       const feedback = yield* Effect.tryPromise({ try: () => tryOn(getToken, id, traceId), catch: (cause) => cause instanceof Error ? cause : new Error("Try-on feedback failed.") });
       setResult(feedback);
-      setComplete("try_on");
-      return;
+      return "try_on" as const;
     }
     if (scope === "full_fit") {
       setStatus("Recording your fit and recognizing familiar pieces…");
       yield* Effect.tryPromise({ try: () => runCaptureOperation(getToken, { operation: "record_fit", storageId: id, traceId }), catch: (cause) => cause instanceof Error ? cause : new Error("This fit could not be recorded.") });
-      setComplete("fit");
-      return;
+      return "fit" as const;
     }
     setStatus("Adding this piece to your wardrobe…");
     yield* Effect.tryPromise({ try: () => runCaptureOperation(getToken, { operation: "add_piece", storageId: id, clientFileName: "native-capture.jpg", contentType: "image/jpeg", traceId }), catch: (cause) => cause instanceof Error ? cause : new Error("This piece could not be added.") });
-    setComplete("piece");
+    return "piece" as const;
   });
 
   const analyze = () => {
@@ -82,7 +81,7 @@ export default function CaptureProcessing() {
       setStatus("Deciding whether this is one piece or a full fit…");
       const detected = yield* Effect.tryPromise({ try: () => routeCapture(getToken, id, traceId), catch: (cause) => cause instanceof Error ? cause : new Error("Photo routing failed.") });
       track("native_capture_routed", { intent, scope: detected.scope, confidence: detected.confidence, needs_review: detected.needsReview, trace_id: traceId });
-      yield* commit(id, detected.scope);
+      return yield* commit(id, detected.scope);
     });
     void Effect.runPromiseExit(workflow).then((exit) => {
       if (Exit.isFailure(exit)) {
@@ -92,8 +91,11 @@ export default function CaptureProcessing() {
         setError(failure?.message ?? "Could not save this photo right now. Please try again.");
       } else {
         track("native_capture_completed", { intent, onboarding, attempt: attempt.current, duration_ms: Date.now() - attemptStarted, trace_id: traceId });
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
         void queryClient.invalidateQueries({ queryKey: ["mobile-bootstrap"] });
+        const destination = captureCompletionDestination(exit.value);
+        if (destination) router.replace(destination);
+        else setComplete("try_on");
       }
       setStatus("");
     });
@@ -105,7 +107,7 @@ export default function CaptureProcessing() {
     analyze();
   }, []);
 
-  const done = () => router.replace(complete === "fit" || complete === "try_on" ? "/(tabs)/fits" : "/(tabs)/wardrobe");
+  const done = () => router.replace("/(tabs)/fits");
 
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ flexGrow: 1, padding: 18, paddingBottom: 48, gap: 16, justifyContent: complete || error ? "flex-start" : "center" }}>
@@ -118,7 +120,6 @@ export default function CaptureProcessing() {
       ) : null}
 
       {result && complete === "try_on" ? <View style={{ gap: 14 }}><Panel tint={!result.evaluation || result.evaluation.score >= 50 ? "#EDF5E9" : "#F8E6EE"}><View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}><View style={{ flex: 1 }}><Text selectable style={{ color: colors.plum, fontWeight: "900", fontSize: 12, textTransform: "uppercase" }}>Closet compatibility</Text><Text selectable style={{ color: colors.ink, fontSize: 23, fontWeight: "900", marginTop: 4 }}>{verdict}</Text></View>{result.evaluation ? <Text selectable style={{ color: colors.ink, fontSize: 38, fontWeight: "900" }}>{result.evaluation.score}<Text style={{ fontSize: 15 }}>/100</Text></Text> : null}</View><Text selectable style={{ color: colors.ink, lineHeight: 22 }}>{result.evaluation?.explanation ?? result.message ?? result.candidate.description}</Text></Panel>{result.similarItems.length ? <Panel><Text selectable style={{ color: colors.ink, fontWeight: "900" }}>Wardrobe anchors</Text><View style={{ flexDirection: "row", gap: 9 }}>{result.similarItems.slice(0, 3).map((item) => <View key={item.id} style={{ flex: 1, gap: 5 }}><Image source={item.imageUrl} style={{ width: "100%", aspectRatio: 1, backgroundColor: colors.wash }} contentFit="cover" /><Text numberOfLines={1} style={{ color: colors.ink, fontWeight: "800", fontSize: 11 }}>{item.category ?? "Piece"}</Text></View>)}</View></Panel> : null}</View> : null}
-      {complete && complete !== "try_on" ? <Panel tint="#EDF5E9"><Text selectable style={{ color: colors.success, fontSize: 20, fontWeight: "900" }}>{complete === "fit" ? "Fit recorded" : "Piece added"}</Text><Text selectable style={{ color: colors.ink }}>{complete === "fit" ? "Wardrobe is connecting detected garments to pieces it already remembers." : "It is now part of your wardrobe and style memory."}</Text></Panel> : null}
       {error ? <ErrorPanel message={error} /> : null}
       {error ? <Pressable onPress={analyze} style={{ backgroundColor: colors.lime, borderColor: colors.line, borderWidth: 1, padding: 15, alignItems: "center" }}><Text style={{ color: colors.ink, fontWeight: "900" }}>Try again</Text></Pressable> : null}
       {complete ? <Pressable onPress={done} style={{ backgroundColor: colors.ink, padding: 15, alignItems: "center" }}><Text style={{ color: "white", fontWeight: "900" }}>Done</Text></Pressable> : null}
