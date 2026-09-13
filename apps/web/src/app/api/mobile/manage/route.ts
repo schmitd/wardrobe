@@ -64,7 +64,7 @@ export async function POST(request: Request) {
   return observeMobileRequest(request, "manage", handleManage);
 }
 
-async function handleManage(request: Request) {
+async function handleManage(request: Request, traceId: string) {
   const body = await Effect.runPromise(
     Effect.tryPromise({
       try: () => request.json() as Promise<ManageBody>,
@@ -74,7 +74,7 @@ async function handleManage(request: Request) {
   if (body._tag === "Left") return Response.json({ error: body.left.message }, { status: 400 });
 
   return Effect.runPromise(
-    Effect.tryPromise({ try: () => execute({ ...body.right, traceId: request.headers.get("X-Wardrobe-Trace-ID") ?? undefined, traceparent: undefined }), catch: (cause): Error => cause instanceof Error ? cause : new Error("Request failed.") }).pipe(
+    Effect.tryPromise({ try: () => execute({ ...body.right, traceId, traceparent: undefined }), catch: (cause): Error => cause instanceof Error ? cause : new Error("Request failed.") }).pipe(
       Effect.match({
         onFailure: (error) => {
           const unauthorized = error.message === "Unauthorized" || error.message === "Missing Convex token";
