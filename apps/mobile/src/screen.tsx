@@ -7,6 +7,8 @@ export function Page({ children, refresh, refreshing = false }: PropsWithChildre
   return (
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
+      automaticallyAdjustKeyboardInsets
+      keyboardShouldPersistTaps="handled"
       contentContainerStyle={{ padding: 20, paddingBottom: 112, gap: 20 }}
       refreshControl={refresh ? <RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.plum} colors={[colors.plum]} /> : undefined}
     >

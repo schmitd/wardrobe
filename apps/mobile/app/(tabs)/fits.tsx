@@ -8,6 +8,7 @@ import { GarmentObservationReview } from "@/garment-observation-review";
 import { ErrorPanel, Loading, Page, Panel } from "@/screen";
 import { colors } from "@/theme";
 import { useWardrobe } from "@/use-wardrobe";
+import { DayPlanner } from "@/day-planner";
 
 type FitsView = "diary" | "plans";
 
@@ -115,6 +116,7 @@ export default function Fits() {
 
       {!query.isLoading && !query.error && view === "plans" ? (
         <View style={{ gap: 14 }}>
+          <DayPlanner />
           <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
             <Text selectable style={{ flex: 1, color: colors.ink, fontSize: 20, fontWeight: "900" }}>Your plans</Text>
             <Link href="/plan/new" asChild>
