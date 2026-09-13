@@ -1,0 +1,48 @@
+diff --git a/scripts/cocoapods/spm.rb b/scripts/cocoapods/spm.rb
+index d500bb990bd53dd4d03e6520b5ddd61325a401b5..ee930fd2c80b93070a54297846ccd1ba6cd2f5b3 100644
+--- a/scripts/cocoapods/spm.rb
++++ b/scripts/cocoapods/spm.rb
+@@ -53,6 +53,16 @@ class SPMManager
+ 
+   private
+ 
++  # Backport react-native PR #57576: CocoaPods counters can restart after
++  # project reload. Never overwrite an existing object, especially PBXProject.
++  def new_object(project, klass)
++    uuid = project.generate_uuid
++    uuid = project.generate_uuid while project.objects_by_uuid.key?(uuid)
++    object = klass.new(project, uuid)
++    object.initialize_defaults
++    object
++  end
++
+   def log(msg)
+     ::Pod::UI.puts "[SPM] #{msg}"
+   end
+@@ -76,7 +86,7 @@ class SPMManager
+       pkg_class = Xcodeproj::Project::Object::XCLocalSwiftPackageReference
+       pkg = project.root_object.package_references.find { |p| p.class == pkg_class && p.relative_path == url }
+       if !pkg
+-        pkg = project.new(pkg_class)
++        pkg = new_object(project, pkg_class)
+         pkg.relative_path = url
+         log(" Adding local package to workspace: #{pkg.inspect}")
+         project.root_object.package_references << pkg
+@@ -85,7 +95,7 @@ class SPMManager
+       pkg_class = Xcodeproj::Project::Object::XCRemoteSwiftPackageReference
+       pkg = project.root_object.package_references.find { |p| p.class == pkg_class && p.repositoryURL == url }
+       if !pkg
+-        pkg = project.new(pkg_class)
++        pkg = new_object(project, pkg_class)
+         pkg.repositoryURL = url
+         pkg.requirement = requirement
+         log(" Adding remote package to workspace: #{pkg.inspect}")
+@@ -101,7 +111,7 @@ class SPMManager
+       next if ref
+ 
+       log(" Adding product dependency #{product_name} to #{target.name}")
+-      ref = project.new(ref_class)
++      ref = new_object(project, ref_class)
+       ref.package = pkg
+       ref.product_name = product_name
+       target.package_product_dependencies << ref

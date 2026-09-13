@@ -4,7 +4,15 @@
     "slug": "wardrobe",
     "icon": "./assets/icon.png",
     "scheme": "wardrobe",
-    "version": "0.1.2",
+    "version": "0.1.3",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9b4470c6-c65f-493d-9cfd-c309f304e63c",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "ios": {
