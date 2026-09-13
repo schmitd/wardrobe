@@ -3,9 +3,11 @@ import { useAuth, useUser } from "@clerk/expo";
 import { useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, Switch, Text, View } from "react-native";
 import { analytics } from "@/analytics";
+import { nativeReplayAvailable } from "@/replay-privacy";
+import { readReplayConsent, setReplayConsent } from "@/replay-consent";
 
 import { Page, Panel } from "@/screen";
 import { colors } from "@/theme";
@@ -19,6 +21,9 @@ export function AccountScreen() {
   const query = useWardrobe();
   const [analyticsEnabled, setAnalyticsEnabled] = useState(!analytics.optedOut);
   const [analyticsError, setAnalyticsError] = useState(false);
+  const [replayEnabled, setReplayEnabled] = useState(false);
+  const [preferencePending, setPreferencePending] = useState(false);
+  useEffect(() => { void readReplayConsent().then(setReplayEnabled).catch(() => undefined); }, []);
   const name = user?.fullName ?? query.data?.currentUser?.name ?? "Wardrobe member";
   const email = user?.primaryEmailAddress?.emailAddress ?? query.data?.currentUser?.email;
 
@@ -44,17 +49,30 @@ export function AccountScreen() {
         <Text selectable style={{ color: colors.muted, lineHeight: 20 }}>Your style and fit context now live with your wardrobe.</Text>
       </View>
       <Pressable
-        onPress={() => { void signOut().then(() => { queryClient.clear(); router.replace("/sign-in"); }); }}
+        onPress={() => { void setReplayConsent(false).catch(() => undefined).then(() => signOut()).then(() => { queryClient.clear(); router.replace("/sign-in"); }); }}
         style={{ alignSelf: "flex-start", borderColor: colors.line, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderRadius: 10, borderCurve: "continuous" }}
       >
         <Text style={{ color: colors.ink, fontWeight: "900" }}>Sign out</Text>
       </Pressable>
       <Panel>
         <Text style={{ color: colors.ink, fontWeight: "900" }}>Help improve Wardrobe</Text>
-        <Text style={{ color: colors.muted, lineHeight: 20 }}>Share usage events and sanitized errors with PostHog. Photos, passwords, and style notes are never included. Screen recording is off. Essential server reliability logs remain enabled.</Text>
-        <Switch accessibilityLabel="Share usage analytics" value={analyticsEnabled} onValueChange={(enabled) => {
+        <Text style={{ color: colors.muted, lineHeight: 20 }}>Share usage events and sanitized errors with PostHog. Session recordings are a separate choice below. Essential server reliability logs remain enabled.</Text>
+        <Switch accessibilityLabel="Share usage analytics" disabled={preferencePending} value={analyticsEnabled} onValueChange={(enabled) => {
           setAnalyticsError(false);
-          void (enabled ? analytics.optIn() : analytics.optOut()).then(() => setAnalyticsEnabled(enabled)).catch(() => setAnalyticsError(true));
+          setPreferencePending(true);
+          void (async () => {
+            if (enabled) await analytics.optIn();
+            else { await analytics.optOut(); await setReplayConsent(false); setReplayEnabled(false); }
+            setAnalyticsEnabled(enabled);
+          })().catch(() => setAnalyticsError(true)).finally(() => setPreferencePending(false));
+        }} />
+        <Text style={{ color: colors.ink, fontWeight: "900" }}>Share masked session recordings</Text>
+        <Text style={{ color: colors.muted, lineHeight: 20 }}>Help us see navigation and layout problems. Recordings mask photos, camera previews, text, and inputs before upload. Audio, console logs, and network contents are not recorded. Off by default; requires usage analytics.</Text>
+        {!nativeReplayAvailable ? <Text style={{ color: colors.muted }}>Recordings are not available in this build while privacy masking is being verified.</Text> : null}
+        <Switch accessibilityLabel="Share masked session recordings" disabled={!nativeReplayAvailable || !analyticsEnabled || preferencePending} value={nativeReplayAvailable && analyticsEnabled && replayEnabled} onValueChange={(enabled) => {
+          setAnalyticsError(false);
+          setPreferencePending(true);
+          void setReplayConsent(enabled).then(() => setReplayEnabled(enabled)).catch(() => setAnalyticsError(true)).finally(() => setPreferencePending(false));
         }} />
         {analyticsError ? <Text accessibilityRole="alert">Could not save this preference. Please try again.</Text> : null}
       </Panel>

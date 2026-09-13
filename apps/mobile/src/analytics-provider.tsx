@@ -4,6 +4,7 @@ import { Component, useEffect, useRef, type PropsWithChildren } from "react";
 import { AppState, Text, View } from "react-native";
 import { analytics, releaseProperties, track, trackFailure } from "./analytics";
 import { screenName } from "./analytics-core";
+import { setReplayConsent, syncReplayConsent } from "./replay-consent";
 
 export function AnalyticsObserver() {
   const { isLoaded, userId } = useAuth();
@@ -20,6 +21,7 @@ export function AnalyticsObserver() {
         if (optedOut) void analytics.optOut().catch(() => undefined);
       }
       identity.current = userId ?? null;
+      void (userId ? syncReplayConsent(true) : setReplayConsent(false)).catch(() => undefined);
     } catch { /* best effort */ }
   }, [isLoaded, userId]);
   useEffect(() => {

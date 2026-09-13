@@ -38,7 +38,7 @@
     "lucide-react": "^0.563.0",
     "next": "16.0.7",
     "playwright": "^1.57.0",
-    "posthog-js": "^1.402.2",
+    "posthog-js": "1.408.1",
     "posthog-node": "^5.51.6",
     "radix-ui": "^1.4.3",
     "react": "19.2.3",
