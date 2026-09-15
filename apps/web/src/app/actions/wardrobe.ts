@@ -40,6 +40,7 @@ import {
   type GarmentIdentityCandidate,
 } from "@/server/garmentIdentity";
 import { compareGarmentCrops } from "@/server/garmentIdentityDisambiguation";
+import { analyzeFitPhoto, FIT_DETECTOR_MODEL, FIT_VISION_CONFIG } from "@/server/fitPhotoAnalysis";
 import { normalizeCaptureRoute } from "@/server/captureRouter";
 import { captureProtectionScopes } from "@/server/captureProtection";
 import { processWardrobeInference } from "@/server/wardrobeInference";
@@ -320,15 +321,17 @@ export const routeCaptureAction = async (input: {
     type: SchemaType.OBJECT,
     properties: {
       capture_scope: { type: SchemaType.STRING },
+      visible_garment_count: { type: SchemaType.INTEGER },
       confidence: { type: SchemaType.NUMBER },
       rationale: { type: SchemaType.STRING },
     },
-    required: ["capture_scope", "confidence", "rationale"],
+    required: ["capture_scope", "visible_garment_count", "confidence", "rationale"],
   };
   const prompt = `Route this wardrobe photo into exactly one capture scope.
-Return JSON only with capture_scope, confidence, and rationale.
+Return JSON only with capture_scope, visible_garment_count, confidence, and rationale.
 - capture_scope must be "single_piece" when the photo primarily presents one garment, shoe pair, bag, accessory, or coordinated set as one catalog item.
 - capture_scope must be "full_fit" when the photo shows a person wearing multiple garments together with enough outfit context to record what was worn.
+- Count separate visible worn garments/accessories in visible_garment_count. A distant or small subject wearing multiple pieces is still full_fit, never a single generic clothing/menswear item. Do not count background clothing or bystanders. A partial outfit can still be full_fit; shoes or a full body need not be visible.
 - A person may be visible. Do not identify or describe them and do not infer sensitive traits. Judge only the clothing composition and framing.
 - confidence must be from 0 to 1.
 - rationale must be a short, plain explanation of the clothing evidence, never a description of the person.`;
@@ -336,7 +339,7 @@ Return JSON only with capture_scope, confidence, and rationale.
   const routed = await runServerAction(
     GeminiService.pipe(
       Effect.flatMap((gemini) =>
-        gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+        gemini.generateContent(FIT_DETECTOR_MODEL, {
           contents: [
             {
               role: "user",
@@ -347,6 +350,7 @@ Return JSON only with capture_scope, confidence, and rationale.
             },
           ],
           generationConfig: {
+            ...FIT_VISION_CONFIG,
             responseMimeType: "application/json",
             responseSchema: schema,
           },
@@ -355,6 +359,7 @@ Return JSON only with capture_scope, confidence, and rationale.
       Effect.flatMap((result) =>
         parseJson<{
           capture_scope?: unknown;
+          visible_garment_count?: unknown;
           confidence?: unknown;
           rationale?: unknown;
         }>(result.response.text(), "routeCapture")
@@ -665,113 +670,6 @@ const normalizeBoundingBox = (box: DetectedFitCheckItem["bounding_box"]) => {
   return { x, y, width: Math.min(clamp(box.width), 1 - x), height: Math.min(clamp(box.height), 1 - y) };
 };
 
-const analyzeFitCheckPhoto = (base64: string, type: FitCheckKind, mimeType = "image/jpeg") =>
-  Effect.gen(function* () {
-    const gemini = yield* GeminiService;
-    const schema: Schema = {
-      type: SchemaType.OBJECT,
-      properties: {
-        transcription: { type: SchemaType.STRING },
-        items: {
-          type: SchemaType.ARRAY,
-          items: {
-            type: SchemaType.OBJECT,
-            properties: {
-              category: { type: SchemaType.STRING },
-              description: { type: SchemaType.STRING },
-              style_tags: {
-                type: SchemaType.ARRAY,
-                items: { type: SchemaType.STRING },
-              },
-              bounding_box: {
-                type: SchemaType.OBJECT,
-                properties: {
-                  x: { type: SchemaType.NUMBER },
-                  y: { type: SchemaType.NUMBER },
-                  width: { type: SchemaType.NUMBER },
-                  height: { type: SchemaType.NUMBER },
-                },
-                required: ["x", "y", "width", "height"],
-              },
-              confidence: { type: SchemaType.NUMBER },
-            },
-            required: ["category", "description", "style_tags"],
-          },
-        },
-      },
-      required: ["transcription", "items"],
-    };
-
-    const prompt = `Analyze only the clothing and accessories visible in this outfit photo for a ${type === "daily_fit_check" ? "daily fit check of what the user actually wore" : "try-on check of items the user tried on"}.
-Do not identify or describe the person. Do not infer age, gender, ethnicity, health, body characteristics, or any other sensitive personal trait. Ignore exposed skin and omit anything that is not clearly a garment or accessory.
-Return JSON only.
-- transcription: one concise sentence describing the whole outfit.
-- items: each visible worn garment, shoe, bag, or accessory.
-- category: garment role such as top, bottom, outerwear, footwear, dress, accessory, bag, jewelry.
-- description: concise visual description with color, silhouette, material/pattern if visible.
-- style_tags: 3-5 concise tags, each at most 3 words.
-- bounding_box: normalized coordinates from 0 to 1 around just that item, as { x, y, width, height }.
-- confidence: 0 to 1.`;
-
-    const requestAnalysis = (
-      model: typeof GEMINI_FLASH_LITE_MODEL | "gemini-2.5-flash",
-      instruction: string
-    ) =>
-      Effect.gen(function* () {
-        const result = yield* gemini.generateContent(model, {
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: instruction },
-                { inlineData: { data: base64, mimeType } },
-              ],
-            },
-          ],
-          generationConfig: {
-            responseMimeType: "application/json",
-            responseSchema: schema,
-          },
-        });
-        const responseText = yield* Effect.try({
-          try: () => result.response.text(),
-          catch: (error) => new Error(toErrorMessage(error)),
-        });
-        return yield* parseJson<{
-          transcription: string;
-          items: DetectedFitCheckItem[];
-        }>(responseText, "analyzeFitCheckPhoto");
-      });
-
-    const fallbackPrompt = `${prompt}
-This is a wardrobe cataloging task. Focus narrowly on fabric, color, silhouette, and garment boundaries; produce no commentary about the wearer.`;
-    const parsed = yield* requestAnalysis(GEMINI_FLASH_LITE_MODEL, prompt).pipe(
-      Effect.catchAll((error) =>
-        isGeminiContentBlock(error)
-          ? requestAnalysis("gemini-2.5-flash", fallbackPrompt)
-          : Effect.fail(error)
-      )
-    );
-
-    return {
-      transcription: truncateWords(parsed.transcription, 40),
-      items: parsed.items.slice(0, 12).map((item) => ({
-        category: truncateWords(item.category, 6),
-        description: truncateWords(item.description, ITEM_DESCRIPTION_WORD_LIMIT),
-        style_tags: sanitizeStyleTags(item.style_tags),
-        bounding_box: normalizeBoundingBox(item.bounding_box),
-        confidence:
-          typeof item.confidence === "number"
-            ? Math.max(0, Math.min(1, item.confidence))
-            : undefined,
-      })),
-    };
-  }).pipe(
-    Effect.retry({
-      times: 2,
-      while: (error) => !isGeminiContentBlock(error),
-    })
-  );
 
 const generateClosetBio = (items: { category: string; description: string; style_tags: string[] }[]) =>
   Effect.gen(function* () {
@@ -1694,7 +1592,7 @@ export const recordFitCheckForAuth = async (
     const sourceImage = Buffer.from(await imageResponse.arrayBuffer());
     const base64 = sourceImage.toString("base64");
     const analysis = await runServerAction(
-      analyzeFitCheckPhoto(base64, input.type, imageMimeType).pipe(Effect.provide(GeminiLive))
+      analyzeFitPhoto(base64, input.type, imageMimeType, { traceId, traceparent }).pipe(Effect.provide(GeminiLive))
     );
     const items: RecordFitCheckItemInput[] = [];
     for (const item of analysis.items) {
@@ -1792,7 +1690,7 @@ export const recordFitCheckForAuth = async (
             visualEmbedding: observation.visualEmbedding,
             semanticEmbedding,
             embeddingModel: "gemini-embedding-2@768",
-            detectorModel: GEMINI_FLASH_LITE_MODEL,
+            detectorModel: FIT_DETECTOR_MODEL,
             resolutionStatus: observation.decision.status,
             matchScore: observation.decision.confidence,
             matchMargin: observation.decision.margin,
@@ -1995,7 +1893,7 @@ export const analyzeGuestFitCheckAction = async (input: {
     Effect.tryPromise({
       try: () =>
         runServerAction(
-          analyzeFitCheckPhoto(photo.normalizedBase64, "daily_fit_check", photo.mimeType).pipe(
+          analyzeFitPhoto(photo.normalizedBase64, "daily_fit_check", photo.mimeType, { traceId, traceparent }).pipe(
             Effect.provide(GeminiLive)
           )
         ),
