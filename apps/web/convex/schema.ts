@@ -8,20 +8,20 @@ const analysisStatus = v.union(
   v.literal("processing_description"),
   v.literal("processing_embedding"),
   v.literal("ready"),
-  v.literal("error")
+  v.literal("error"),
 );
 
 const fitCheckType = v.union(
   v.literal("daily_fit_check"),
   v.literal("try_on"),
-  v.literal("candidate_fit_check")
+  v.literal("candidate_fit_check"),
 );
 
 const detectedItemSource = v.union(
   v.literal("matched_existing"),
   v.literal("created_from_fit_check"),
   v.literal("transcribed_only"),
-  v.literal("observed_unresolved")
+  v.literal("observed_unresolved"),
 );
 
 const garmentResolutionStatus = v.union(
@@ -30,15 +30,21 @@ const garmentResolutionStatus = v.union(
   v.literal("confirmed"),
   v.literal("unresolved"),
   v.literal("promoted_new"),
-  v.literal("rejected")
+  v.literal("rejected"),
 );
 
 export default defineSchema({
-  outfitSuggestions: defineTable(outfitFields).index("by_user", ["userId"]),
+  outfitSuggestions: defineTable(outfitFields)
+    .index("by_user", ["userId"])
+    .index("by_user_date", ["userId", "date"]),
   planningSettings: defineTable({
-    userId: v.string(), calendarEnabled: v.boolean(), calendarIds: v.array(v.string()),
-    lastGenerationAt: v.number(), updatedAt: v.number(),
+    userId: v.string(),
+    calendarEnabled: v.boolean(),
+    calendarIds: v.array(v.string()),
+    lastGenerationAt: v.number(),
+    updatedAt: v.number(),
     lastTranscriptionAt: v.optional(v.number()),
+    lastInterpretationAt: v.optional(v.number()),
     calendarRevision: v.optional(v.number()),
   }).index("by_user", ["userId"]),
   wardrobeItems: defineTable({
@@ -99,7 +105,11 @@ export default defineSchema({
   profileBioRevisions: defineTable({
     userId: v.string(),
     bio: v.string(),
-    source: v.union(v.literal("manual"), v.literal("agent"), v.literal("guest_import")),
+    source: v.union(
+      v.literal("manual"),
+      v.literal("agent"),
+      v.literal("guest_import"),
+    ),
     reason: v.string(),
     parentRevisionId: v.optional(v.id("profileBioRevisions")),
     contextFingerprint: v.optional(v.string()),
@@ -190,7 +200,7 @@ export default defineSchema({
         y: v.number(),
         width: v.number(),
         height: v.number(),
-      })
+      }),
     ),
     confidence: v.optional(v.number()),
     createdAt: v.number(),
@@ -246,12 +256,14 @@ export default defineSchema({
     storageId: v.id("_storage"),
     purpose: v.string(),
     createdAt: v.number(),
-    captureRoute: v.optional(v.object({
-      scope: v.union(v.literal("single_piece"), v.literal("full_fit")),
-      confidence: v.number(),
-      needsReview: v.boolean(),
-      rationale: v.string(),
-    })),
+    captureRoute: v.optional(
+      v.object({
+        scope: v.union(v.literal("single_piece"), v.literal("full_fit")),
+        confidence: v.number(),
+        needsReview: v.boolean(),
+        rationale: v.string(),
+      }),
+    ),
   })
     .index("by_user", ["userId"])
     .index("by_user_storage", ["userId", "storageId"])

@@ -1,405 +1,824 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
+import { useUser } from "@clerk/nextjs";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Mic,
+  SlidersHorizontal,
+  Shirt,
+} from "lucide-react";
 import {
   localDate,
-  type OutfitSuggestion,
+  outfitForDay,
+  sevenDays,
+  shiftDay,
   type PlanningData,
   type PlanningOperation,
+  type ReviewedDay,
+  type WeekInterpretation,
+  type CalendarWeek,
 } from "@wardrobe/shared";
 import { planningRequest } from "@/lib/planning-client";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import DayVoiceInput from "./DayVoiceInput";
 import GoogleCalendarConnect from "./GoogleCalendarConnect";
 
+type Draft = {
+  week: string;
+  description: string;
+  review: ReviewedDay[];
+  clarification: string;
+  useCalendar: boolean;
+  planId: string;
+};
+const initial = (): Draft => ({
+  week: localDate(),
+  description: "",
+  review: [],
+  clarification: "",
+  useCalendar: true,
+  planId: "",
+});
+const dateLabel = (value: string, weekday = false) =>
+  new Date(`${value}T12:00:00`).toLocaleDateString(undefined, {
+    ...(weekday ? { weekday: "long" as const } : {}),
+    month: "short",
+    day: "numeric",
+  });
+const input =
+  "w-full rounded-lg border border-[#bbb0c0] bg-white px-3 py-2 text-[#241426] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#735079]";
+
 export default function DayPlanner() {
+  const { user } = useUser();
+  return user ? <WeekPlanner key={user.id} userId={user.id} /> : null;
+}
+function WeekPlanner({ userId }: { userId: string }) {
   const [data, setData] = useState<PlanningData | null>(null);
-  const [date, setDate] = useState(localDate());
-  const [description, setDescription] = useState("");
-  const [planId, setPlanId] = useState("");
-  const [useCalendar, setUseCalendar] = useState(false);
+  const [draft, setDraft] = useState<Draft>(initial);
+  const [restored, setRestored] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [calendar, setCalendar] = useState<CalendarWeek | null>(null);
+  const [calendarError, setCalendarError] = useState(false);
+  const [modal, setModal] = useState<
+    "describe" | "calendar" | "options" | null
+  >(null);
   const [busy, setBusy] = useState(false);
+  const lock = useRef(false);
   const [message, setMessage] = useState("");
-  const [editing, setEditing] = useState<OutfitSuggestion | null>(null);
-  const [pieces, setPieces] = useState<string[]>([]);
-  const [dismissing, setDismissing] = useState<string | null>(null);
-  const [reason, setReason] = useState("Not my style");
+  const [swap, setSwap] = useState<string | null>(null);
+  const [reason, setReason] = useState("");
+  const storageKey = `wardrobe-planner-${userId}`;
+  const persist = useCallback(() => {
+    try {
+      sessionStorage.setItem(
+        storageKey,
+        JSON.stringify({ draft, expires: Date.now() + 8 * 3600000 }),
+      );
+    } catch {
+      /* current in-memory draft remains usable */
+    }
+  }, [draft, storageKey]);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(storageKey) ?? "null");
+      if (
+        saved?.expires > Date.now() &&
+        saved.draft?.week >= localDate() &&
+        /^\d{4}-\d{2}-\d{2}$/.test(saved.draft.week) &&
+        typeof saved.draft.description === "string" &&
+        Array.isArray(saved.draft.review)
+      )
+        setDraft({ ...initial(), ...saved.draft });
+    } catch {
+      /* invalid local draft */
+    }
+    setRestored(true);
+    if (new URLSearchParams(window.location.search).has("calendar"))
+      setModal("calendar");
+  }, [storageKey]);
+  useEffect(() => {
+    if (restored) persist();
+  }, [persist, restored]);
   const refresh = useCallback(async () => {
     const next = await planningRequest<PlanningData>({
       operation: "planning_load",
     });
     setData(next);
-    if (!next.calendarEnabled) setUseCalendar(false);
   }, []);
   useEffect(() => {
     void refresh().catch(() =>
-      setMessage("Could not load outfit planning. Try again."),
+      setMessage("Could not load planning. Please retry."),
     );
   }, [refresh]);
-  const run = async (operation: PlanningOperation) => {
+  useEffect(() => {
+    let active = true;
+    setCalendar(null);
+    setCalendarError(false);
+    if (data?.calendarEnabled && restored)
+      void planningRequest<CalendarWeek>({
+        operation: "planning_week",
+        week: draft.week,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      })
+        .then((result) => {
+          if (active) setCalendar(result);
+        })
+        .catch(() => {
+          if (active) setCalendarError(true);
+        });
+    return () => {
+      active = false;
+    };
+  }, [data, draft.week, restored]);
+  const run = async <T,>(operation: PlanningOperation): Promise<T | null> => {
+    if (lock.current) return null;
+    lock.current = true;
     setBusy(true);
     setMessage("");
     try {
-      await planningRequest(operation);
-      await refresh();
-      setEditing(null);
-      setDismissing(null);
+      const result = await planningRequest<T>(operation);
+      if (operation.operation !== "planning_interpret") await refresh();
+      return result;
+    } catch (e) {
       setMessage(
-        operation.operation === "planning_generate"
-          ? "Suggestion ready. Review it below before accepting."
-          : "Outfit updated.",
+        e instanceof Error ? e.message : "Could not complete this request.",
       );
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Please try again.");
+      return null;
     } finally {
+      lock.current = false;
       setBusy(false);
     }
   };
-  const dates = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() + i);
-    return localDate(d);
-  });
+  const changeWeek = (week: string) => {
+    setDraft((d) => ({ ...d, week, review: [], clarification: "" }));
+    setSelected(null);
+    setSwap(null);
+  };
+  const outfit = selected
+    ? outfitForDay(data?.suggestions ?? [], selected)
+    : undefined;
+  const editable = draft.review.filter(
+    (day) =>
+      !["planned", "worn"].includes(
+        outfitForDay(data?.suggestions ?? [], day.date)?.status ?? "",
+      ),
+  );
+  const setText = (description: string) =>
+    setDraft((d) => ({ ...d, description, review: [], clarification: "" }));
+  const interpret = async () => {
+    const result = await run<WeekInterpretation>({
+      operation: "planning_interpret",
+      description: draft.description,
+      week: draft.week,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    });
+    if (result)
+      setDraft((d) => ({
+        ...d,
+        review: result.days,
+        clarification: result.clarification,
+      }));
+  };
+  const generate = async () => {
+    const result = await run<{ updated: number; kept: number }>({
+      operation: "planning_generate_week",
+      days: draft.review,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      useCalendar: draft.useCalendar && Boolean(data?.calendarEnabled),
+      ...(draft.planId ? { planId: draft.planId } : {}),
+    });
+    if (result) {
+      setMessage(
+        `${result.updated} days updated${result.kept ? ` · ${result.kept} planned or worn outfits kept` : ""}`,
+      );
+      setModal(null);
+    }
+  };
+  const update = async (operation: PlanningOperation) => {
+    if (await run(operation)) {
+      setSwap(null);
+      setReason("");
+      setMessage("Outfit updated.");
+    }
+  };
+  const pieces = (ids: string[], large = false) => (
+    <div
+      data-private
+      className={`flex flex-wrap items-center gap-2 ${large ? "" : "mt-auto"}`}
+    >
+      {ids.slice(0, large ? 12 : 4).map((id) => {
+        const item = data?.items.find((i) => i.id === id);
+        return (
+          <div
+            key={id}
+            className={`relative rounded-md bg-white ${large ? "h-36 w-24" : "h-20 w-12"}`}
+          >
+            {item?.imageUrl ? (
+              <Image
+                src={item.imageUrl}
+                alt={item.category}
+                fill
+                sizes={large ? "96px" : "48px"}
+                className="object-contain"
+                unoptimized
+              />
+            ) : (
+              <Shirt className="m-auto h-full w-7 text-[#685e70]" />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
   return (
     <section
-      aria-label="Day outfit planner"
-      className="space-y-5 border border-[var(--rack-line)] bg-white p-5"
+      id="plans"
+      aria-label="Week outfit planner"
+      className="space-y-5 rounded-2xl border border-[#d9cfdf] bg-[#faf7fb] p-4 text-[#241426] sm:p-6"
     >
-      <div>
-        <h2 className="text-2xl font-extrabold">Dress for your day</h2>
-        <p className="mt-2">
-          Describe your activities, get an outfit from pieces you own, then make
-          it yours.
-        </p>
-      </div>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void run({
-            operation: "planning_generate",
-            date,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            description,
-            ...(planId ? { planId } : {}),
-            useCalendar,
-          });
-        }}
-        className="space-y-4"
-      >
-        <div className="flex flex-wrap gap-2">
-          {dates.map((d, i) => (
-            <Button
-              key={d}
-              type="button"
-              size="sm"
-              variant={date === d ? "default" : "outline"}
-              onClick={() => setDate(d)}
-              aria-pressed={date === d}
-            >
-              {i === 0
-                ? "Today"
-                : new Date(`${d}T12:00:00`).toLocaleDateString(undefined, {
-                    weekday: "short",
-                    day: "numeric",
-                  })}
-            </Button>
-          ))}
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold">Your week, dressed.</h2>
+          <p className="mt-1 text-sm text-[#685e70]">
+            Outfits for what is coming up.
+          </p>
         </div>
-        <label className="block">
-          Or choose a later date
-          <input
-            aria-label="Outfit date"
-            type="date"
-            value={date}
-            min={localDate()}
-            onChange={(e) => setDate(e.target.value)}
-            className="ml-3 border p-2"
-          />
-        </label>
-        <label className="block font-semibold">
-          Your day
-          <textarea
-            data-private
-            aria-label="Describe your day"
-            value={description}
-            maxLength={4000}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-            placeholder="Office in the morning, a walk at lunch, then dinner with friends…"
-            className="mt-2 block w-full border p-3 font-normal"
-          />
-        </label>
-        <DayVoiceInput
-          onText={(text) => {
-            setDescription((current) =>
-              [current, text].filter(Boolean).join("\n").slice(0, 4000),
-            );
-            setMessage(
-              "Transcript added. Review and correct your day before requesting an outfit.",
-            );
-          }}
-        />
-        <label className="block">
-          Optional Plan
-          <select
-            data-private
-            value={planId}
-            onChange={(e) => setPlanId(e.target.value)}
-            className="ml-3 max-w-full border p-2"
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => setModal("calendar")}>
+            <CalendarDays />
+            Calendar
+          </Button>
+          <Button
+            variant="outline"
+            aria-label="Planner options"
+            onClick={() => setModal("options")}
           >
-            <option value="">No Plan</option>
-            {data?.plans.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex gap-2">
+            <SlidersHorizontal />
+          </Button>
+          <Button
+            onClick={() => setModal("describe")}
+            disabled={!data || !restored}
+          >
+            <Mic />
+            Describe your week
+          </Button>
+        </div>
+      </header>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost"
+            aria-label="Previous week"
+            disabled={draft.week <= localDate()}
+            onClick={() =>
+              changeWeek(
+                shiftDay(draft.week, -7) < localDate()
+                  ? localDate()
+                  : shiftDay(draft.week, -7),
+              )
+            }
+          >
+            <ChevronLeft />
+          </Button>
+          <h3 className="font-semibold">
+            {dateLabel(draft.week)} – {dateLabel(shiftDay(draft.week, 6))}
+          </h3>
+          <Button
+            variant="ghost"
+            aria-label="Next week"
+            onClick={() => changeWeek(shiftDay(draft.week, 7))}
+            disabled={shiftDay(draft.week, 7) > shiftDay(localDate(), 360)}
+          >
+            <ChevronRight />
+          </Button>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          Week starting
           <input
-            type="checkbox"
-            checked={useCalendar}
-            disabled={!data?.calendarEnabled}
-            onChange={(e) => setUseCalendar(e.target.checked)}
+            type="date"
+            aria-label="Week starting"
+            className={input}
+            min={localDate()}
+            max={shiftDay(localDate(), 360)}
+            value={draft.week}
+            onChange={(e) => {
+              if (e.target.value) changeWeek(e.target.value);
+            }}
           />
-          Use selected Google calendars for this date
         </label>
-        <p className="text-sm">
-          Only this requested date is read, even for later dates. Suggestions
-          are AI-generated; review dress codes and weather. Wardrobe retains
-          your latest 100 recommendations.
-        </p>
-        <Button type="submit" disabled={busy || !data}>
-          {busy ? "Working…" : "Recommend an outfit"}
-        </Button>
-      </form>
-      <GoogleCalendarConnect
-        enabled={data?.calendarEnabled ?? false}
-        onChange={() =>
-          void refresh().catch(() =>
-            setMessage("Refresh to load calendar settings."),
-          )
-        }
-      />
-      {message && (
-        <p role="status" className="border p-3">
-          {message}
-        </p>
-      )}
-      {!data && (
+      </div>
+      {!data ? (
         <Button
-          type="button"
           variant="outline"
           onClick={() =>
             void refresh().catch(() =>
-              setMessage("Could not load planning. Please try again."),
+              setMessage("Could not load planning. Please retry."),
             )
           }
         >
-          Reload planning
+          Retry loading outfits
         </Button>
-      )}
-      <div className="space-y-4">
-        <h3 className="text-xl font-bold">Suggested, planned and worn</h3>
-        {data?.suggestions.length === 0 && (
-          <p>Your first outfit suggestion will appear here.</p>
-        )}
-        {data?.suggestions.map((s) => (
-          <article key={s.id} className="space-y-3 border p-4">
-            <div data-private>
-              <p className="text-sm font-semibold capitalize">
-                {s.status} · {s.date}
-              </p>
-              <h4 className="mt-1 text-xl font-bold">{s.title}</h4>
-              <p className="mt-2 whitespace-pre-line">{s.rationale}</p>
-              <ul className="mt-3 space-y-1">
-                {s.itemIds.map((id) => {
-                  const item = data.items.find((i) => i.id === id);
-                  return (
-                    <li key={id}>
-                      {item
-                        ? `${item.category}: ${item.description}`
-                        : "Piece no longer in your wardrobe"}
-                    </li>
-                  );
-                })}
-              </ul>
-              {s.missing.length > 0 && (
-                <p className="mt-3">
-                  To complete or adapt this outfit: {s.missing.join(" · ")}
-                </p>
-              )}
-              <p className="mt-3 text-sm">Context: {s.context.join(" · ")}</p>
-            </div>
-            {(s.status === "suggested" || s.status === "planned") && (
-              <div className="flex flex-wrap gap-2">
-                {s.status === "suggested" && (
-                  <Button
-                    type="button"
-                    disabled={busy || !s.itemIds.length}
-                    onClick={() =>
-                      void run({ operation: "planning_accept", id: s.id })
-                    }
-                  >
-                    Accept outfit
-                  </Button>
+      ) : (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+          {sevenDays(draft.week).map((date) => {
+            const s = outfitForDay(data.suggestions, date);
+            const events =
+              calendar?.days.find((d) => d.date === date)?.events ?? [];
+            return (
+              <button
+                key={date}
+                type="button"
+                aria-pressed={selected === date}
+                aria-label={`${dateLabel(date, true)}, ${s?.status ?? "No suggestion"}`}
+                onClick={() => {
+                  setSelected(date);
+                  setSwap(null);
+                  setReason("");
+                }}
+                className={`flex min-h-32 flex-col gap-3 rounded-xl border p-3 text-left transition-colors hover:bg-[#f1eaf4] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#735079] xl:min-h-64 ${selected === date ? "border-[#735079] bg-[#f1eaf4] ring-1 ring-[#735079]" : "border-[#ddd5e1] bg-white"}`}
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="font-medium">
+                    {new Date(`${date}T12:00:00`).toLocaleDateString(
+                      undefined,
+                      { weekday: "short" },
+                    )}
+                  </span>
+                  <span className="text-xl tabular-nums">
+                    {new Date(`${date}T12:00:00`).getDate()}
+                  </span>
+                </div>
+                <div data-private className="text-sm">
+                  {events.length ? (
+                    <span className="flex gap-1">
+                      <CalendarDays className="mt-0.5 size-3 shrink-0" />
+                      {events
+                        .slice(0, 2)
+                        .map((e) => e.title)
+                        .join(" · ")}
+                    </span>
+                  ) : (
+                    (s?.title ?? "No plans yet")
+                  )}
+                </div>
+                <span className="text-xs capitalize text-[#685e70]">
+                  {s?.status ?? "Suggest an outfit"}
+                </span>
+                {s ? (
+                  pieces(s.itemIds)
+                ) : (
+                  <span className="mt-auto text-sm text-[#735079]">
+                    Choose this day →
+                  </span>
                 )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => {
-                    setEditing(s);
-                    setPieces(
-                      s.itemIds.filter((id) =>
-                        data.items.some((i) => i.id === id),
-                      ),
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {calendarError && (
+        <p role="status" className="text-sm">
+          Calendar could not refresh. Your outfits are still here. Reconnect
+          Calendar or continue with dictation.
+        </p>
+      )}
+      {message && (
+        <p role="status" className="rounded-lg bg-white p-3 text-sm">
+          {message}
+        </p>
+      )}
+      {selected && (
+        <article
+          className="grid gap-6 rounded-xl border border-[#ddd5e1] bg-white p-5 lg:grid-cols-[1.3fr_1fr]"
+          aria-label={`Outfit for ${dateLabel(selected, true)}`}
+        >
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">
+              {dateLabel(selected, true)}
+            </h3>
+            {outfit ? (
+              <>
+                <div data-private>
+                  <h4 className="text-xl font-semibold">{outfit.title}</h4>
+                  <p className="mt-1 text-sm capitalize text-[#685e70]">
+                    {outfit.status}
+                  </p>
+                </div>
+                {pieces(outfit.itemIds, true)}
+                <ul data-private className="divide-y divide-[#eee6f0]">
+                  {outfit.itemIds.map((id) => {
+                    const item = data?.items.find((i) => i.id === id);
+                    return (
+                      <li
+                        key={id}
+                        className="flex items-center justify-between gap-4 py-3"
+                      >
+                        <div>
+                          <p className="font-medium">
+                            {item?.category ?? "Unavailable piece"}
+                          </p>
+                          <p className="text-sm text-[#685e70]">
+                            {item?.description}
+                          </p>
+                        </div>
+                        {outfit.status !== "worn" && (
+                          <Button
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => setSwap(swap === id ? null : id)}
+                          >
+                            Swap
+                          </Button>
+                        )}
+                      </li>
                     );
+                  })}
+                </ul>
+                {swap && (
+                  <label className="block space-y-2">
+                    Replace with an owned piece
+                    <select
+                      data-private
+                      className={input}
+                      value=""
+                      disabled={busy}
+                      onChange={(e) => {
+                        if (e.target.value)
+                          void update({
+                            operation: "planning_edit",
+                            id: outfit.id,
+                            itemIds: outfit.itemIds.map((id) =>
+                              id === swap ? e.target.value : id,
+                            ),
+                          });
+                      }}
+                    >
+                      <option value="">Choose a replacement…</option>
+                      {data?.items
+                        .filter((i) => !outfit.itemIds.includes(i.id))
+                        .map((i) => (
+                          <option key={i.id} value={i.id}>
+                            {i.category}: {i.description}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                )}
+              </>
+            ) : (
+              <>
+                <p>
+                  No suggestion yet. Add context for this day or use its
+                  calendar events.
+                </p>
+                <Button
+                  onClick={() => {
+                    setDraft((d) => ({
+                      ...d,
+                      review: [{ date: selected, description: "" }],
+                      clarification: "",
+                    }));
+                    setModal("describe");
                   }}
                 >
-                  Edit / swap pieces
+                  Suggest an outfit
                 </Button>
-                {s.status === "planned" && (
-                  <Button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => {
-                      setEditing(s);
-                      setPieces(
-                        s.itemIds.filter((id) =>
-                          data.items.some((i) => i.id === id),
-                        ),
-                      );
-                    }}
-                  >
-                    Record what I wore
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => setDismissing(s.id)}
-                >
-                  Dismiss
-                </Button>
-              </div>
+              </>
             )}
-          </article>
-        ))}
-      </div>
-      {editing && (
-        <section
-          className="space-y-3 border-2 border-[#241426] p-4"
-          aria-label="Edit outfit"
-        >
-          <h3 className="font-bold">
-            {editing.status === "planned"
-              ? "Choose what you will wear — or actually wore"
-              : "Swap or edit pieces"}
-          </h3>
-          <fieldset data-private className="max-h-80 space-y-2 overflow-y-auto">
-            <legend>Choose 1–12 owned pieces</legend>
-            {data?.items.map((item) => (
-              <label key={item.id} className="flex gap-2">
+          </div>
+          {outfit && (
+            <div className="space-y-4">
+              <h4 className="font-semibold">Why this outfit</h4>
+              <div data-private className="space-y-3 text-sm leading-relaxed">
+                <p className="whitespace-pre-line">{outfit.rationale}</p>
+                {outfit.missing.length > 0 && (
+                  <p>To complete or adapt: {outfit.missing.join(" · ")}</p>
+                )}
+                <details>
+                  <summary className="cursor-pointer py-2">
+                    Context used
+                  </summary>
+                  <p>{outfit.context.join(" · ")}</p>
+                </details>
+              </div>
+              {outfit.status === "suggested" ? (
+                <Button
+                  disabled={busy || !outfit.itemIds.length}
+                  onClick={() =>
+                    void update({ operation: "planning_accept", id: outfit.id })
+                  }
+                >
+                  Plan this outfit
+                </Button>
+              ) : outfit.status === "planned" ? (
+                <Button
+                  disabled={busy}
+                  onClick={() =>
+                    void update({ operation: "planning_worn", id: outfit.id })
+                  }
+                >
+                  I wore this
+                </Button>
+              ) : (
+                <p>Recorded as worn.</p>
+              )}
+              {outfit.status !== "worn" && (
+                <details>
+                  <summary className="cursor-pointer py-2 text-sm">
+                    Dismiss suggestion
+                  </summary>
+                  <label className="block space-y-2 text-sm">
+                    Reason
+                    <select
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      className={input}
+                    >
+                      <option value="">Choose a reason…</option>
+                      {[
+                        "Not my style",
+                        "Wrong for the occasion",
+                        "Pieces unavailable",
+                        "Weather mismatch",
+                      ].map((r) => (
+                        <option key={r}>{r}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <Button
+                    className="mt-3"
+                    variant="outline"
+                    disabled={busy || !reason}
+                    onClick={() =>
+                      void update({
+                        operation: "planning_dismiss",
+                        id: outfit.id,
+                        reason,
+                      })
+                    }
+                  >
+                    Dismiss outfit
+                  </Button>
+                </details>
+              )}
+            </div>
+          )}
+        </article>
+      )}
+      <Dialog
+        open={modal !== null}
+        onOpenChange={(open) => {
+          if (!open && !busy) setModal(null);
+        }}
+      >
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+          <DialogTitle>
+            {modal === "describe"
+              ? "Describe your week"
+              : modal === "calendar"
+                ? "Google Calendar"
+                : "Planner options"}
+          </DialogTitle>
+          <DialogDescription>
+            {modal === "describe"
+              ? "Say what is coming up. Review dates and activities before changing outfits."
+              : modal === "calendar"
+                ? "Your selected week and draft stay here while you connect."
+                : "Optional context, away from your weekly overview."}
+          </DialogDescription>
+          {modal === "describe" && (
+            <div className="space-y-4">
+              <label className="block space-y-2 font-medium">
+                Your week
+                <textarea
+                  data-private
+                  className={input}
+                  rows={4}
+                  maxLength={4000}
+                  disabled={busy}
+                  value={draft.description}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder="Wednesday is a client meeting. Friday is dinner out. Sunday we’re hiking…"
+                />
+              </label>
+              <DayVoiceInput
+                disabled={busy}
+                onText={(text) =>
+                  setText(
+                    [draft.description, text]
+                      .filter(Boolean)
+                      .join("\n")
+                      .slice(0, 4000),
+                  )
+                }
+              />
+              {!draft.review.length ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    disabled={busy || !draft.description.trim()}
+                    onClick={() => void interpret()}
+                  >
+                    {busy ? "Interpreting…" : "Review days"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    disabled={busy || !data?.calendarEnabled}
+                    onClick={() =>
+                      setDraft((d) => ({
+                        ...d,
+                        useCalendar: true,
+                        review: sevenDays(d.week).map((date) => ({
+                          date,
+                          description: "",
+                        })),
+                        clarification: "",
+                      }))
+                    }
+                  >
+                    Use Calendar for this week
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <h4 className="font-semibold">Review your days</h4>
+                  <p className="text-sm">
+                    Check dates and activities. Remove any day you do not want
+                    to update.
+                  </p>
+                  {draft.review.map((day, index) => (
+                    <fieldset
+                      key={index}
+                      className="space-y-3 rounded-xl border p-3"
+                    >
+                      <legend className="px-1 text-sm">Day {index + 1}</legend>
+                      <label className="block text-sm">
+                        Date
+                        <input
+                          type="date"
+                          className={input}
+                          min={localDate()}
+                          max={shiftDay(localDate(), 366)}
+                          disabled={busy}
+                          value={day.date}
+                          onInput={(e) => {
+                            const date = e.currentTarget.value;
+                            if (date)
+                              setDraft((d) => ({
+                                ...d,
+                                review: d.review.map((row, i) =>
+                                  i === index ? { ...row, date } : row,
+                                ),
+                              }));
+                          }}
+                          onChange={(e) => {
+                            const date = e.currentTarget.value;
+                            if (date)
+                              setDraft((d) => ({
+                                ...d,
+                                review: d.review.map((row, i) =>
+                                  i === index ? { ...row, date } : row,
+                                ),
+                              }));
+                          }}
+                        />
+                      </label>
+                      <label className="block text-sm">
+                        Activities
+                        <textarea
+                          data-private
+                          className={input}
+                          rows={2}
+                          maxLength={1200}
+                          disabled={busy}
+                          value={day.description}
+                          onChange={(e) => {
+                            const description = e.currentTarget.value;
+                            setDraft((d) => ({
+                              ...d,
+                              review: d.review.map((row, i) =>
+                                i === index ? { ...row, description } : row,
+                              ),
+                            }));
+                          }}
+                        />
+                      </label>
+                      {["planned", "worn"].includes(
+                        outfitForDay(data?.suggestions ?? [], day.date)
+                          ?.status ?? "",
+                      ) && (
+                        <p className="text-sm">
+                          Planned or worn outfit will be kept.
+                        </p>
+                      )}
+                      <Button
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() =>
+                          setDraft((d) => ({
+                            ...d,
+                            review: d.review.filter((_, i) => i !== index),
+                          }))
+                        }
+                      >
+                        Remove day
+                      </Button>
+                    </fieldset>
+                  ))}
+                  <Button
+                    disabled={
+                      busy || !editable.length || Boolean(draft.clarification)
+                    }
+                    onClick={() => void generate()}
+                  >
+                    {busy
+                      ? "Suggesting outfits…"
+                      : `Suggest outfits for ${editable.length} ${editable.length === 1 ? "day" : "days"}`}
+                  </Button>
+                  <p className="text-sm">
+                    Other days stay unchanged. Planned and worn outfits are
+                    protected.
+                  </p>
+                </>
+              )}
+              {draft.clarification && (
+                <div className="space-y-2 rounded-lg border p-3">
+                  <p data-private>{draft.clarification}</p>
+                  <Button
+                    variant="outline"
+                    disabled={busy || !draft.review.length}
+                    onClick={() =>
+                      setDraft((d) => ({ ...d, clarification: "" }))
+                    }
+                  >
+                    I corrected the dates above
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+          {modal === "calendar" && (
+            <GoogleCalendarConnect
+              enabled={Boolean(data?.calendarEnabled)}
+              selectedIds={data?.calendarIds}
+              beforeAuthorize={persist}
+              onChange={() => void refresh()}
+            />
+          )}
+          {modal === "options" && (
+            <div className="space-y-4">
+              <label className="flex gap-2">
                 <input
                   type="checkbox"
-                  checked={pieces.includes(item.id)}
-                  onChange={(e) =>
-                    setPieces((current) =>
-                      e.target.checked
-                        ? [...current, item.id].slice(0, 12)
-                        : current.filter((id) => id !== item.id),
-                    )
-                  }
+                  disabled={!data?.calendarEnabled}
+                  checked={draft.useCalendar && Boolean(data?.calendarEnabled)}
+                  onChange={(e) => {
+                    const useCalendar = e.currentTarget.checked;
+                    setDraft((d) => ({ ...d, useCalendar }));
+                  }}
                 />
-                {item.category}: {item.description}
+                Use Google Calendar for suggestions
               </label>
-            ))}
-          </fieldset>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              disabled={busy || !pieces.length}
-              onClick={() =>
-                void run({
-                  operation: "planning_edit",
-                  id: editing.id,
-                  itemIds: pieces,
-                })
-              }
-            >
-              Save pieces
-            </Button>
-            {editing.status === "planned" && (
-              <Button
-                type="button"
-                disabled={busy || !pieces.length}
-                onClick={() =>
-                  void run({
-                    operation: "planning_worn",
-                    id: editing.id,
-                    itemIds: pieces,
-                  })
-                }
-              >
-                Confirm worn
-              </Button>
-            )}
-            <Button
-              type="button"
-              variant="outline"
-              disabled={busy}
-              onClick={() => setEditing(null)}
-            >
-              Cancel edit
-            </Button>
-          </div>
-        </section>
-      )}
-      {dismissing && (
-        <section className="space-y-3 border p-4">
-          <label>
-            Why dismiss?
-            <select
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="ml-2 border p-2"
-            >
-              {[
-                "Not my style",
-                "Wrong for the occasion",
-                "Pieces unavailable",
-                "Weather mismatch",
-                "Other",
-              ].map((r) => (
-                <option key={r}>{r}</option>
-              ))}
-            </select>
-          </label>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                void run({
-                  operation: "planning_dismiss",
-                  id: dismissing,
-                  reason,
-                })
-              }
-            >
-              Dismiss outfit
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setDismissing(null)}
-            >
-              Keep outfit
-            </Button>
-          </div>
-        </section>
-      )}
+              <label className="block space-y-2">
+                Optional saved Plan
+                <select
+                  data-private
+                  className={input}
+                  value={draft.planId}
+                  onChange={(e) => {
+                    const planId = e.currentTarget.value;
+                    setDraft((d) => ({ ...d, planId }));
+                  }}
+                >
+                  <option value="">No Plan</option>
+                  {data?.plans.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="text-sm">
+                Suggestions use owned wardrobe pieces and saved preferences.
+                Weather is not checked; review the forecast.
+              </p>
+            </div>
+          )}
+          {message && (
+            <p role="status" className="text-sm">
+              {message}
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

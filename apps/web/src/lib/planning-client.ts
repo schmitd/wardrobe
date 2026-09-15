@@ -1,11 +1,25 @@
 import posthog from "posthog-js";
 import type { PlanningOperation } from "@wardrobe/shared";
+import { createTraceContext } from "./trace";
 
 export async function planningRequest<T>(body: PlanningOperation): Promise<T> {
   const started = Date.now();
+  const trace = createTraceContext();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Wardrobe-Trace-ID": trace.traceId,
+  };
+  if (!posthog.has_opted_out_capturing()) {
+    const distinctId = posthog.get_distinct_id();
+    const sessionId = posthog.get_session_id();
+    if (distinctId && sessionId) {
+      headers["X-POSTHOG-DISTINCT-ID"] = distinctId;
+      headers["X-POSTHOG-SESSION-ID"] = sessionId;
+    }
+  }
   const response = await fetch("/api/planning", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
   const result = await response.json();
