@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Wardrobe Design",
+    "slug": "wardrobe-planner-prototype",
+    "scheme": "wardrobe-design",
+    "version": "0.0.1",
+    "userInterfaceStyle": "automatic",
+    "orientation": "portrait",
+    "plugins": ["expo-router"],
+    "ios": {
+      "bundleIdentifier": "com.davidcschmitt.wardrobe.design",
+      "supportsTablet": true
+    }
+  }
+}
