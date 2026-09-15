@@ -74,6 +74,9 @@ export default function RootLayout({
           <Providers>
             <Navbar />
             {children}
+            <footer className="mx-auto w-full max-w-[1320px] px-4 py-6 pb-28 text-sm md:pb-6">
+              <a href="/privacy" className="underline">Privacy</a>
+            </footer>
           </Providers>
         </body>
       </html>

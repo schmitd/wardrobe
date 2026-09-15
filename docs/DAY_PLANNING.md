@@ -30,8 +30,8 @@ Never send day text, audio, calendar content/IDs, garment descriptions/photos, r
 
 ## Release gates
 
-1. Confirm Calendar API is enabled and incremental consent works for the existing production OAuth client. Google Cloud project `221493786724` currently denies `davidschmittemail@gmail.com` project/service-list access. The owning Google account must be used; do not replace credentials or broaden sign-in scopes to work around it.
-2. Build iOS/Android candidates; verify build results. New `expo-audio` and the already-merged native replay module require new binaries, not an OTA to build 4.
-3. Merge/deploy the complete release after the Calendar integration gate is resolved, then submit iOS to TestFlight. Do not start an Apple approval watcher.
+1. Google Cloud project `221493786724` (`gen-lang-client-0224409020`) is accessible with `davidschmittgit@gmail.com`. Calendar API enablement was verified September 15, 2026. OAuth branding, publication and a real incremental-consent connection remain to be verified. Do not replace credentials or broaden default sign-in scopes to work around a missing grant.
+2. Both native candidates for `4da675f` finished successfully: iOS 0.1.4 (5), build `bc860c8f-9832-483a-8646-adf11bb87ce7`; Android 0.1.4 (2), build `43478da2-8baa-4826-9059-5be5e9f45a42`. New `expo-audio` and the already-merged native replay module require new binaries, not an OTA to build 4. Subsequent privacy-page changes are web-only.
+3. Deploy the public `/privacy` notice and complete OAuth configuration before testing production incremental consent. Verify the production planning API before submitting iOS to TestFlight. Do not start an Apple approval watcher or claim Calendar consent/replay masking is verified without evidence.
 
 The development-only `apps/web/scripts/planning-smoke.ts` refuses production credentials and a nonempty fixture inventory. It creates explicitly synthetic fixture data in the designated development environment, not real tester data.
