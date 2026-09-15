@@ -21,6 +21,10 @@ const body = Space_Grotesk({
 export const metadata: Metadata = {
   title: "Wardrobe",
   description: "Closet manager and shopping companion.",
+  verification: {
+    // Public ownership proof for the Google project owner; not an API credential.
+    google: "5YRcxZSQHTvgJOw1GuRRzPL5Qj1J7jWnzGSGrhs9Er8",
+  },
 };
 
 export default function RootLayout({
