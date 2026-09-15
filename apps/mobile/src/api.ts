@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import type { CaptureRoute, CompatibilityResult, MobileBootstrap, SelfieAnalysis } from "@/types";
 import { analyticsHeaders, track } from "@/analytics";
 import { createTraceId } from "@/trace";
+import type { PlanningOperation } from "@wardrobe/shared";
 
 const baseUrl = (process.env.EXPO_PUBLIC_WARDROBE_API_URL ?? "https://wardrobe.davidcschmitt.com").replace(/\/$/, "");
 type GetToken = () => Promise<string | null>;
@@ -38,6 +39,8 @@ const request = <T>(getToken: GetToken, path: string, init?: RequestInit, operat
 };
 
 export const loadBootstrap = (getToken: GetToken) => Effect.runPromise(request<MobileBootstrap>(getToken, "/api/mobile/bootstrap"));
+export const planningRequest = <T>(getToken: GetToken, input: PlanningOperation) => Effect.runPromise(request<T>(getToken, "/api/planning", { method: "POST", body: JSON.stringify(input) }, input.operation));
+export const transcribeDay = (getToken: GetToken, audio: string) => Effect.runPromise(request<{ text: string }>(getToken, "/api/transcribe", { method: "POST", body: JSON.stringify({ audio, mimeType: "audio/mp4", confirmed: true }) }, "transcribe"));
 
 export const getUploadUrl = (getToken: GetToken) =>
   Effect.runPromise(request<{ uploadUrl: string }>(getToken, "/api/mobile/upload-url", { method: "POST" }, "upload_url"));

@@ -3,16 +3,17 @@ import { after } from "next/server";
 import { PostHog } from "posthog-node";
 import { ensureTraceContext } from "@/lib/trace";
 import { linkedAnalyticsSession, safeMobileOperation } from "./mobileTelemetryCore";
+import { limitedJson } from "./limitedJson";
 
 // API boundaries report only bounded operation names, never request/response bodies.
 
-export async function observeMobileRequest(request: Request, endpoint: "capture" | "manage" | "bootstrap" | "upload_url", execute: (request: Request, traceId: string) => Promise<Response>) {
+export async function observeMobileRequest(request: Request, endpoint: "capture" | "manage" | "bootstrap" | "upload_url" | "planning" | "transcribe", execute: (request: Request, traceId: string) => Promise<Response>) {
   const started = Date.now();
   const trace = ensureTraceContext({ traceId: request.headers.get("X-Wardrobe-Trace-ID") });
   let operation: string = endpoint;
-  if (endpoint === "capture" || endpoint === "manage") {
+  if (endpoint === "capture" || endpoint === "manage" || endpoint === "planning") {
     try {
-      const body = await request.clone().json();
+      const body = await limitedJson(request.clone(), 16000) as { operation?: unknown } | null;
       operation = safeMobileOperation(body?.operation);
     } catch { operation = "invalid_request"; }
   }

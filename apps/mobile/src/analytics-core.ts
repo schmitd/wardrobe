@@ -7,7 +7,7 @@ const values: Record<string, readonly string[]> = {
   source: ["camera", "library"],
   outcome: ["success", "failure", "cancelled"],
   permission: ["granted", "denied", "undetermined"],
-  operation: ["bootstrap", "upload_url", "route", "record_fit", "add_piece", "try_on", "create_collection", "add_collection_item", "remove_collection_item", "save_inspiration", "update_bio", "delete_item", "analyze_selfie", "resolve_observation", "promote_observation"],
+  operation: ["bootstrap", "upload_url", "route", "record_fit", "add_piece", "try_on", "create_collection", "add_collection_item", "remove_collection_item", "save_inspiration", "update_bio", "delete_item", "analyze_selfie", "resolve_observation", "promote_observation", "planning_load", "planning_generate", "planning_accept", "planning_edit", "planning_worn", "planning_dismiss", "calendar_list", "calendar_connect", "calendar_disconnect", "transcribe"],
 };
 
 export function safeProperties(input: Record<string, unknown> = {}) {

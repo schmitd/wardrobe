@@ -1,11 +1,13 @@
 import { v } from "convex/values";
 import { internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 export const deleteUserData = internalMutation({
   args: {
     userId: v.string(),
   },
   handler: async (ctx, { userId }) => {
+    await ctx.scheduler.runAfter(0, internal.planning.deleteUserData, { userId });
     const [
       wardrobeItems,
       candidateItems,

@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { outfitFields } from "./planningValidators";
 
 const analysisStatus = v.union(
   v.literal("queued"),
@@ -33,6 +34,13 @@ const garmentResolutionStatus = v.union(
 );
 
 export default defineSchema({
+  outfitSuggestions: defineTable(outfitFields).index("by_user", ["userId"]),
+  planningSettings: defineTable({
+    userId: v.string(), calendarEnabled: v.boolean(), calendarIds: v.array(v.string()),
+    lastGenerationAt: v.number(), updatedAt: v.number(),
+    lastTranscriptionAt: v.optional(v.number()),
+    calendarRevision: v.optional(v.number()),
+  }).index("by_user", ["userId"]),
   wardrobeItems: defineTable({
     userId: v.string(),
     storageId: v.id("_storage"),

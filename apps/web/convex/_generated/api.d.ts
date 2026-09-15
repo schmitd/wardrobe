@@ -14,6 +14,8 @@ import type * as candidates from "../candidates.js";
 import type * as fitChecks from "../fitChecks.js";
 import type * as garmentIdentityQueries from "../garmentIdentityQueries.js";
 import type * as http from "../http.js";
+import type * as planning from "../planning.js";
+import type * as planningValidators from "../planningValidators.js";
 import type * as profile from "../profile.js";
 import type * as retrier from "../retrier.js";
 import type * as storage from "../storage.js";
@@ -38,6 +40,8 @@ declare const fullApi: ApiFromModules<{
   fitChecks: typeof fitChecks;
   garmentIdentityQueries: typeof garmentIdentityQueries;
   http: typeof http;
+  planning: typeof planning;
+  planningValidators: typeof planningValidators;
   profile: typeof profile;
   retrier: typeof retrier;
   storage: typeof storage;
