@@ -11,6 +11,7 @@ export const normalizeCaptureRoute = (input: {
   capture_scope?: unknown;
   confidence?: unknown;
   rationale?: unknown;
+  visible_garment_count?: unknown;
 }): CaptureRoute => {
   const recognizedScope =
     input.capture_scope === "single_piece" || input.capture_scope === "full_fit"
@@ -22,7 +23,10 @@ export const normalizeCaptureRoute = (input: {
   const confidence = Math.max(0, Math.min(1, parsedConfidence));
 
   return {
-    scope: recognizedScope ?? "single_piece",
+    // Multi-piece evidence takes precedence over a generic category/route label.
+    // Unknown classification must not silently create one generic catalog item.
+    scope: (typeof input.visible_garment_count === "number" && Number.isInteger(input.visible_garment_count) && input.visible_garment_count >= 2)
+      ? "full_fit" : recognizedScope ?? "full_fit",
     confidence,
     needsReview: false,
     rationale:

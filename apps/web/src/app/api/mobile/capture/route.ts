@@ -15,6 +15,7 @@ import {
 } from "@/server/mobileCaptureError";
 
 export const runtime = "nodejs";
+export const maxDuration = 180;
 
 type CaptureBody = {
   operation?: "route" | "record_fit" | "add_piece" | "try_on";

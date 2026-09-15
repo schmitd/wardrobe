@@ -28,11 +28,14 @@ describe("capture router policy", () => {
     ).toMatchObject({ scope: "single_piece", confidence: 0.52, needsReview: false });
   });
 
-  it("falls back to a piece when the model returns an invalid scope", () => {
+  it("never turns an invalid route into a generic catalog item", () => {
     expect(normalizeCaptureRoute({ capture_scope: "unknown", confidence: 4 })).toMatchObject({
-      scope: "single_piece",
+      scope: "full_fit",
       confidence: 1,
       needsReview: false,
     });
+  });
+  it("decomposes multiple visible garments even if the route label says one piece", () => {
+    expect(normalizeCaptureRoute({ capture_scope: "single_piece", visible_garment_count: 3, confidence: 0.9 }).scope).toBe("full_fit");
   });
 });

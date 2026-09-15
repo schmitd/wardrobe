@@ -87,6 +87,9 @@ export const applyDirectGarmentComparison = (
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
 export const cropGarmentRegion = async (input: Buffer, box: NormalizedBoundingBox) => {
+  if (![box.x, box.y, box.width, box.height].every(Number.isFinite) || box.x < 0 || box.y < 0 || box.width <= 0 || box.height <= 0 || box.x + box.width > 1.000001 || box.y + box.height > 1.000001) {
+    throw new Error("Invalid garment bounding box");
+  }
   // Normalize EXIF orientation before applying boxes returned against the
   // visually upright image (especially important for phone camera photos).
   const oriented = await sharp(input, { failOn: "none" }).rotate().toBuffer();
