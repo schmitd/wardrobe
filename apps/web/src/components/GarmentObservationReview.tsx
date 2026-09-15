@@ -62,7 +62,7 @@ export default function GarmentObservationReview({ observations }: { observation
             <article key={String(observation._id)} className="border border-[var(--rack-line)] bg-[var(--rack-paper)] p-3">
               <div className="flex gap-3">
                 <div className="relative h-20 w-16 shrink-0 overflow-hidden border border-[var(--rack-line)] bg-white">
-                  {observation.cropUrl && <Image src={observation.cropUrl} alt={observation.description} fill sizes="64px" className="object-cover" />}
+                  {observation.cropUrl && <Image src={observation.cropUrl} alt={observation.description} fill sizes="64px" className="object-contain" />}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center justify-between gap-2">

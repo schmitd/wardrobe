@@ -32,7 +32,7 @@ export function GarmentObservationReview({ observations }: { observations: Garme
         return (
           <View key={observation.id} style={{ borderWidth: 1, borderColor: colors.washStrong, backgroundColor: colors.paper, padding: 10, gap: 10, borderRadius: 11, borderCurve: "continuous" }}>
             <View style={{ flexDirection: "row", gap: 10 }}>
-              <Image source={observation.cropUrl ?? undefined} style={{ width: 62, height: 76, backgroundColor: colors.wash, borderRadius: 8 }} contentFit="cover" />
+              <Image source={observation.cropUrl ?? undefined} style={{ width: 62, height: 76, backgroundColor: colors.wash, borderRadius: 8 }} contentFit="contain" />
               <View style={{ flex: 1, gap: 4 }}><View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}><Text selectable numberOfLines={1} style={{ flex: 1, color: colors.ink, fontWeight: "900" }}>{observation.category}</Text>{resolved ? <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}><MaterialCommunityIcons name="check-circle" size={15} color={colors.success} /><Text style={{ color: colors.success, fontSize: 10, fontWeight: "900" }}>{observation.resolutionStatus === "promoted_new" ? "Added new" : "Recognized"}</Text></View> : null}{observation.resolutionStatus === "unresolved" ? <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "900" }}>No repeat</Text> : null}</View><Text selectable numberOfLines={3} style={{ color: colors.muted, fontSize: 12, lineHeight: 17 }}>{observation.description}</Text></View>
             </View>
             {needsConfirmation ? <View style={{ gap: 8 }}>
