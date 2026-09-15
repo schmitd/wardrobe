@@ -2,6 +2,8 @@
 
 This is the durable operating contract for production feedback and product decisions. It applies to `main`, Vercel production deployments, and every preview deployment.
 
+Week-planner release operations add `planning_interpret`, `planning_week`, and `planning_generate_week` to bounded operation dimensions. Preserve consent-gated web/native session correlation. Photos, reviewed transcripts, calendar titles/IDs, and generated outfit details are masked in the week board, details, selectors, and worn-outfit diary. Draft persistence is product state, never an analytics property. This release does not enable native replay without the existing platform masking gate.
+
 ## Ownership boundary
 
 | Signal | System of record | Why |

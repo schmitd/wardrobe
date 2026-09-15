@@ -30,6 +30,20 @@ export type PlanningData = {
 export type PlanningOperation =
   | { operation: "planning_load" }
   | {
+      operation: "planning_interpret";
+      week: string;
+      timezone: string;
+      description: string;
+    }
+  | { operation: "planning_week"; week: string; timezone: string }
+  | {
+      operation: "planning_generate_week";
+      days: { date: string; description: string }[];
+      timezone: string;
+      useCalendar: boolean;
+      planId?: string;
+    }
+  | {
       operation: "planning_generate";
       date: string;
       timezone: string;

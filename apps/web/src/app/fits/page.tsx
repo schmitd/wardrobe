@@ -18,6 +18,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import GarmentObservationReview from '@/components/GarmentObservationReview';
 import PlansView from '@/components/PlansView';
 import DayPlanner from '@/components/DayPlanner';
+import WornOutfits from '@/components/WornOutfits';
 
 type FitCheckMode = 'daily_fit_check' | 'try_on';
 
@@ -123,6 +124,7 @@ function FitsContent() {
       </section>
 
       {activeView === 'plans' ? <><DayPlanner /><PlansView /></> : <div id="fits-diary" className="space-y-6">
+      <WornOutfits />
       <section className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2"><CaptureCard mode="daily_fit_check" onComplete={record} /><CaptureCard mode="try_on" onComplete={record} /></div>
         {(status || error) && <p role="status" className={`border p-3 text-sm font-semibold ${error ? 'border-[#B93267] bg-[var(--rack-danger-wash)] text-[#B93267]' : 'border-[var(--rack-line)] bg-[var(--rack-success-wash)] text-[#241426]'}`}>{error ?? status}</p>}

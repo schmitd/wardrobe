@@ -103,16 +103,23 @@ export const load = query({
 });
 
 export const reserveGeneration = mutation({
-  args: { transcription: v.optional(v.boolean()) },
+  args: {
+    transcription: v.optional(v.boolean()),
+    interpretation: v.optional(v.boolean()),
+  },
   returns: v.null(),
-  handler: async (ctx, { transcription }) => {
+  handler: async (ctx, { transcription, interpretation }) => {
     const userId = await getAuthenticatedUserId(ctx);
     if (!userId) throw new Error("Unauthorized");
     const settings = await ctx.db
       .query("planningSettings")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .unique();
-    const field = transcription ? "lastTranscriptionAt" : "lastGenerationAt";
+    const field = interpretation
+      ? "lastInterpretationAt"
+      : transcription
+        ? "lastTranscriptionAt"
+        : "lastGenerationAt";
     if (settings && Date.now() - (settings[field] ?? 0) < 30000)
       throw new Error("Please wait 30 seconds before trying again.");
     if (settings) await ctx.db.patch(settings._id, { [field]: Date.now() });
@@ -177,7 +184,16 @@ export const save = mutation({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .order("asc")
       .take(100);
-    if (existing.length >= 100) await ctx.db.delete(existing[0]._id);
+    if (existing.length >= 100) {
+      const expired = existing.find(
+        (o) => o.status !== "planned" && o.status !== "worn",
+      );
+      if (!expired)
+        throw Error(
+          "Your outfit history is full. Remove an old outfit before generating more.",
+        );
+      await ctx.db.delete(expired._id);
+    }
     const { calendarRevision: _revision, ...outfit } = args;
     return ctx.db.insert("outfitSuggestions", {
       ...outfit,
@@ -229,6 +245,119 @@ export const update = mutation({
       updatedAt: Date.now(),
     });
     return null;
+  },
+});
+
+// One transaction for a reviewed week: a concurrent accept/worn action always wins.
+export const saveWeek = mutation({
+  args: {
+    outfits: v.array(
+      v.object({
+        date: v.string(),
+        title: v.string(),
+        rationale: v.string(),
+        context: v.array(v.string()),
+        itemIds: v.array(v.id("wardrobeItems")),
+        missing: v.array(v.string()),
+      }),
+    ),
+    calendarDerived: v.boolean(),
+    calendarRevision: v.optional(v.number()),
+  },
+  returns: v.object({ updated: v.number(), kept: v.number() }),
+  handler: async (ctx, args) => {
+    const userId = await getAuthenticatedUserId(ctx);
+    if (!userId) throw Error("Unauthorized");
+    if (
+      !args.outfits.length ||
+      args.outfits.length > 7 ||
+      new Set(args.outfits.map((o) => o.date)).size !== args.outfits.length
+    )
+      throw Error("Choose 1–7 distinct dates.");
+    if (args.calendarDerived) {
+      const settings = await ctx.db
+        .query("planningSettings")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .unique();
+      if (
+        !settings?.calendarEnabled ||
+        args.calendarRevision !== (settings.calendarRevision ?? 0)
+      )
+        throw Error("Calendar connection changed. Try again.");
+    }
+    let updated = 0,
+      kept = 0;
+    for (const outfit of args.outfits) {
+      if (
+        !/^\d{4}-\d{2}-\d{2}$/.test(outfit.date) ||
+        new Date(`${outfit.date}T12:00:00Z`).toISOString().slice(0, 10) !==
+          outfit.date ||
+        !outfit.title.trim() ||
+        outfit.title.length > 160 ||
+        !outfit.rationale.trim() ||
+        outfit.rationale.length > 2400 ||
+        outfit.itemIds.length > 12 ||
+        outfit.missing.length > 8 ||
+        outfit.missing.some((s) => s.length > 300) ||
+        outfit.context.length > 10 ||
+        outfit.context.some((s) => s.length > 300)
+      )
+        throw Error("Invalid recommendation.");
+      const existing = await ctx.db
+        .query("outfitSuggestions")
+        .withIndex("by_user_date", (q) =>
+          q.eq("userId", userId).eq("date", outfit.date),
+        )
+        .order("desc")
+        .take(100);
+      if (existing.some((o) => o.status === "planned" || o.status === "worn")) {
+        kept++;
+        continue;
+      }
+      for (const id of outfit.itemIds)
+        if ((await ctx.db.get(id))?.userId !== userId)
+          throw Error("Piece unavailable.");
+      if (!outfit.itemIds.length && !outfit.missing.length)
+        throw Error("Recommendation has no pieces or explanation.");
+      const previous = existing.find((o) => o.status === "suggested");
+      const value = {
+        ...outfit,
+        itemIds: [...new Set(outfit.itemIds)],
+        calendarDerived: args.calendarDerived,
+        updatedAt: Date.now(),
+      };
+      if (previous) await ctx.db.patch(previous._id, value);
+      else {
+        // Match the existing 100-entry privacy retention limit without evicting
+        // an accepted outfit or another day in this atomic batch.
+        const retained = await ctx.db
+          .query("outfitSuggestions")
+          .withIndex("by_user", (q) => q.eq("userId", userId))
+          .order("asc")
+          .take(100);
+        if (retained.length >= 100) {
+          const expired = retained.find(
+            (o) =>
+              o.status !== "planned" &&
+              o.status !== "worn" &&
+              !args.outfits.some((day) => day.date === o.date),
+          );
+          if (!expired)
+            throw Error(
+              "Your outfit history is full. Remove an old outfit before generating more.",
+            );
+          await ctx.db.delete(expired._id);
+        }
+        await ctx.db.insert("outfitSuggestions", {
+          ...value,
+          userId,
+          status: "suggested",
+          createdAt: Date.now(),
+        });
+      }
+      updated++;
+    }
+    return { updated, kept };
   },
 });
 

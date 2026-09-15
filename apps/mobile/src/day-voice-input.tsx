@@ -12,7 +12,13 @@ import { AppState, Pressable, Text, View } from "react-native";
 import { transcribeDay } from "@/api";
 import { colors } from "@/theme";
 
-export function DayVoiceInput({ onText }: { onText: (text: string) => void }) {
+export function DayVoiceInput({
+  onText,
+  disabled = false,
+}: {
+  onText: (text: string) => void;
+  disabled?: boolean;
+}) {
   const { getToken } = useAuth();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const state = useAudioRecorderState(recorder);
@@ -68,6 +74,7 @@ export function DayVoiceInput({ onText }: { onText: (text: string) => void }) {
     };
   }, [recorder]);
   const start = async () => {
+    if (disabled) return;
     setBusy(true);
     setMessage("");
     try {
@@ -97,7 +104,7 @@ export function DayVoiceInput({ onText }: { onText: (text: string) => void }) {
     }
   };
   const transcribe = async () => {
-    if (!uri) return;
+    if (!uri || disabled) return;
     setBusy(true);
     setMessage("");
     try {
@@ -126,7 +133,7 @@ export function DayVoiceInput({ onText }: { onText: (text: string) => void }) {
   };
   const button = (label: string, onPress: () => void) => (
     <Pressable
-      disabled={busy}
+      disabled={busy || (disabled && !state.isRecording)}
       onPress={onPress}
       accessibilityRole="button"
       style={{

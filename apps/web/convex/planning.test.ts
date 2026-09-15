@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { calendar, reserveGeneration, save, update } from "./planning";
+import {
+  calendar,
+  reserveGeneration,
+  save,
+  saveWeek,
+  update,
+} from "./planning";
 
 type Row = { _id: string; userId: string; [key: string]: unknown };
 const invoke = (fn: unknown, ctx: unknown, args: unknown) =>
@@ -68,11 +74,13 @@ function fixture(userId = "alice") {
       let rows = tables[table];
       const chain = {
         withIndex: (_: string, filter: (q: unknown) => unknown) => {
-          filter({
+          const indexQuery = {
             eq: (key: string, val: unknown) => {
               rows = rows.filter((r) => r[key] === val);
+              return indexQuery;
             },
-          });
+          };
+          filter(indexQuery);
           return chain;
         },
         order: () => chain,
@@ -167,9 +175,113 @@ describe("planning ownership and lifecycle", () => {
     const f = fixture();
     await invoke(reserveGeneration, f.ctx, { transcription: true });
     await invoke(reserveGeneration, f.ctx, {});
+    await invoke(reserveGeneration, f.ctx, { interpretation: true });
+    await expect(
+      invoke(reserveGeneration, f.ctx, { interpretation: true }),
+    ).rejects.toThrow();
     await expect(invoke(reserveGeneration, f.ctx, {})).rejects.toThrow();
     await expect(
       invoke(reserveGeneration, f.ctx, { transcription: true }),
+    ).rejects.toThrow();
+  });
+  test("week updates preserve concurrent planned outfits and other dates", async () => {
+    const f = fixture();
+    await f.ctx.db.patch("calendar-outfit", { date: "2026-09-18" });
+    await f.ctx.db.patch("suggestion", { date: "2026-09-17" });
+    const row = (date: string) => ({
+      date,
+      title: "Outfit",
+      rationale: "Owned pieces",
+      context: [],
+      itemIds: ["coat"],
+      missing: [],
+    });
+    expect(
+      await invoke(saveWeek, f.ctx, {
+        outfits: [row("2026-09-18"), row("2026-09-17"), row("2026-09-20")],
+        calendarDerived: false,
+      }),
+    ).toEqual({ updated: 2, kept: 1 });
+    expect(await f.ctx.db.get("calendar-outfit")).toMatchObject({
+      status: "planned",
+      itemIds: ["shirt"],
+    });
+    expect(await f.ctx.db.get("suggestion")).toMatchObject({
+      itemIds: ["coat"],
+    });
+    expect(await f.ctx.db.get("foreign-outfit")).toMatchObject({
+      userId: "bob",
+    });
+  });
+  test("week retention preserves committed outfits and bounds private history", async () => {
+    const f = fixture();
+    f.tables.outfitSuggestions = Array.from({ length: 100 }, (_, i) => ({
+      _id: `history-${i}`,
+      userId: "alice",
+      status: i === 99 ? "suggested" : "worn",
+      date: `old-${i}`,
+      itemIds: ["shirt"],
+    }));
+    await invoke(saveWeek, f.ctx, {
+      calendarDerived: false,
+      outfits: [
+        {
+          date: "2026-09-17",
+          title: "Outfit",
+          rationale: "Owned",
+          context: [],
+          itemIds: ["coat"],
+          missing: [],
+        },
+      ],
+    });
+    expect(f.tables.outfitSuggestions.length).toBe(100);
+    expect(await f.ctx.db.get("history-0")).not.toBeNull();
+    expect(await f.ctx.db.get("history-99")).toBeNull();
+    f.tables.outfitSuggestions.forEach((row) => (row.status = "worn"));
+    await expect(
+      invoke(saveWeek, f.ctx, {
+        calendarDerived: false,
+        outfits: [
+          {
+            date: "2026-09-18",
+            title: "Outfit",
+            rationale: "Owned",
+            context: [],
+            itemIds: ["coat"],
+            missing: [],
+          },
+        ],
+      }),
+    ).rejects.toThrow("history is full");
+  });
+  test("week saves validate ownership, duplicates, and Calendar revision", async () => {
+    const row = {
+      date: "2026-09-17",
+      title: "Outfit",
+      rationale: "Owned pieces",
+      context: [],
+      itemIds: ["foreign"],
+      missing: [],
+    };
+    await expect(
+      invoke(saveWeek, fixture().ctx, {
+        outfits: [row],
+        calendarDerived: false,
+      }),
+    ).rejects.toThrow();
+    await expect(
+      invoke(saveWeek, fixture().ctx, {
+        outfits: [row, row],
+        calendarDerived: false,
+      }),
+    ).rejects.toThrow();
+    await expect(
+      invoke(saveWeek, fixture().ctx, {
+        outfits: [{ ...row, itemIds: ["shirt"] }],
+        calendarDerived: true,
+        calendarRevision: 99,
+      }),
     ).rejects.toThrow();
   });
   test("a reconnect cannot revive an in-flight recommendation from an old calendar grant", async () => {

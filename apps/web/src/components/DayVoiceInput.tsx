@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 
 export default function DayVoiceInput({
   onText,
+  disabled = false,
 }: {
   onText: (text: string) => void;
+  disabled?: boolean;
 }) {
   const recorder = useRef<MediaRecorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
@@ -40,6 +42,7 @@ export default function DayVoiceInput({
     };
   }, []);
   const start = async () => {
+    if (disabled) return;
     setError("");
     setBusy(true);
     cancelled.current = false;
@@ -79,7 +82,7 @@ export default function DayVoiceInput({
     }
   };
   const transcribe = async () => {
-    if (!blob) return;
+    if (!blob || disabled) return;
     setBusy(true);
     setError("");
     try {
@@ -119,7 +122,7 @@ export default function DayVoiceInput({
           <Button
             type="button"
             variant="outline"
-            disabled={busy}
+            disabled={busy || disabled}
             onClick={start}
           >
             Dictate your day
@@ -131,7 +134,7 @@ export default function DayVoiceInput({
           </Button>
         )}
         {blob && (
-          <Button type="button" disabled={busy} onClick={transcribe}>
+          <Button type="button" disabled={busy || disabled} onClick={transcribe}>
             {busy ? "Transcribing…" : "Transcribe recording"}
           </Button>
         )}

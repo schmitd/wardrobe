@@ -1,24 +1,32 @@
 "use client";
 import { useUser } from "@clerk/nextjs";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CALENDAR_SCOPES } from "@wardrobe/shared";
 import { planningRequest } from "@/lib/planning-client";
 import { Button } from "@/components/ui/button";
-
 export default function GoogleCalendarConnect({
   enabled,
   onChange,
+  selectedIds = [],
+  beforeAuthorize,
 }: {
   enabled: boolean;
   onChange: () => void;
+  selectedIds?: string[];
+  beforeAuthorize?: () => void;
 }) {
   const { user } = useUser();
   const [calendars, setCalendars] = useState<
     { id: string; name: string; primary: boolean }[] | null
   >(null);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>(selectedIds);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [saved, setSaved] = useState(false);
+  const loaded = useRef(false);
+  const mobile =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("returnTo") === "mobile";
   const run = async (work: () => Promise<void>) => {
     setBusy(true);
     setMessage("");
@@ -26,19 +34,43 @@ export default function GoogleCalendarConnect({
       await work();
     } catch {
       setMessage(
-        "Calendar connection could not be completed. Reconnect with Google and allow both permissions.",
+        "Calendar did not connect. Your week and draft are still here. Retry or continue without Calendar.",
       );
     } finally {
       setBusy(false);
     }
   };
+  const load = async () => {
+    const result = await planningRequest<{
+      calendars: NonNullable<typeof calendars>;
+      truncated: boolean;
+    }>({ operation: "calendar_list" });
+    setCalendars(result.calendars);
+    setSelected(
+      selectedIds.length
+        ? selectedIds.filter((id) => result.calendars.some((c) => c.id === id))
+        : result.calendars.filter((c) => c.primary).map((c) => c.id),
+    );
+    if (result.truncated) setMessage("Showing the first 100 calendars.");
+  };
+  useEffect(() => {
+    if (loaded.current) return;
+    loaded.current = true;
+    if (
+      enabled ||
+      new URLSearchParams(window.location.search).get("calendar") ===
+        "connected"
+    )
+      void run(load);
+  }, [enabled]);
   const authorize = () =>
     run(async () => {
       if (!user) return;
+      beforeAuthorize?.();
       const existing = user.externalAccounts.find(
         (a) => a.provider === "google",
       );
-      const redirectUrl = `${window.location.origin}/fits?view=plans&calendar=connected`;
+      const redirectUrl = `${window.location.origin}/fits?view=plans&calendar=connected${mobile ? "&returnTo=mobile" : ""}`;
       const account = existing
         ? await existing.reauthorize({
             additionalScopes: CALENDAR_SCOPES,
@@ -51,90 +83,46 @@ export default function GoogleCalendarConnect({
           });
       const url = account.verification?.externalVerificationRedirectURL;
       if (url) window.location.assign(url.toString());
-      else
-        setMessage("Google is connected. Choose “Select calendars” to finish.");
+      else await load();
     });
   return (
-    <section
-      className="space-y-3 border p-4"
-      aria-label="Google Calendar connection"
-    >
-      <h3 className="font-bold">
-        Google Calendar {enabled ? "· Connected" : "· Optional"}
-      </h3>
+    <section aria-label="Google Calendar connection" className="space-y-4">
       <p className="text-sm">
-        Read-only access to selected calendars. Events are read only when you
-        request an outfit for a date. Event titles, times and locations may
-        inform the AI recommendation; attendee lists and descriptions are not
-        read. Disconnect deletes saved calendar-derived recommendations,
-        including planned and worn entries. You can also revoke Google
-        permission in your Google Account.
+        Read-only access to calendars you choose. Wardrobe never adds or changes
+        events.
       </p>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          disabled={busy}
-          onClick={authorize}
-        >
-          {enabled ? "Reauthorize Google" : "Connect Google Calendar"}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={busy}
-          onClick={() =>
-            run(async () => {
-              const result = await planningRequest<{
-                calendars: { id: string; name: string; primary: boolean }[];
-                truncated: boolean;
-              }>({ operation: "calendar_list" });
-              setCalendars(result.calendars);
-              setSelected(
-                result.calendars.filter((c) => c.primary).map((c) => c.id),
-              );
-              if (result.truncated)
-                setMessage("Showing the first 100 calendars.");
-            })
-          }
-        >
-          Select calendars
-        </Button>
-        {enabled && (
+      {!calendars && !saved ? (
+        <div className="flex flex-wrap gap-2">
+          <Button disabled={busy} onClick={authorize}>
+            {busy
+              ? "Connecting…"
+              : enabled
+                ? "Reconnect Google"
+                : "Continue with Google"}
+          </Button>
           <Button
-            type="button"
             variant="outline"
             disabled={busy}
-            onClick={() => {
-              if (
-                window.confirm(
-                  "Disconnect and delete all calendar-derived recommendations, including planned and worn entries? Other wardrobe data and Google sign-in stay intact.",
-                )
-              )
-                void run(async () => {
-                  await planningRequest({ operation: "calendar_disconnect" });
-                  setCalendars(null);
-                  onChange();
-                });
-            }}
+            onClick={() => void run(load)}
           >
-            Disconnect and delete
+            Already connected? Choose calendars
           </Button>
-        )}
-      </div>
+        </div>
+      ) : null}
       {calendars && (
-        <fieldset data-private className="space-y-2">
-          <legend>Calendars to use (up to 10)</legend>
+        <fieldset data-private className="space-y-3 rounded-xl border p-4">
+          <legend className="px-1 font-medium">Use these calendars</legend>
           {calendars.map((c) => (
-            <label key={c.id} className="flex gap-2">
+            <label key={c.id} className="flex min-h-10 items-center gap-3">
               <input
                 type="checkbox"
+                disabled={busy}
                 checked={selected.includes(c.id)}
                 onChange={(e) =>
-                  setSelected((current) =>
+                  setSelected((ids) =>
                     e.target.checked
-                      ? [...current, c.id].slice(0, 10)
-                      : current.filter((id) => id !== c.id),
+                      ? [...ids, c.id].slice(0, 10)
+                      : ids.filter((id) => id !== c.id),
                   )
                 }
               />
@@ -142,19 +130,17 @@ export default function GoogleCalendarConnect({
             </label>
           ))}
           <Button
-            type="button"
             disabled={busy || !selected.length}
             onClick={() =>
-              run(async () => {
+              void run(async () => {
                 await planningRequest({
                   operation: "calendar_connect",
                   calendarIds: selected,
                 });
                 setCalendars(null);
+                setSaved(true);
                 onChange();
-                setMessage(
-                  "Calendar connection saved. You can return to the iPhone or Android app.",
-                );
+                setMessage("Calendar connected. Your week is ready.");
               })
             }
           >
@@ -162,7 +148,54 @@ export default function GoogleCalendarConnect({
           </Button>
         </fieldset>
       )}
-      {message && <p role="status">{message}</p>}
+      <details className="text-sm">
+        <summary className="cursor-pointer py-2">How Calendar is used</summary>
+        <p>
+          Opening a week reads event titles and times for display. Requested
+          outfit generation also uses locations. Attendees and event
+          descriptions are not read. Calendar content never goes to product
+          analytics. Disconnect deletes saved calendar-derived outfits,
+          including planned and worn entries. You can also revoke permission in
+          your Google Account.
+        </p>
+        {enabled && (
+          <Button
+            className="mt-3"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              if (
+                window.confirm(
+                  "Disconnect and delete calendar-derived outfits, including planned and worn entries? Other wardrobe data and Google sign-in stay intact.",
+                )
+              )
+                void run(async () => {
+                  await planningRequest({ operation: "calendar_disconnect" });
+                  setCalendars(null);
+                  setSaved(false);
+                  onChange();
+                });
+            }}
+          >
+            Disconnect and delete
+          </Button>
+        )}
+      </details>
+      {message && (
+        <p role="status" className="text-sm">
+          {message}
+        </p>
+      )}
+      {mobile && (
+        <a
+          className="inline-block rounded-full bg-[#735079] px-5 py-3 font-medium text-white"
+          href="wardrobe://fits?view=plans"
+        >
+          {saved
+            ? "Return to Wardrobe"
+            : "Continue in Wardrobe without changes"}
+        </a>
+      )}
     </section>
   );
 }
