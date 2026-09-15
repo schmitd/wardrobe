@@ -33,6 +33,7 @@ Initial evidence on the reported watch photo:
 - Tuned no-thinking candidate: separate top, bottom and watch accepted in repeated runs (approximately 13–37 seconds); watch was visually inspected inside the new crop.
 - Synthetic distant fixture: three separate pieces, about 12 seconds. This is not the user's separate distant selfie.
 - Mirrored fixture: three separate pieces, about 38 seconds on a successful run. An earlier verifier call timed out; requests now have a bounded automatic timeout retry.
+- Correct paid-project key: the original selfie produced separate top, bottom and watch in about six seconds; the watch was visually checked inside its crop. The earlier free-tier quota failure came from an older development key, not a missing billing account for the active Wardrobe project. No billing changes were needed. Production environment values are redacted when pulled locally, so this local run does not by itself establish which key is deployed.
 
 Still required for a broader accuracy claim: the actual distant failure photo, diverse outfits/accessories, low-light/occlusion cases, physical-device capture, and deployed operational validation. These timings cover localization, not upload and all downstream embedding/storage work.
 
