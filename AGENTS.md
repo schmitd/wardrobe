@@ -2,6 +2,12 @@
 
 ## Development
 - Always use Bun to run node commands.
+- Read `docs/ARCHITECTURE.md` before backend changes and `docs/REPAIR_RELEASE.md` before releasing the Effect 4 migration.
+- Use Effect 4 Context services, Layers, tagged errors, schemas, cancellation, and the shared runtime for server I/O workflows. Keep deterministic transformations and React state plain TypeScript.
+- Confect source lives in `apps/web/confect`; `confect/_generated` and most of `apps/web/convex` are generated. Never put helpers in the generated directory. Regenerate with `bun run --bun confect codegen` at the repository root.
+- Enforce identity, storage ownership, and related-record ownership in Convex. A web action or client check cannot secure a public Convex function. Caller-supplied storage references are not proof of ownership.
+- Bound database reads, paginate user collections, and project UI data without embeddings. Schedule domain follow-up work from successful mutations so all clients get the same behavior.
+- Prefer meaningful boundary and integration checks over tests that mirror implementation. Run `bun run test`, `bun run typecheck`, `bun run lint`, and relevant builds before release.
 
 ## Product and observability context
 

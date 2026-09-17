@@ -41,11 +41,13 @@ Native TestFlight instrumentation and release checks are documented in [TESTFLIG
 | `wardrobe_item_added` | `content_type` | Are signed-in users activating their closet? |
 | `compatibility_check_completed` | `category`, `verdict`, `score`, item counts | Is the core decision workflow used and useful? |
 | `inspiration_saved` | `has_photo`, `collection_type` | Are users returning to product discovery? |
-| `profile_bio_saved` | `character_count` | Are users personalizing recommendations? |
+| `unified_capture_completed` | bounded `intent`, `scope` | Which capture flows complete? |
+| `planning_operation_finished` | bounded `operation`, `outcome`, `duration_ms`, `source`, `analytics_schema` | Where do planning requests fail or slow down? |
+| `profile_bio_saved` | `character_count`, bounded `surface` | Are users personalizing recommendations? |
 | `selfie_analyzed` | `has_color_season` | Is color-profile personalization completing? |
 | `observability_smoke_test` | `smoke_id`, deploy URL, Git SHA, source | Does deployment ingestion work? |
 
-Use `$pageview`, autocapture, and session replay for navigation and UI interactions instead of inventing click events. Keep event names in past tense for completed outcomes. Do not add IDs or free-form customer text as properties.
+Use `$pageview`, autocapture, and session replay for navigation and UI interactions instead of inventing click events. Keep event names in past tense for completed outcomes. Do not add content IDs or free-form customer text as properties. The explicit exception is the random opaque `trace_id` used by the authenticated native contract in `TESTFLIGHT_ANALYTICS.md`; it is a join key, never a trace payload. Release identifiers are allowed under that contract too.
 
 ## Bug-feedback workflow
 

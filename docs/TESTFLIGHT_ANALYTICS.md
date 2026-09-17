@@ -37,6 +37,13 @@ Event properties are explicitly allowlisted. Exceptions are replaced with generi
 photos, passwords, style notes, filenames and original error messages are excluded.
 Native replay and automatic console/error capture remain disabled until real-device masking is verified.
 
+The Effect 4 repair adds `update_id`, `update_channel`, `runtime_version`, and
+`runtime_fingerprint` to native release dimensions. Under the current Expo fingerprint
+runtime policy the fingerprint is the runtime version, not a separately computed hash.
+Development/embedded builds use explicit fallback values. Style memory has a
+`PostHogMaskView`; replay preferences cannot be changed before stored consent loads.
+These changes still need ingestion and physical-device validation after release.
+
 ## Masked replay preparation (2026-09-08)
 
 David authorized session replay with photos censored on both web and native. This is not authorization for unmasked content or autonomous UX edits.
