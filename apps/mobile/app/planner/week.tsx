@@ -9,7 +9,7 @@ export default function Week() {
   return (
     <PlannerPage>
       <PlannerText>Choose the first day of your seven-day view.</PlannerText>
-      <PlannerDate value={date} onChange={setDate} inline />
+      <PlannerDate value={date} onChange={setDate} inline allowPast />
       <PlannerButton
         title="Show this week"
         onPress={() => {

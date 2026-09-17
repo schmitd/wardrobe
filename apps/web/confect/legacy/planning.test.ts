@@ -14,6 +14,7 @@ const invoke = (fn: unknown, ctx: unknown, args: unknown) =>
   )._handler(ctx, args);
 function fixture(userId = "alice") {
   const tables: Record<string, Row[]> = {
+    deletedAccounts: [],
     wardrobeItems: [
       { _id: "shirt", userId: "alice" },
       { _id: "coat", userId: "alice" },
@@ -86,6 +87,7 @@ function fixture(userId = "alice") {
         order: () => chain,
         take: async (n: number) => rows.slice(0, n),
         unique: async () => rows[0] ?? null,
+        first: async () => rows[0] ?? null,
       };
       return chain;
     },

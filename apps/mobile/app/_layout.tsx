@@ -3,7 +3,7 @@ import { tokenCache } from "@clerk/expo/token-cache";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 
 import { CaptureProvider } from "@/capture-context";
@@ -133,31 +133,31 @@ function Navigation() {
   );
 }
 
-export default function RootLayout() {
-  const [queryClient] = useState(
-    () =>
-      new QueryClient({
-        defaultOptions: { queries: { staleTime: 20_000, retry: 2 } },
-      }),
-  );
-
-  if (!publishableKey) {
-    throw new Error(
-      "Add EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY to the mobile environment.",
-    );
-  }
-
+function SessionProviders() {
+  const [queryClient] = useState(() => new QueryClient({
+    defaultOptions: { queries: { staleTime: 20_000, retry: 2 } },
+  }));
+  useEffect(() => () => { void queryClient.cancelQueries(); queryClient.clear(); }, [queryClient]);
   return (
-    <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}>
-      <QueryClientProvider client={queryClient}>
-        <AnalyticsObserver />
-        <AnalyticsErrorBoundary>
-          <CaptureProvider>
-            <StatusBar style="dark" />
-            <Navigation />
-          </CaptureProvider>
-        </AnalyticsErrorBoundary>
-      </QueryClientProvider>
-    </ClerkProvider>
+    <QueryClientProvider client={queryClient}>
+      <AnalyticsObserver />
+      <AnalyticsErrorBoundary>
+        <CaptureProvider>
+          <StatusBar style="dark" />
+          <Navigation />
+        </CaptureProvider>
+      </AnalyticsErrorBoundary>
+    </QueryClientProvider>
   );
+}
+
+function AccountProviders() {
+  const { isLoaded, isSignedIn, userId, sessionId } = useAuth({ treatPendingAsSignedOut: false });
+  const account = isLoaded && isSignedIn ? `${userId}:${sessionId}` : "signed-out";
+  return <SessionProviders key={account} />;
+}
+
+export default function RootLayout() {
+  if (!publishableKey) throw new Error("Add EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY to the mobile environment.");
+  return <ClerkProvider publishableKey={publishableKey} tokenCache={tokenCache}><AccountProviders /></ClerkProvider>;
 }

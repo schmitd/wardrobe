@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 
-import type { CaptureRoute, CompatibilityResult, MobileBootstrap, SelfieAnalysis } from "@/types";
+import type { CaptureRoute, CompatibilityResult, MobileBootstrap, Collection, WardrobeItem, SelfieAnalysis } from "@/types";
 import { analyticsHeaders, track } from "@/analytics";
 import { createTraceId } from "@/trace";
 import type { PlanningOperation } from "@wardrobe/shared";
@@ -38,7 +38,7 @@ const request = <T>(getToken: GetToken, path: string, init?: RequestInit, operat
   );
 };
 
-export const loadBootstrap = (getToken: GetToken) => Effect.runPromise(request<MobileBootstrap>(getToken, "/api/mobile/bootstrap"));
+export const loadBootstrap = (getToken: GetToken) => Effect.runPromise(request<MobileBootstrap>(getToken, "/api/mobile/bootstrap?v=2"));
 export const planningRequest = <T>(getToken: GetToken, input: PlanningOperation) => Effect.runPromise(request<T>(getToken, "/api/planning", { method: "POST", body: JSON.stringify(input) }, input.operation));
 export const transcribeDay = (getToken: GetToken, audio: string) => Effect.runPromise(request<{ text: string }>(getToken, "/api/transcribe", { method: "POST", body: JSON.stringify({ audio, mimeType: "audio/mp4", confirmed: true }) }, "transcribe"));
 
@@ -49,6 +49,7 @@ export const runCaptureOperation = <T>(
   getToken: GetToken,
   input: {
     operation: "route" | "record_fit" | "add_piece" | "try_on";
+    scope?: "single_piece" | "full_fit";
     storageId: string;
     clientFileName?: string;
     contentType?: string;
@@ -63,8 +64,8 @@ export const runCaptureOperation = <T>(
 export const routeCapture = (getToken: GetToken, storageId: string, traceId?: string) =>
   runCaptureOperation<CaptureRoute>(getToken, { operation: "route", storageId, traceId });
 
-export const tryOn = (getToken: GetToken, storageId: string, traceId?: string) =>
-  runCaptureOperation<CompatibilityResult>(getToken, { operation: "try_on", storageId, traceId });
+export const tryOn = (getToken: GetToken, storageId: string, traceId?: string, scope?: "single_piece" | "full_fit") =>
+  runCaptureOperation<CompatibilityResult>(getToken, { operation: "try_on", storageId, traceId, scope });
 
 type ManageInput = {
   operation: "create_collection" | "add_collection_item" | "remove_collection_item" | "save_inspiration" | "update_bio" | "delete_item" | "analyze_selfie" | "resolve_observation" | "promote_observation";
@@ -111,3 +112,8 @@ export const resolveObservation = (getToken: GetToken, observationId: string, it
 
 export const promoteObservation = (getToken: GetToken, observationId: string) =>
   runManageOperation<{ success: boolean; wardrobeItemId: string }>(getToken, { operation: "promote_observation", observationId });
+
+export const loadMobilePage = <T>(getToken: GetToken, view: "closet" | "plans" | "fits", cursor: string) => Effect.runPromise(request<{ page: T[]; isDone: boolean; continueCursor: string }>(getToken, `/api/mobile/data?view=${view}&cursor=${encodeURIComponent(cursor)}`));
+export const loadCollection = (getToken: GetToken, id: string, cursor: string | null = null) => Effect.runPromise(request<Collection | null>(getToken, `/api/mobile/data?view=collection&id=${encodeURIComponent(id)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`));
+
+export const loadItem = (getToken: GetToken, id: string) => Effect.runPromise(request<WardrobeItem | null>(getToken, `/api/mobile/data?view=item&id=${encodeURIComponent(id)}`));

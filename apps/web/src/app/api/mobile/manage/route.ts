@@ -1,4 +1,6 @@
-import { Effect } from "effect";
+import { publicServerFailure, RequestFailure } from "@/server/errors";
+import { limitedJson } from "@/server/limitedJson";
+import { Effect, Schema } from "effect";
 import { observeMobileRequest } from "@/server/mobileTelemetry";
 
 import {
@@ -15,22 +17,14 @@ import {
 
 export const runtime = "nodejs";
 
-type ManageBody = {
-  operation?: "create_collection" | "add_collection_item" | "remove_collection_item" | "save_inspiration" | "update_bio" | "delete_item" | "analyze_selfie" | "resolve_observation" | "promote_observation";
-  wardrobeId?: string;
-  itemId?: string;
-  observationId?: string;
-  storageId?: string;
-  name?: string;
-  description?: string;
-  bio?: string;
-  reason?: string;
-  traceId?: string;
-  traceparent?: string;
-};
+const ManageBody = Schema.Struct({
+  operation: Schema.Literals(["create_collection", "add_collection_item", "remove_collection_item", "save_inspiration", "update_bio", "delete_item", "analyze_selfie", "resolve_observation", "promote_observation"]),
+  wardrobeId: Schema.optionalKey(Schema.String), itemId: Schema.optionalKey(Schema.String), observationId: Schema.optionalKey(Schema.String), storageId: Schema.optionalKey(Schema.String), name: Schema.optionalKey(Schema.String), description: Schema.optionalKey(Schema.String), bio: Schema.optionalKey(Schema.String), reason: Schema.optionalKey(Schema.String), traceId: Schema.optionalKey(Schema.String), traceparent: Schema.optionalKey(Schema.String),
+});
+type ManageBody = typeof ManageBody.Type;
 
 const required = (value: string | undefined, label: string) => {
-  if (!value?.trim()) throw new Error(`Missing ${label}.`);
+  if (typeof value !== "string" || !value.trim()) throw new RequestFailure({ status: 400, message: `Missing ${label}.` });
   return value.trim();
 };
 
@@ -56,7 +50,7 @@ const execute = async (body: ManageBody): Promise<unknown> => {
     case "promote_observation":
       return await promoteFitObservationAction({ observationId: required(body.observationId, "observation") });
     default:
-      throw new Error("Unknown mobile operation.");
+      throw new RequestFailure({ status: 400, message: "Unknown mobile operation." });
   }
 };
 
@@ -67,18 +61,18 @@ export async function POST(request: Request) {
 async function handleManage(request: Request, traceId: string) {
   const body = await Effect.runPromise(
     Effect.tryPromise({
-      try: () => request.json() as Promise<ManageBody>,
-      catch: () => new Error("The request body could not be read."),
-    }).pipe(Effect.either)
+      try: () => limitedJson(request, 40000),
+      catch: cause => cause instanceof RequestFailure ? cause : new RequestFailure({ status: 400, message: "The request body could not be read." }),
+    }).pipe(Effect.flatMap(value => Schema.decodeUnknownEffect(ManageBody)(value).pipe(Effect.mapError(() => new RequestFailure({ status: 400, message: "Invalid mobile request." })))), Effect.result)
   );
-  if (body._tag === "Left") return Response.json({ error: body.left.message }, { status: 400 });
+  if (body._tag === "Failure") return Response.json({ error: body.failure.message }, { status: body.failure.status });
 
   return Effect.runPromise(
-    Effect.tryPromise({ try: () => execute({ ...body.right, traceId, traceparent: undefined }), catch: (cause): Error => cause instanceof Error ? cause : new Error("Request failed.") }).pipe(
+    Effect.tryPromise({ try: () => execute({ ...body.success, traceId, traceparent: undefined }), catch: (cause): Error => cause instanceof Error ? cause : new Error("Request failed.") }).pipe(
       Effect.match({
         onFailure: (error) => {
-          const unauthorized = error.message === "Unauthorized" || error.message === "Missing Convex token";
-          return Response.json({ error: unauthorized ? error.message : error.message || "Request failed." }, { status: unauthorized ? 401 : 400 });
+          const failure = publicServerFailure(error);
+          return Response.json({ error: failure.message }, { status: failure.status });
         },
         onSuccess: (result) => Response.json(result),
       })

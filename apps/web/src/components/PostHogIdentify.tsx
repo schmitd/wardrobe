@@ -20,9 +20,8 @@ export default function PostHogIdentify() {
       return;
     }
 
-    // Preserve the initial anonymous session. Reset only when an identified user
-    // actually signs out so the next visitor cannot inherit their identity.
-    if (identifiedUserId.current) {
+    // A signed-out reload can still contain the previous persisted identity.
+    if (identifiedUserId.current || posthog.get_property("$user_id")) {
       posthog.reset();
       identifiedUserId.current = null;
     }

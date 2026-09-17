@@ -16,7 +16,7 @@ export type PhotoUploadDependencies<Body> = {
   prepare: (uri: string, width: number) => Promise<string>;
   authorize: () => Promise<{ uploadUrl: string }>;
   open: (uri: string) => Body;
-  transfer: (uploadUrl: string, body: Body) => Promise<UploadResponse>;
+  transfer: (uploadUrl: string, body: Body, signal?: AbortSignal) => Promise<UploadResponse>;
 };
 
 const messageFrom = (cause: unknown, fallback: string) =>
@@ -46,14 +46,14 @@ export const photoUploadEffect = <Body>(
     }),
   });
   const response = yield* Effect.tryPromise({
-    try: () => dependencies.transfer(uploadUrl, body),
+    try: signal => dependencies.transfer(uploadUrl, body, signal),
     catch: () => new PhotoUploadError({ stage: "transfer", message: "Upload failed. Check your connection." }),
   });
   if (!response.ok) {
     return yield* Effect.fail(new PhotoUploadError({
       stage: "transfer",
       status: response.status,
-      message: `Upload failed (${response.status}). Please try again.`,
+      message: response.status === 413 ? "Choose a photo smaller than 20 MB." : response.status === 403 ? "The upload expired. Please try again." : `Upload failed (${response.status}). Please try again.`,
     }));
   }
   const payload = yield* Effect.tryPromise({
@@ -73,4 +73,4 @@ export const photoUploadEffect = <Body>(
     }));
   }
   return payload.storageId;
-});
+}).pipe(Effect.timeout("90 seconds"), Effect.catchTag("TimeoutError", () => Effect.fail(new PhotoUploadError({ stage: "transfer", message: "The upload took too long. Please try again." }))));

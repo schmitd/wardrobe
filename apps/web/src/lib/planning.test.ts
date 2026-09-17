@@ -22,6 +22,7 @@ describe("planning contracts", () => {
       validateOutfit({ ...outfit, rationale: "x".repeat(2401) }, owned),
     ).toThrow();
     expect(() => validateOutfit({ ...outfit, itemIds: [] }, owned)).toThrow();
+    expect(() => validateOutfit({ ...outfit, itemIds: [], missing: ["   "] }, owned)).toThrow();
   });
   test("accepts honest incomplete inventory and deduplicates owned pieces", () => {
     expect(
@@ -49,6 +50,7 @@ describe("planning contracts", () => {
     expect(() =>
       validatePlanningDate("2026-09-11", "America/New_York", now),
     ).toThrow();
+    expect(validatePlanningDate("2026-09-11", "America/New_York", now, true).date).toBe("2026-09-11");
     expect(() => validatePlanningDate("2028-09-13", "UTC", now)).toThrow();
     expect(() => validatePlanningDate("2026-02-30", "UTC", now)).toThrow();
     expect(() =>

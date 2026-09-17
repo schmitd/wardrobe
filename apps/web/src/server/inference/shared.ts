@@ -1,22 +1,17 @@
-import { Effect, Schedule } from "effect";
+import { Data, Effect, Schema, Schedule } from "effect";
 
-import { GeminiService } from "@/services/GeminiService";
+import { GeminiError, GeminiService } from "../../services/GeminiService";
+import { modelResponses } from "./modelResponses";
 
-export const parseJson = <T>(text: string, label: string) =>
-  Effect.try({
-    try: () => {
-      const trimmed = text.trim();
-      if (!trimmed) {
-        throw new Error("empty response text");
-      }
-
-      return JSON.parse(trimmed) as T;
-    },
-    catch: (error) => new Error(`${label} JSON parse failed: ${String(error)}`),
-  });
+export class ModelResponseError extends Data.TaggedError("ModelResponseError")<{ message: string; operation: string }> {}
+export const parseJson = <L extends keyof typeof modelResponses>(text: string, label: L) => Effect.gen(function* () {
+  const invalid = () => new ModelResponseError({ message: "The model returned an invalid response. Please try again.", operation: label });
+  const json: unknown = yield* Effect.try({ try: () => JSON.parse(text.trim()), catch: invalid });
+  return yield* Schema.decodeUnknownEffect(modelResponses[label])(json).pipe(Effect.mapError(invalid));
+});
 
 export const withRetries = <A, E, R>(effect: Effect.Effect<A, E, R>, attempts = 3) =>
-  effect.pipe(Effect.retry(Schedule.recurs(attempts - 1)));
+  effect.pipe(Effect.retry({ times: attempts - 1, schedule: Schedule.exponential("500 millis"), while: error => error instanceof GeminiError && error.retryable }));
 
 export const toErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);

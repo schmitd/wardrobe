@@ -9,6 +9,7 @@ import posthog from 'posthog-js';
 export type CompatibilityCheckResult = Awaited<ReturnType<typeof checkCompatibilityAction>>;
 
 type RunCompatibilityOptions = {
+  scope?: "single_piece" | "full_fit";
   startMessage?: string;
   fallbackErrorMessage?: string;
 };
@@ -31,7 +32,7 @@ export function useCompatibilityCheck() {
 
       try {
         const trace = createTraceContext();
-        const response = await checkCompatibilityAction({ storageId, ...trace });
+        const response = await checkCompatibilityAction({ storageId, scope: options?.scope, ...trace });
         const score = response.evaluation?.score ?? null;
         posthog.capture('compatibility_check_completed', {
           category: response.candidate.category,

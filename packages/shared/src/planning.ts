@@ -24,11 +24,12 @@ export type PlanningData = {
   items: PlanningItem[];
   plans: { id: string; name: string; description: string }[];
   suggestions: OutfitSuggestion[];
+  inventoryTruncated?: boolean;
   calendarEnabled: boolean;
   calendarIds: string[];
 };
 export type PlanningOperation =
-  | { operation: "planning_load" }
+  | { operation: "planning_load"; week?: string }
   | {
       operation: "planning_interpret";
       week: string;
@@ -38,6 +39,7 @@ export type PlanningOperation =
   | { operation: "planning_week"; week: string; timezone: string }
   | {
       operation: "planning_generate_week";
+      week?: string;
       days: { date: string; description: string }[];
       timezone: string;
       useCalendar: boolean;
@@ -73,6 +75,7 @@ export function validatePlanningDate(
   value: unknown,
   timezone: unknown,
   now = new Date(),
+  allowPast = false,
 ) {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value))
     throw new Error("Choose a date in YYYY-MM-DD format.");
@@ -97,7 +100,7 @@ export function validatePlanningDate(
   }
   const days =
     (parsed.getTime() - new Date(`${today}T12:00:00Z`).getTime()) / 86400000;
-  if (days < 0 || days > 366)
+  if (days < (allowPast ? -366 : 0) || days > 366)
     throw new Error("Choose today or a date within the next year.");
   return { date: value, nearTerm: days < 14 };
 }
@@ -126,7 +129,8 @@ export function validateOutfit(value: unknown, ownedIds: Set<string>) {
     throw new Error(
       "Recommendation contained an unavailable piece. Please try again.",
     );
-  const missing = list("missing", 8, 300);
+  const missing = list("missing", 8, 300).map(value => value.trim());
+  if (missing.some(value => !value)) throw new Error("Missing pieces must include an explanation.");
   if (!itemIds.length && !missing.length)
     throw new Error("Recommendation has no pieces or explanation.");
   return {

@@ -272,6 +272,8 @@ export default function Fits() {
             >
               Recent fits
             </Text>
+            {query.data?.fitsCursor ? <Pressable disabled={query.loadingMore} onPress={() => query.loadMore("fits")} style={{ padding: 16 }}><Text>Load earlier fits</Text></Pressable> : null}
+            {query.moreError ? <ErrorPanel message={query.moreError.message} /> : null}
             {(query.data?.fitChecks ?? []).length === 0 ? (
               <Panel tint={colors.wash}>
                 <Text

@@ -1,0 +1,50 @@
+/** Run only against the isolated anonymous local backend: bun run scripts/verify-local-storage.ts */
+import { strict as assert } from "node:assert";
+import { ConvexHttpClient } from "convex/browser";
+import { makeFunctionReference, type UserIdentityAttributes } from "convex/server";
+import { api } from "../convex/_generated/api";
+
+const config = await Bun.file(new URL("../../../.convex/local/default/config.json", import.meta.url)).json();
+const url = "http://127.0.0.1:3210";
+type LocalClient = ConvexHttpClient & { setAdminAuth(token: string, identity?: UserIdentityAttributes): void };
+const client = (subject?: string) => {
+  const c = new ConvexHttpClient(url) as LocalClient;
+  c.setAdminAuth(config.adminKey, subject ? { subject, issuer: "https://local.test", tokenIdentifier: `local|${subject}` } : undefined);
+  return c;
+};
+const suffix = crypto.randomUUID();
+const alice = client(`storage-alice-${suffix}`), bob = client(`storage-bob-${suffix}`), admin = client();
+const uploadPhoto = async (c: ConvexHttpClient) => {
+  const uploadUrl = await c.mutation(api.wardrobe.getUploadUrl, {});
+  assert.equal(new URL(uploadUrl).pathname, "/uploads");
+  const options = await fetch(uploadUrl, { method: "OPTIONS", headers: { Origin: "https://local.test", "Access-Control-Request-Headers": "Content-Type" } });
+  assert.equal(options.status, 204);
+  assert.equal(options.headers.get("Access-Control-Allow-Origin"), "*");
+  const response = await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": "image/jpeg" }, body: new Uint8Array([255, 216, 255, 217]) });
+  assert.equal(response.status, 200, await response.clone().text());
+  const { storageId } = await response.json();
+  const replay = await fetch(uploadUrl, { method: "POST", body: "replay" });
+  assert.equal(replay.status, 403);
+  return storageId;
+};
+const alicePhoto = await uploadPhoto(alice), bobPhoto = await uploadPhoto(bob);
+await alice.mutation(api.storage.registerUpload, { storageId: alicePhoto, purpose: "selfie" });
+await alice.mutation(api.storage.registerUpload, { storageId: alicePhoto, purpose: "selfie" });
+assert.ok(await alice.query(api.storage.getStorageUrl, { storageId: alicePhoto }));
+assert.equal((await alice.query(api.storage.getLatestUploadByPurpose, { purpose: "selfie" }))?.storageId, alicePhoto);
+await assert.rejects(alice.mutation(api.storage.registerUpload, { storageId: bobPhoto, purpose: "selfie" }));
+await assert.rejects(alice.query(api.storage.getStorageUrl, { storageId: bobPhoto }));
+await assert.rejects(alice.mutation(api.wardrobe.createWardrobeItem, { storageId: bobPhoto }));
+const owned = await alice.mutation(api.wardrobe.createWardrobeItem, { storageId: alicePhoto });
+assert.equal(owned.created, true);
+assert.equal((await alice.mutation(api.wardrobe.createWardrobeItem, { storageId: alicePhoto })).created, false);
+await assert.rejects(alice.mutation(api.fitChecks.recordFitCheck, { storageId: alicePhoto, type: "daily_fit_check", items: [{ source: "observed_unresolved", observation: { cropStorageId: bobPhoto, categoryKey: "top", visualEmbedding: [], embeddingModel: "test", detectorModel: "test", resolutionStatus: "unresolved", candidateItemIds: [], candidateScores: [] } }] }));
+assert.equal((await alice.query(api.mobile.bootstrap, {})).items[0]?.id, owned.id);
+await admin.action(makeFunctionReference<"action", { userId: string }, null>("styleMemory:refresh"), { userId: `no-style-job-${suffix}` });
+const pendingUpload = await alice.mutation(api.wardrobe.getUploadUrl, {});
+await admin.mutation(makeFunctionReference<"mutation", { userId: string }>("account:deleteUserData"), { userId: `storage-alice-${suffix}` });
+assert.equal((await fetch(pendingUpload, { method: "POST", body: "expired-by-deletion" })).status, 403);
+await assert.rejects(alice.mutation(api.wardrobe.getUploadUrl, {}));
+assert.ok(await bob.query(api.storage.getStorageUrl, { storageId: bobPhoto }));
+await admin.mutation(makeFunctionReference<"mutation", { userId: string }>("account:deleteUserData"), { userId: `storage-bob-${suffix}` });
+console.log("PASS: local upload contract, CORS, replay rejection, owner controls, foreign crop rejection, account revocation, foreign photo preservation, bounded bootstrap, and Confect Node-action runtime.");

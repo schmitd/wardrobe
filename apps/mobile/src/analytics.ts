@@ -1,5 +1,6 @@
 import PostHog from "posthog-react-native";
 import { nativeApplicationVersion, nativeBuildVersion } from "expo-application";
+import * as Updates from "expo-updates";
 import { Platform } from "react-native";
 import { safeProperties } from "./analytics-core";
 import { nativeReplayPrivacy } from "./replay-privacy";
@@ -26,6 +27,11 @@ export const releaseProperties = () => ({
   platform: Platform.OS,
   app_version: nativeApplicationVersion ?? "development",
   build_number: nativeBuildVersion ?? "development",
+  update_id: Updates.updateId ?? "embedded",
+  runtime_version: Updates.runtimeVersion ?? "development",
+  update_channel: Updates.channel ?? "development",
+  // Runtime version is the compatibility fingerprint under the fingerprint policy.
+  runtime_fingerprint: Updates.runtimeVersion ?? "development",
   environment: __DEV__ ? "development" : "production",
   source: "native",
   analytics_schema: 1,

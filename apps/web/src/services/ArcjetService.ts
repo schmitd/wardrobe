@@ -1,3 +1,4 @@
+import { RequestFailure } from "@/server/errors";
 import arcjet, { fixedWindow, request, slidingWindow } from "@arcjet/next";
 import { Context, Effect, Layer } from "effect";
 
@@ -53,21 +54,21 @@ export interface ArcjetService {
   readonly protectGuestBatch: () => Effect.Effect<void, Error>;
 }
 
-export const ArcjetService = Context.GenericTag<ArcjetService>("ArcjetService");
+export const ArcjetService = Context.Service<ArcjetService>("ArcjetService");
 
 const deniedErrorForScope = (scope: AuthenticatedScope) => {
   switch (scope) {
     case "upload":
-      return new Error(UPLOAD_RATE_LIMIT_MESSAGE);
+      return new RequestFailure({ status: 429, message: UPLOAD_RATE_LIMIT_MESSAGE });
     case "check":
-      return new Error(CHECK_RATE_LIMIT_MESSAGE);
+      return new RequestFailure({ status: 429, message: CHECK_RATE_LIMIT_MESSAGE });
     case "routing":
-      return new Error(ROUTING_RATE_LIMIT_MESSAGE);
+      return new RequestFailure({ status: 429, message: ROUTING_RATE_LIMIT_MESSAGE });
     case "onboarding":
-      return new Error(ONBOARDING_RATE_LIMIT_MESSAGE);
+      return new RequestFailure({ status: 429, message: ONBOARDING_RATE_LIMIT_MESSAGE });
     case "inference":
     default:
-      return new Error(INFERENCE_RATE_LIMIT_MESSAGE);
+      return new RequestFailure({ status: 429, message: INFERENCE_RATE_LIMIT_MESSAGE });
   }
 };
 
@@ -98,7 +99,7 @@ const createAuthenticatedProtection = (scope: AuthenticatedScope, dailyLimit: nu
 const make = Effect.gen(function* () {
   const arcjetKey = process.env.ARCJET_KEY;
   if (!arcjetKey) {
-    return yield* Effect.fail(new Error(SECURITY_UNAVAILABLE_MESSAGE));
+    return yield* Effect.fail(new RequestFailure({ status: 503, message: SECURITY_UNAVAILABLE_MESSAGE }));
   }
 
   const authenticatedProtection = {
@@ -146,11 +147,12 @@ const make = Effect.gen(function* () {
           const req = await request();
           const decision = await authenticatedProtection[scope][tier].protect(req, { userId });
 
+          if (decision.isErrored()) throw new RequestFailure({ status: 503, message: SECURITY_UNAVAILABLE_MESSAGE });
           if (!decision.isDenied()) return;
           if (decision.reason.isRateLimit()) throw deniedErrorForScope(scope);
-          throw new Error("Request denied. Please try again.");
+          throw new RequestFailure({ status: 403, message: "Request denied. Please try again." });
         },
-        catch: (error) => (error instanceof Error ? error : new Error(String(error))),
+        catch: (error) => (error instanceof RequestFailure ? error : new RequestFailure({ status: 503, message: SECURITY_UNAVAILABLE_MESSAGE })),
       }),
 
     protectGuestBatch: () =>
@@ -159,12 +161,13 @@ const make = Effect.gen(function* () {
           const req = await request();
           const decision = await guestBatchProtection.protect(req);
 
+          if (decision.isErrored()) throw new RequestFailure({ status: 503, message: SECURITY_UNAVAILABLE_MESSAGE });
           if (!decision.isDenied()) return;
-          if (decision.reason.isBot()) throw new Error(GUEST_BOT_BLOCK_MESSAGE);
-          if (decision.reason.isRateLimit()) throw new Error(GUEST_AUTH_PROMPT_MESSAGE);
-          throw new Error("Guest upload request blocked. Please sign in or create an account.");
+          if (decision.reason.isBot()) throw new RequestFailure({ status: 403, message: GUEST_BOT_BLOCK_MESSAGE });
+          if (decision.reason.isRateLimit()) throw new RequestFailure({ status: 429, message: GUEST_AUTH_PROMPT_MESSAGE });
+          throw new RequestFailure({ status: 403, message: "Guest upload request blocked. Please sign in or create an account." });
         },
-        catch: (error) => (error instanceof Error ? error : new Error(String(error))),
+        catch: (error) => (error instanceof RequestFailure ? error : new RequestFailure({ status: 503, message: SECURITY_UNAVAILABLE_MESSAGE })),
       }),
   } satisfies ArcjetService;
 });

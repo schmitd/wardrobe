@@ -175,7 +175,7 @@ export function SignInScreen() {
               {step === "choose" ? (
                 <>
                   <Text selectable style={{ color: colors.ink, fontSize: 22, fontWeight: "900" }}>Come back to your closet</Text>
-                  <Text selectable style={{ color: colors.muted, lineHeight: 21 }}>Use the same account as the web app. New here? Either option creates your account as part of the flow.</Text>
+                  <Text selectable style={{ color: colors.muted, lineHeight: 21 }}>Use the same account as the web app. New here? Result option creates your account as part of the flow.</Text>
                   <Pressable
                     accessibilityRole="button"
                     disabled={busy}

@@ -2,6 +2,7 @@ import { useAuth } from "@clerk/expo";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   localDate,
+  shiftDay,
   type CalendarWeek,
   type PlanningData,
   type PlanningOperation,
@@ -48,10 +49,11 @@ function useController() {
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [message, setMessage] = useState("");
+  const [refreshWarning, setRefreshWarning] = useState("");
   const query = useQuery({
-    queryKey: ["day-planning", userId],
+    queryKey: ["day-planning", userId, draft.week],
     queryFn: () =>
-      planningRequest<PlanningData>(getToken, { operation: "planning_load" }),
+      planningRequest<PlanningData>(getToken, { operation: "planning_load", week: draft.week }),
     enabled: Boolean(isSignedIn),
   });
   const calendar = useQuery({
@@ -86,7 +88,7 @@ function useController() {
         const saved = JSON.parse(raw);
         if (
           saved.expires > Date.now() &&
-          saved.draft?.week >= localDate() &&
+          saved.draft?.week >= shiftDay(localDate(), -366) &&
           /^\d{4}-\d{2}-\d{2}$/.test(saved.draft.week) &&
           typeof saved.draft.description === "string" &&
           Array.isArray(saved.draft.review)
@@ -117,13 +119,15 @@ function useController() {
     busyRef.current = true;
     setBusy(true);
     setMessage("");
+    setRefreshWarning("");
     try {
       const result = await planningRequest<T>(getToken, operation);
       if (
         operation.operation !== "planning_interpret" &&
         operation.operation !== "calendar_list"
-      )
-        await refresh();
+      ) {
+        try { await refresh(); } catch { setRefreshWarning("Saved. Pull to refresh to see your change."); }
+      }
       return result;
     } catch (e) {
       setMessage(
@@ -139,7 +143,7 @@ function useController() {
     draft,
     setDraft,
     busy,
-    message,
+    message: [message, refreshWarning].filter(Boolean).join(" "),
     setMessage,
     data: query.data,
     loading: query.isLoading || !restored,

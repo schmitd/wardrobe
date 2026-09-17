@@ -61,7 +61,7 @@ describe("native photo upload", () => {
     expect(Exit.isFailure(exit)).toBe(true);
     if (Exit.isFailure(exit)) {
       const error = exit.cause.toString();
-      expect(error).toContain("Upload failed (413)");
+      expect(error).toContain("Choose a photo smaller than 20 MB.");
       expect(error).toContain(PhotoUploadError.name);
     }
   });

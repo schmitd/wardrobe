@@ -1,12 +1,12 @@
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useAuth } from "@clerk/expo";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { Redirect, Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 
-import { deleteItem } from "@/api";
+import { deleteItem, loadItem } from "@/api";
 import { ErrorPanel, Loading, Panel } from "@/screen";
 import { colors } from "@/theme";
 import { useWardrobe } from "@/use-wardrobe";
@@ -17,11 +17,12 @@ const trace = () => `native-${Date.now().toString(36)}-${Math.random().toString(
 export function ItemDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const itemId = Array.isArray(id) ? id[0] : id;
-  const { getToken, isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
+  const { getToken, isSignedIn, userId } = useAuth({ treatPendingAsSignedOut: false });
   const router = useRouter();
   const queryClient = useQueryClient();
   const query = useWardrobe();
-  const item = query.data?.items.find((entry) => entry.id === itemId);
+  const detail = useQuery({ queryKey: ["mobile-item", userId, itemId], queryFn: () => loadItem(getToken, itemId), enabled: Boolean(isSignedIn && itemId) });
+  const item = detail.data ?? query.data?.items.find((entry) => entry.id === itemId);
   const [confirming, setConfirming] = useState(false);
   const [reason, setReason] = useState(reasons[0]);
   const mutation = useMutation({
@@ -30,7 +31,8 @@ export function ItemDetailScreen() {
   });
 
   if (!isSignedIn) return <Redirect href="/sign-in" />;
-  if (query.isLoading) return <Loading />;
+  if (detail.isLoading) return <Loading />;
+  if (detail.error) return <ErrorPanel message={detail.error.message} retry={() => void detail.refetch()} />;
   if (!item) return <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: 20 }}><ErrorPanel message="This piece could not be found." /></ScrollView>;
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ padding: 20, paddingBottom: 70, gap: 18 }}>

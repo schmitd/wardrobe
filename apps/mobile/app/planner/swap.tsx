@@ -7,16 +7,18 @@ import {
   PlannerPage,
   PlannerRow,
   PlannerText,
+  PlannerButton,
 } from "@/planner-ui";
 export default function Swap() {
-  const { id, piece } = useLocalSearchParams<{ id: string; piece: string }>();
+  const { id, piece } = useLocalSearchParams<{ id: string; piece?: string }>();
   const p = usePlanner();
   const outfit = p.data?.suggestions.find((s) => s.id === id);
   return (
     <PlannerPage>
       <PlannerText>
-        Choose an owned replacement. The rest of your outfit stays the same.
+        {piece ? "Replace or remove this piece." : "Add an owned piece to your outfit."}
       </PlannerText>
+      {piece && outfit && outfit.itemIds.length > 1 && outfit.status !== "worn" ? <PlannerButton secondary title="Remove this piece" disabled={p.busy} onPress={() => void p.run({ operation: "planning_edit", id, itemIds: outfit.itemIds.filter(i => i !== piece) }).then(result => { if (result) router.back(); })} /> : null}
       <PlannerGroup>
         <PostHogMaskView>
           {p.data?.items
@@ -33,7 +35,7 @@ export default function Swap() {
                     .run({
                       operation: "planning_edit",
                       id,
-                      itemIds: outfit.itemIds.map((i) =>
+                      itemIds: !piece ? [...outfit.itemIds, item.id] : outfit.itemIds.map((i) =>
                         i === piece ? item.id : i,
                       ),
                     })

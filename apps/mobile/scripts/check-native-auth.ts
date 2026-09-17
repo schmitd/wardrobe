@@ -6,8 +6,8 @@ const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "";
 
 const program = checkNativeAuthConfiguration(publishableKey).pipe(
   Effect.tap(() => Console.log("Clerk Native API preflight passed.")),
-  Effect.catchAll((error) => Console.error(`Clerk Native API preflight failed: ${error.message}`).pipe(
-    Effect.zipRight(Effect.sync(() => {
+  Effect.catch((error) => Console.error(`Clerk Native API preflight failed: ${error.message}`).pipe(
+    Effect.andThen(Effect.sync(() => {
       process.exitCode = 1;
     })),
   )),

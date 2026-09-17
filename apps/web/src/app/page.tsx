@@ -1,9 +1,11 @@
 'use client';
 
+import { uploadPhotoFile } from "@/services/photoUpload";
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@clerk/nextjs';
-import { useQuery } from 'convex/react';
-import { Effect, Either } from 'effect';
+import { usePaginatedQuery } from 'convex/react';
+import { Effect, Result } from 'effect';
 import { api } from '@convex/_generated/api';
 import AddItemSection from '@/components/AddItemSection';
 import GuestClosetDemo from '@/components/GuestClosetDemo';
@@ -25,7 +27,8 @@ import type { OptimisticWardrobeItem, WardrobeItem } from '@/types/wardrobe';
 export default function Home() {
   const { isSignedIn } = useAuth();
   const uploadInputId = 'rack-upload-input';
-  const items = useQuery(api.wardrobe.listWardrobeItems, isSignedIn ? {} : 'skip');
+  const closet = usePaginatedQuery(api.wardrobe.pageWardrobeItems, isSignedIn ? {} : 'skip', { initialNumItems: 48 });
+  const items = closet.status === 'LoadingFirstPage' ? undefined : closet.results;
   const [optimisticItems, setOptimisticItems] = useState<OptimisticWardrobeItem[]>([]);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
@@ -136,11 +139,7 @@ export default function Home() {
           if (!createdItemId) {
             setImportStatus(`Uploading ${item.fileName}...`);
             const file = dataUrlToFile(item.dataUrl, item.fileName);
-            const uploadUrl = await getUploadUrlAction();
-            const uploadResponse = await fetch(uploadUrl, { method: 'POST', body: file });
-            if (!uploadResponse.ok) throw new Error(`Upload failed: ${uploadResponse.statusText}`);
-            const { storageId } = await uploadResponse.json();
-            if (!storageId) throw new Error('Upload response missing storageId');
+            const storageId = await uploadPhotoFile(file, getUploadUrlAction);
 
             const created = await createWardrobeItemAction({
               storageId,
@@ -185,11 +184,7 @@ export default function Home() {
         Effect.tryPromise({
           try: async () => {
             const file = dataUrlToFile(snapshot.sourceFit!.dataUrl, snapshot.sourceFit!.fileName);
-            const uploadUrl = await getUploadUrlAction();
-            const uploadResponse = await fetch(uploadUrl, { method: 'POST', body: file });
-            if (!uploadResponse.ok) throw new Error(`Upload failed: ${uploadResponse.statusText}`);
-            const { storageId } = await uploadResponse.json();
-            if (!storageId) throw new Error('Upload response missing storageId');
+            const storageId = await uploadPhotoFile(file, getUploadUrlAction);
             const trace = createTraceContext();
             return completeGuestOnboardingAction({
               items: preparedItems.map(({ item, itemId, traceId, traceparent }) => ({
@@ -210,12 +205,12 @@ export default function Home() {
             });
           },
           catch: (error) => error,
-        }).pipe(Effect.either)
+        }).pipe(Effect.result)
       );
 
-      if (Either.isLeft(completionOutcome)) {
+      if (Result.isFailure(completionOutcome)) {
         const message = userFacingErrorMessage(
-          completionOutcome.left,
+          completionOutcome.failure,
           'Your closet was saved, but onboarding needs another try.'
         );
         preparedItems.forEach(({ tempId }) => {
@@ -225,8 +220,8 @@ export default function Home() {
         return;
       }
 
-      if (!completionOutcome.right.success) {
-        for (const result of completionOutcome.right.results) {
+      if (!completionOutcome.success.success) {
+        for (const result of completionOutcome.success.results) {
           if (result.success) continue;
           const prepared = preparedItems.find(({ itemId }) => itemId === result.itemId);
           if (!prepared) continue;
@@ -332,6 +327,7 @@ export default function Home() {
         </section>
       </div>
 
-    </main>
+    {(closet.status === 'CanLoadMore' || closet.status === 'LoadingMore') && <button type="button" disabled={closet.status === 'LoadingMore'} onClick={() => closet.loadMore(48)} className="border px-4 py-3">{closet.status === 'LoadingMore' ? 'Loading…' : 'Load more pieces'}</button>}
+      </main>
   );
 }

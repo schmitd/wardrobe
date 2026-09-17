@@ -11,12 +11,12 @@ import {
 
 export class GeminiError extends Error {
   readonly _tag = "GeminiError";
+  readonly status: number | undefined;
+  readonly retryable: boolean;
   constructor(public error: unknown) {
-    super(
-      typeof error === "object" && error !== null && "message" in error
-        ? (error as { message: string }).message
-        : String(error)
-    );
+    super(error instanceof Error ? error.message : String(error));
+    this.status = typeof error === "object" && error !== null && "status" in error && typeof error.status === "number" ? error.status : undefined;
+    this.retryable = this.status === 429 || (this.status !== undefined && this.status >= 500) || error instanceof TypeError;
   }
 }
 
@@ -63,7 +63,7 @@ export interface GeminiService {
   ) => Effect.Effect<BatchEmbedContentsResponse, GeminiError>;
 }
 
-export const GeminiService = Context.GenericTag<GeminiService>("GeminiService");
+export const GeminiService = Context.Service<GeminiService>("GeminiService");
 
 const make = Effect.gen(function* () {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -99,12 +99,12 @@ const make = Effect.gen(function* () {
       request: GenerateContentRequest | string | Array<string | Part>
     ) =>
       Effect.tryPromise({
-        try: async () => {
+        try: async signal => {
           try {
-            return await getModel(modelName).generateContent(request);
+            return await getModel(modelName).generateContent(request, { signal, timeout: 50_000 });
           } catch (error) {
             if (modelName === GEMINI_FLASH_LITE_MODEL && isTemporaryModelCapacityError(error)) {
-              return flashModel.generateContent(request);
+              return flashModel.generateContent(request, { signal, timeout: 50_000 });
             }
             throw error;
           }
@@ -114,13 +114,14 @@ const make = Effect.gen(function* () {
 
     embedContent: (input: string | Part[]) =>
       Effect.tryPromise({
-        try: () => {
+        try: signal => {
           const request = {
             content: { role: "user", parts: typeof input === "string" ? [{ text: input }] : input },
             output_dimensionality: GEMINI_EMBEDDING_DIMENSIONS,
           } satisfies EmbedContentRequestWithDimensions;
           return embeddingModel.embedContent(
-            request as unknown as Parameters<typeof embeddingModel.embedContent>[0]
+            request as unknown as Parameters<typeof embeddingModel.embedContent>[0],
+            { signal, timeout: 50_000 }
           );
         },
         catch: (error) => new GeminiError(error),
@@ -128,13 +129,13 @@ const make = Effect.gen(function* () {
 
     batchEmbedContents: (request: BatchEmbedContentsRequest) =>
       Effect.tryPromise({
-        try: () =>
+        try: signal =>
           embeddingModel.batchEmbedContents({
             requests: request.requests.map((embeddingRequest) => ({
               ...embeddingRequest,
               output_dimensionality: GEMINI_EMBEDDING_DIMENSIONS,
             })),
-          } as BatchEmbedContentsRequest),
+          } as BatchEmbedContentsRequest, { signal, timeout: 50_000 }),
         catch: (error) => new GeminiError(error),
       }).pipe(Effect.withSpan("gemini.batchEmbedContents")),
   };
