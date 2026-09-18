@@ -8,6 +8,7 @@
 - Enforce identity, storage ownership, and related-record ownership in Convex. A web action or client check cannot secure a public Convex function. Caller-supplied storage references are not proof of ownership.
 - Bound database reads, paginate user collections, and project UI data without embeddings. Schedule domain follow-up work from successful mutations so all clients get the same behavior.
 - Prefer meaningful boundary and integration checks over tests that mirror implementation. Run `bun run test`, `bun run typecheck`, `bun run lint`, and relevant builds before release.
+- Express local invariants through validated boundary types and Effect schemas where appropriate. Reserve fuzzing for stateful interactions, authorization, races, and unexpected compositions; avoid duplicating a parser with randomized copies of its own checks. For interactive local debugging, see `docs/DEBUGGING.md`.
 
 ## Product and observability context
 

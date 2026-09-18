@@ -29,5 +29,5 @@ test("fuzz: arbitrary claim order never changes the authoritative photo owner", 
     }
     expect(await t.withIdentity({ subject: "alice" }).query(api.storage.getStorageUrl, { storageId: photo })).toBeString();
     expect((await t.run(ctx => ctx.db.query("storageObjects").collect())).map(row => row.userId)).toEqual(["alice"]);
-  }), { ...propertyOptions, numRuns: Math.min(propertyOptions.numRuns, 100) });
+  }), propertyOptions);
 }, 30_000);

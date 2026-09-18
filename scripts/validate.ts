@@ -13,7 +13,7 @@ const files: Record<string, string[]> = {
   storage: ["confect/storage.integration.test.ts"],
   planning: ["confect/legacy/planning.test.ts", "src/lib/planning.test.ts"],
   reads: ["confect/readModels.integration.test.ts"],
-  fuzz: ["validation/planning.fuzz.test.ts", "validation/storage.fuzz.test.ts"],
+  fuzz: ["validation/storage.fuzz.test.ts"],
 };
 const env = { ...process.env, ...(values.seed ? { FUZZ_SEED: values.seed } : {}), ...(values.runs ? { FUZZ_RUNS: values.runs } : {}), ...(values.path ? { FUZZ_PATH: values.path } : {}) };
 async function run(cmd: string[], cwd = web) {

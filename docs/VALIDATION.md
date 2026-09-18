@@ -6,9 +6,11 @@ Policy: automatically merge a ready PR when CI and an independent Codex adversar
 
 `CI / Merge checks` combines lint, type checking, existing unit/integration tests, seeded properties, generated-adapter drift (including untracked files), build, and three Playwright journeys. One failed, canceled or skipped prerequisite prevents success. Use Bun 1.3.8 and Node 22; Playwright is launched with `bun run playwright`, not `bun run --bun playwright`.
 
+Root `scripts/**` are included in Turbo's global cache inputs: web checks compile/import these tools, so changing a tool must invalidate the cached checks too.
+
 The browser gallery mounts the real DayPlanner and capture components/hooks. Only external boundaries (Clerk, server actions, Calendar/model responses, Convex subscriptions and analytics) are synthetic. The three journeys cover saved-but-stale planner feedback and outfit editing, seven multilingual days plus partial Calendar disclosure, and delayed full-fit try-on routing without adding owned pieces. They assert behavior, not screenshots or DOM internals. The gallery is a separate loopback-only test server and introduces no production authentication bypass.
 
-Three seeded properties exercise recommendation ownership, reviewed week/date bounds, and storage ownership across randomized read/claim/poisoned-row sequences. Positive controls prevent a reject-everything implementation from passing. Failures print the fast-check seed and shrink path for reproduction. Keep permanent tests for stable contracts; use temporary probes for a hypothesis and promote only useful minimized regressions.
+One seeded property exercises storage ownership across randomized read/claim/poisoned-row sequences. Positive controls prevent a reject-everything implementation from passing. Failures print the fast-check seed and shrink path for reproduction. Local shape/date invariants belong in boundary parsers and validated types, with a few focused boundary examples. Fuzzing should explore stateful authorization, race/order effects, and unexpected compositions rather than repeat those parsers. Types preserve a checked fact inside a program; they do not prove current ownership in a later transaction. Keep authoritative Convex checks. Use temporary probes for a hypothesis and promote only useful minimized regressions.
 
 Four scoped ESLint rules enforce centralized storage URL/deletion authority, bounded reads in Effect implementations, server-to-adapter import direction, and the shared inference runtime. These mechanical rules do not prove auth/data flow or cover every alias. Confect review guidance lives in [the scoped AGENTS.md](../apps/web/confect/AGENTS.md): group middleware, deliberate native interop and scheduled internal work are valid patterns, not automatic findings.
 
@@ -23,7 +25,7 @@ bun run validate planning --grep 'week'
 bun run validate reads
 bun run validate fuzz --seed 739123 --runs 100
 # Reproduce exactly one property by name when supplying a shrink path:
-bun run validate fuzz --grep 'reviewed dates' --seed 739123 --path '0:1:2'
+bun run validate fuzz --grep 'arbitrary claim order' --seed 739123 --path '0:1:2'
 bun run validate browser --grep 'capture:'
 bun run validate generated
 bun run probe:performance --sizes 50,500,2000 --samples 7
@@ -32,7 +34,7 @@ bun run review:context --base origin/main --head HEAD
 
 For local browser runs, `PLAYWRIGHT_CHANNEL=chrome` can use installed Chrome; CI/Cloud install Playwright Chromium. A missing browser is a setup failure, never a passed journey. A test filter selecting zero tests is not evidence. `validate all` runs the regular lint/types/unit/browser gates; CI additionally performs codegen and a full build.
 
-`Targeted probes` is a secret-free GitHub Actions workflow with bounded seed/run arguments and a selected suite. Dispatch it on the candidate revision. It performs deterministic probes; it does not invoke an API-billed model. Console output and retained artifacts provide reproduction evidence. Ordinary CI uses 60 cases/property; a reviewer can choose another seed or up to 1,000 cases (storage sequences cap at 100).
+`Targeted probes` is a secret-free GitHub Actions workflow with bounded seed/run arguments and a selected suite. Dispatch it on the candidate revision. It performs deterministic probes; it does not invoke an API-billed model. Console output and retained artifacts provide reproduction evidence. Ordinary CI uses 60 storage sequences; a reviewer can choose another seed or up to 100 sequences. For paused stacks, inspected locals, conditional breakpoints and step-by-step execution, use the [interactive debugger workflow](DEBUGGING.md).
 
 For adaptive computer use, save a small plan as `output/plan.json`:
 

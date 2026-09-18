@@ -19,6 +19,7 @@
     "web-build": "turbo build --filter=@wardrobe/web",
     "vercel-build": "bun run --bun confect codegen && bun run --cwd apps/web convex deploy --cmd \"cd ../.. && bun run web-build\"",
     "validate": "bun run scripts/validate.ts",
+    "debug": "bun run scripts/debug.ts",
     "probe:browser": "bun run --cwd apps/web scripts/probe-browser.ts",
     "probe:performance": "bun run --cwd apps/web scripts/probe-performance.ts",
     "review:context": "bun run scripts/review-context.ts",

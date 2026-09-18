@@ -24,7 +24,7 @@ export async function buildContext(baseRef: string, headRef: string, output: str
     version: 1, base, head, mergeBase, sourceFiles: sources, generatedFiles: generated,
     diffSha256: createHash("sha256").update(diff).digest("hex"),
     diffBytes: Buffer.byteLength(diff), diffFile: "change.diff", contextFile: "context.md",
-    commands, instructions: ["AGENTS.md", "apps/web/confect/AGENTS.md", "docs/ARCHITECTURE.md", "docs/VALIDATION.md"],
+    commands, instructions: ["AGENTS.md", "apps/web/confect/AGENTS.md", "docs/ARCHITECTURE.md", "docs/VALIDATION.md", "docs/DEBUGGING.md"],
   };
   await mkdir(output, { recursive: true });
   await Bun.write(resolve(output, "manifest.json"), JSON.stringify(manifest, null, 2));
