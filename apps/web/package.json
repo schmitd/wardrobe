@@ -60,6 +60,7 @@
     "convex-test": "0.0.59",
     "eslint": "^9",
     "eslint-config-next": "16.0.7",
+    "fast-check": "4.10.1",
     "happy-dom": "^20.1.0",
     "shadcn": "^3.8.4",
     "tailwindcss": "^4",

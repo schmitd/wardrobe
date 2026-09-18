@@ -19,3 +19,9 @@
 - Preserve the event names and safe property contracts documented in `docs/OBSERVABILITY.md`; update that document when the contract changes.
 - Analytics are a default requirement for future feature work: preserve native/web user-flow events, authenticated client/server correlation, and Axiom operational telemetry. Add safe events for new meaningful flows rather than silently shipping uninstrumented behavior.
 - Preserve analytics opt-out, content allowlists, and reviewer/test-traffic exclusions. Test telemetry changes and verify ingestion after deployment; do not enable native replay or autonomous UX changes without separate approval.
+
+## Code Review Rules
+
+- Review the changed behavior and reachable callers against `docs/ARCHITECTURE.md`. Confirm a failure path and a legitimate control before reporting a defect. Give the exact revision, affected boundary, and a focused reproduction command; distinguish observed failures from hypotheses. Formatting and mechanical lint findings belong in CI.
+- Apply the nearest scoped guidance, especially `apps/web/confect/AGENTS.md`. Read the pinned package declarations when uncertain about a prerelease API. Do not demand blanket Effect conversion, blanket return validators, or more mocks when the existing boundary already enforces the invariant.
+- Resolve routine implementation/test failures autonomously. Escalate actual product or operational tradeoffs: changing ownership/authorization semantics, destructive migration or retention, new external credentials/spend, publishing/deployment, or a conflicting user-visible contract. A scary filename alone does not require a decision. See `docs/VALIDATION.md` for narrow probes and evidence requirements.
