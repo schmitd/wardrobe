@@ -14,9 +14,9 @@ export async function buildContext(baseRef: string, headRef: string, output: str
   const head = git(["rev-parse", "--verify", `${headRef}^{commit}`]);
   const mergeBase = git(["merge-base", base, head]);
   const files = git(["diff", "--name-only", "-z", mergeBase, head]).split("\0").filter(Boolean);
-  const generated = files.filter(file => file.includes("/_generated/") || file.startsWith("apps/web/convex/"));
+  const generated = files.filter(file => file.includes("/_generated/"));
   const sources = files.filter(file => !generated.includes(file));
-  const diff = git(["diff", "--no-ext-diff", "--no-textconv", mergeBase, head, "--", ".", ":(exclude)bun.lock", ":(exclude)apps/web/confect/_generated", ":(exclude)apps/web/convex"]);
+  const diff = git(["diff", "--no-ext-diff", "--no-textconv", mergeBase, head, "--", ".", ":(exclude)apps/web/confect/_generated", ":(exclude)apps/web/convex/_generated"]);
   const commands = ["bun run validate core", "bun run validate fuzz --seed 20260918 --runs 60"];
   if (files.some(file => /components|hooks|planning|capture|validation/.test(file))) commands.push("bun run validate browser", "bun run probe:browser --plan output/plan.json");
   if (files.some(file => /confect|schema|mobile/.test(file))) commands.push("bun run probe:performance --sizes 50,500,2000");

@@ -30,6 +30,7 @@ const events: unknown[] = [];
 const record = (event: unknown) => { if (events.length < 500) events.push(event); };
 let browser: Awaited<ReturnType<typeof chromium.launch>> | undefined;
 let failure: unknown;
+process.once("SIGTERM", () => { server.kill(); void browser?.close(); });
 const watchdog = setTimeout(() => { server.kill(); void browser?.close(); }, 90_000);
 try {
   let ready = false;

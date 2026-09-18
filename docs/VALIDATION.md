@@ -61,10 +61,12 @@ Desktop/CLI review is reproducible:
 
 ```sh
 # Commit first; the launcher rejects a dirty candidate.
-bun run review:local --base origin/main --head HEAD
+bun run review:local --base origin/main --head HEAD --desktop-browser
 ```
 
-The launcher exports the committed candidate to a new temporary directory, installs locked dependencies without install scripts, strips application/token environment variables, and starts a fresh ephemeral Codex session with the existing ChatGPT login and a workspace-write sandbox, with unrelated plugins/connectors disabled. It copies no `.env`, deployment credentials, GitHub tokens or local hooks. A local sandbox still uses the host's installed tools and Codex authentication; use Codex Cloud for untrusted/fork code requiring a remote environment. Browser tools may be unavailable under a host sandbox; record that gap and use Cloud or a trusted Desktop probe rather than claiming a pass.
+The launcher exports the committed candidate to a new temporary directory, installs locked dependencies without install scripts, strips application/token environment variables, and starts a fresh ephemeral Codex session with the existing ChatGPT login and a workspace-write sandbox, with unrelated plugins/connectors disabled. It copies no `.env`, deployment credentials, GitHub tokens or local hooks. On a trusted Desktop candidate, `--desktop-browser` lets the reviewer submit up to six bounded browser plans through an output file. A parent runner executes those plans in the same exported synthetic workspace and returns screenshots, logs and trace artifacts for the reviewer to inspect. The parent runner is outside the nested agent sandbox; it executes repository test code and is not a security boundary for hostile PRs. It receives no application secrets or publishing tokens. Omit this option when that trust does not hold and use Cloud.
+
+A local sandbox still uses the host's installed tools and Codex authentication; use Codex Cloud for untrusted/fork code requiring a remote environment. Browser tools may be unavailable under a host sandbox; record that gap and use Cloud or a trusted Desktop probe rather than claiming a pass.
 
 The manifest binds base, merge-base, head and diff hash, distinguishes source from generated files, lists relevant commands, and gives a bounded initial context. Full diffs remain in an artifact for targeted reading. The reviewer starts without the author's rationale or an earlier reviewer verdict, traces the affected boundary, records falsifiable hypotheses, and executes appropriate negative and ordinary controls. It reports findings, decisions, executed commands/artifacts and coverage gaps using `.github/codex/schemas/review.json`. A new revision starts a fresh review, not a resumed verdict.
 
