@@ -17,7 +17,8 @@ export default function Day() {
   const p = usePlanner();
   const [why, setWhy] = useState(false);
   const s = outfitForDay(p.data?.suggestions ?? [], date);
-  const events = p.calendar?.days.find((d) => d.date === date)?.events ?? [];
+  const calendarDay = p.calendar?.days.find((d) => d.date === date);
+  const events = calendarDay?.events ?? [];
   const update = async (operation: PlanningOperation) => {
     if (await p.run(operation)) p.setMessage("Outfit updated.");
   };
@@ -35,6 +36,7 @@ export default function Day() {
           <PlannerText key={i}>{e.title}</PlannerText>
         ))}
       </PostHogMaskView>
+      {calendarDay?.truncated ? <PlannerText>Partial calendar: some events are not shown.</PlannerText> : null}
       {s && p.data ? (
         <>
           <PostHogMaskView>
@@ -71,6 +73,8 @@ export default function Day() {
               })}
             </PostHogMaskView>
           </PlannerGroup>
+          {s.status !== "worn" && s.itemIds.length < 12 ? <PlannerButton secondary title="Add a piece" disabled={p.busy} onPress={() => router.push({ pathname: "/planner/swap", params: { id: s.id } })} /> : null}
+          {s.status === "planned" ? <PlannerText>Adjust the pieces to match what you actually wore before confirming.</PlannerText> : null}
           {s.status === "suggested" ? (
             <PlannerButton
               title="Plan this outfit"

@@ -1,3 +1,4 @@
+import { PHOTO_UPLOAD_MAX_BYTES } from "@wardrobe/shared";
 import { Effect } from "effect";
 import { fetch as expoFetch } from "expo/fetch";
 import { File } from "expo-file-system";
@@ -22,10 +23,12 @@ export const uploadPhoto = (getToken: GetToken, uri: string, width = 1600) =>
     open: (preparedUri) => {
       const image = new File(preparedUri);
       if (!image.exists || image.size === 0) throw new Error("This photo could not be opened.");
+      if (image.size > PHOTO_UPLOAD_MAX_BYTES) throw new Error("Choose a photo smaller than 20 MB.");
       return image;
     },
-    transfer: (uploadUrl, image) => expoFetch(uploadUrl, {
+    transfer: (uploadUrl, image, signal) => expoFetch(uploadUrl, {
       method: "POST",
+      signal,
       headers: { "Content-Type": "image/jpeg" },
       // Expo File implements the native Blob contract consumed by expo/fetch.
       // Bun's DOM declarations model FormData differently, so the structural

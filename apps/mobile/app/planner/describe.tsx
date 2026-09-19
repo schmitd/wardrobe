@@ -47,6 +47,7 @@ export default function Describe() {
     Keyboard.dismiss();
     const result = await p.run<{ updated: number; kept: number }>({
       operation: "planning_generate_week",
+      week: d.week,
       days: d.review,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       useCalendar: d.useCalendar && Boolean(p.data?.calendarEnabled),

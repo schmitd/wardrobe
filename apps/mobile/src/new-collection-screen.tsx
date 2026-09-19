@@ -4,22 +4,27 @@ import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Keyboard, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
-import { createCollection } from "@/api";
+import { createCollection, loadBootstrap } from "@/api";
 import { ErrorPanel } from "@/screen";
 import { colors } from "@/theme";
 
 const trace = () => `native-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 export function NewCollectionScreen() {
-  const { getToken, isSignedIn } = useAuth({ treatPendingAsSignedOut: false });
+  const { getToken, isSignedIn, userId } = useAuth({ treatPendingAsSignedOut: false });
   const queryClient = useQueryClient();
   const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const mutation = useMutation({
     mutationFn: () => createCollection(getToken, { name, ...(description.trim() ? { description } : {}), traceId: trace() }),
-    onSuccess: (result) => {
-      void queryClient.invalidateQueries({ queryKey: ["mobile-bootstrap"] });
+    onSuccess: async (result) => {
+      // A successful save remains successful even if the following refresh fails.
+      try {
+        await queryClient.fetchQuery({ queryKey: ["mobile-bootstrap", userId], queryFn: () => loadBootstrap(getToken), staleTime: 0 });
+      } catch {
+        await queryClient.invalidateQueries({ queryKey: ["mobile-bootstrap", userId], refetchType: "none" });
+      }
       router.replace({ pathname: "/plan/[id]", params: { id: result.id } });
     },
   });

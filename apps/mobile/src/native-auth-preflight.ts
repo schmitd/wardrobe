@@ -1,6 +1,12 @@
-import { Data, Effect } from "effect";
+import { Data, Effect, Schema } from "effect";
 
 type Fetch = (input: string | URL, init?: RequestInit) => Promise<Response>;
+
+const Environment = Schema.Struct({
+  auth_config: Schema.Struct({ object: Schema.Literal("auth_config") }),
+  display_config: Schema.Struct({ object: Schema.Literal("display_config") }),
+  user_settings: Schema.Unknown,
+});
 
 type ClerkErrorPayload = {
   errors?: Array<{
@@ -48,7 +54,8 @@ export const checkNativeAuthConfiguration = (
   endpoint.searchParams.set("_is_native", "1");
 
   const response = yield* Effect.tryPromise({
-    try: () => fetchImplementation(endpoint, {
+    try: signal => fetchImplementation(endpoint, {
+      signal,
       headers: {
         "x-expo-sdk-version": "3.7.8",
         "x-mobile": "1",
@@ -59,7 +66,13 @@ export const checkNativeAuthConfiguration = (
     }),
   });
 
-  if (response.ok) return;
+  if (response.ok) {
+    const payload = yield* readPayload(response);
+    yield* Schema.decodeUnknownEffect(Environment)(payload).pipe(Effect.mapError(() => new NativeAuthConfigurationError({
+      message: "Clerk returned an unexpected native environment response.", status: response.status,
+    })));
+    return;
+  }
 
   const payload = yield* readPayload(response);
   const clerkError = payload.errors?.[0];
@@ -68,4 +81,4 @@ export const checkNativeAuthConfiguration = (
     message: clerkError?.long_message ?? clerkError?.message ?? `Clerk rejected native authentication with HTTP ${response.status}.`,
     status: response.status,
   }));
-});
+}).pipe(Effect.timeout("10 seconds"), Effect.catchTag("TimeoutError", () => Effect.fail(new NativeAuthConfigurationError({ message: "Clerk native authentication check timed out after 10 seconds." }))));

@@ -36,17 +36,13 @@ export function DayPlanner() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Previous week"
-          disabled={p.draft.week <= localDate()}
+          disabled={p.draft.week <= shiftDay(localDate(), -360)}
           onPress={() =>
-            changeWeek(
-              shiftDay(p.draft.week, -7) < localDate()
-                ? localDate()
-                : shiftDay(p.draft.week, -7),
-            )
+            changeWeek(shiftDay(p.draft.week, -7))
           }
           style={{
             padding: 14,
-            opacity: p.draft.week <= localDate() ? 0.3 : 1,
+            opacity: p.draft.week <= shiftDay(localDate(), -360) ? 0.3 : 1,
           }}
         >
           <Text style={{ color: c.accent, fontSize: 23 }}>‹</Text>
@@ -90,16 +86,16 @@ export function DayPlanner() {
         <PlannerGroup>
           {sevenDays(p.draft.week).map((date) => {
             const outfit = outfitForDay(p.data?.suggestions ?? [], date);
-            const events =
-              p.calendar?.days.find((d) => d.date === date)?.events ?? [];
+            const calendarDay = p.calendar?.days.find((d) => d.date === date);
+            const events = calendarDay?.events ?? [];
             const day = new Date(`${date}T12:00:00`);
-            const context =
+            const context = (calendarDay?.truncated ? "Partial calendar · " : "") + (
               events
                 .map((e) => e.title)
                 .slice(0, 2)
                 .join(" · ") ||
               outfit?.title ||
-              "No plans yet";
+              "No plans yet");
             return (
               <Pressable
                 key={date}

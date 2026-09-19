@@ -1,5 +1,7 @@
 'use client';
 
+import { uploadPhoto } from "@/services/photoUpload";
+
 import Link from 'next/link';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import {
@@ -19,7 +21,6 @@ import {
   createWardrobeItemAction,
   getUploadUrlAction,
   recordDailyFitCheckAction,
-  refreshStyleBioAction,
   routeCaptureAction,
 } from '@/app/actions/wardrobe';
 import TryOnFeedback from '@/components/TryOnFeedback';
@@ -33,7 +34,7 @@ import {
 } from '@/components/ui/dialog';
 import { useCompatibilityCheck } from '@/hooks/useCompatibilityCheck';
 import { OPEN_CAPTURE_MENU_EVENT, openCaptureMenu } from '@/lib/captureEvents';
-import { Either, promiseEffect, runBackground, runEffectResult } from '@/lib/effect-result';
+import { Result, promiseEffect, runEffectResult } from '@/lib/effect-result';
 import { createTraceContext } from '@/lib/trace';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import type { CaptureRoute, CaptureScope } from '@/server/captureRouter';
@@ -80,15 +81,7 @@ const stageLabel = (stage: string) => {
   }
 };
 
-const uploadCapture = (file: File) =>
-  Effect.gen(function* () {
-    const uploadUrl = yield* promiseEffect(() => getUploadUrlAction());
-    const upload = yield* promiseEffect(() => fetch(uploadUrl, { method: 'POST', body: file }));
-    if (!upload.ok) return yield* Effect.fail(new Error(`Upload failed: ${upload.statusText}`));
-    const payload = yield* promiseEffect(() => upload.json() as Promise<{ storageId?: string }>);
-    if (!payload.storageId) return yield* Effect.fail(new Error('Upload response missing storageId.'));
-    return payload.storageId;
-  });
+const uploadCapture = (file: File) => uploadPhoto(file, getUploadUrlAction);
 
 const waitForWardrobeItem = (input: {
   itemId: string;
@@ -218,6 +211,7 @@ export function UnifiedCaptureController() {
   }, [menuOpen]);
 
   const chooseIntent = (intent: CaptureIntent) => {
+    if (pending) return;
     selectedIntentRef.current = intent;
     setMenuOpen(false);
     setToast(null);
@@ -233,6 +227,7 @@ export function UnifiedCaptureController() {
       setTryOnOpen(true);
       setStatus(scope === 'full_fit' ? 'Comparing this fit with your closet…' : 'Comparing this piece with your closet…');
       const result = await tryOn.runCompatibilityCheck(capture.storageId, {
+        scope,
         startMessage: 'Reading your wardrobe, then finding useful anchors…',
         fallbackErrorMessage: 'Try-on feedback failed.',
       });
@@ -243,7 +238,6 @@ export function UnifiedCaptureController() {
         return;
       }
       posthog.capture('unified_capture_completed', { intent: capture.intent, scope });
-      runBackground('style_bio.background_refresh.failed', () => refreshStyleBioAction());
       return;
     }
 
@@ -277,28 +271,28 @@ export function UnifiedCaptureController() {
     setPending(false);
     setStatus(null);
     URL.revokeObjectURL(capture.previewUrl);
-    if (Either.isLeft(outcome)) {
+    if (Result.isFailure(outcome)) {
       setToast({
-        message: userFacingErrorMessage(outcome.left, 'This photo could not be saved. Please try again.'),
+        message: userFacingErrorMessage(outcome.failure, 'This photo could not be saved. Please try again.'),
         error: true,
       });
       return;
     }
 
-    const saved = outcome.right;
+    const saved = outcome.success;
     setToast(
       saved.kind === 'fit'
         ? { message: 'Fit recorded. Familiar pieces were matched when confidence was high.', href: `/fits#fit-${saved.id}` }
         : { message: 'Piece added to your wardrobe.', href: '/' }
     );
     posthog.capture('unified_capture_completed', { intent: capture.intent, scope });
-    runBackground('style_bio.background_refresh.failed', () => refreshStyleBioAction());
   };
 
   const onFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file) return;
+    if (!file || pending) return;
+    const intent = selectedIntentRef.current;
     if (!file.type.startsWith('image/')) {
       setToast({ message: 'Choose a photo to continue.', error: true });
       return;
@@ -317,23 +311,23 @@ export function UnifiedCaptureController() {
           storageId,
           previewUrl,
           route,
-          intent: selectedIntentRef.current,
+          intent,
         } satisfies PendingCapture;
       })
     );
 
-    if (Either.isLeft(outcome)) {
+    if (Result.isFailure(outcome)) {
       setPending(false);
       setStatus(null);
       URL.revokeObjectURL(previewUrl);
       setToast({
-        message: userFacingErrorMessage(outcome.left, 'This photo could not be read. Please try again.'),
+        message: userFacingErrorMessage(outcome.failure, 'This photo could not be read. Please try again.'),
         error: true,
       });
       return;
     }
 
-    void completeCapture(outcome.right, outcome.right.route.scope);
+    void completeCapture(outcome.success, outcome.success.route.scope);
   };
 
   return (

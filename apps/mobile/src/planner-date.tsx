@@ -8,14 +8,16 @@ export function PlannerDate({
   onChange,
   label = "Choose date",
   inline = false,
+  allowPast = false,
 }: {
   value: string;
   onChange: (date: string) => void;
   label?: string;
   inline?: boolean;
+  allowPast?: boolean;
 }) {
   const date = new Date(`${value}T12:00:00`);
-  const minimumDate = new Date(`${localDate()}T00:00:00`);
+  const minimumDate = new Date(`${shiftDay(localDate(), allowPast ? -366 : 0)}T00:00:00`);
   const maximumDate = new Date(`${shiftDay(localDate(), 360)}T23:59:59`);
   return isIOS ? (
     <DateTimePicker

@@ -92,7 +92,7 @@ function WeekPlanner({ userId }: { userId: string }) {
       const saved = JSON.parse(sessionStorage.getItem(storageKey) ?? "null");
       if (
         saved?.expires > Date.now() &&
-        saved.draft?.week >= localDate() &&
+        saved.draft?.week >= shiftDay(localDate(), -366) &&
         /^\d{4}-\d{2}-\d{2}$/.test(saved.draft.week) &&
         typeof saved.draft.description === "string" &&
         Array.isArray(saved.draft.review)
@@ -111,9 +111,10 @@ function WeekPlanner({ userId }: { userId: string }) {
   const refresh = useCallback(async () => {
     const next = await planningRequest<PlanningData>({
       operation: "planning_load",
+      week: draft.week,
     });
     setData(next);
-  }, []);
+  }, [draft.week]);
   useEffect(() => {
     void refresh().catch(() =>
       setMessage("Could not load planning. Please retry."),
@@ -139,14 +140,19 @@ function WeekPlanner({ userId }: { userId: string }) {
       active = false;
     };
   }, [data, draft.week, restored]);
+  const [refreshWarning, setRefreshWarning] = useState("");
   const run = async <T,>(operation: PlanningOperation): Promise<T | null> => {
     if (lock.current) return null;
     lock.current = true;
     setBusy(true);
     setMessage("");
+    setRefreshWarning("");
     try {
       const result = await planningRequest<T>(operation);
-      if (operation.operation !== "planning_interpret") await refresh();
+      if (operation.operation !== "planning_interpret") {
+        try { await refresh(); }
+        catch { setRefreshWarning("Saved. The view could not refresh; reload to see your change."); }
+      }
       return result;
     } catch (e) {
       setMessage(
@@ -191,6 +197,7 @@ function WeekPlanner({ userId }: { userId: string }) {
   const generate = async () => {
     const result = await run<{ updated: number; kept: number }>({
       operation: "planning_generate_week",
+      week: draft.week,
       days: draft.review,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       useCalendar: draft.useCalendar && Boolean(data?.calendarEnabled),
@@ -278,13 +285,9 @@ function WeekPlanner({ userId }: { userId: string }) {
           <Button
             variant="ghost"
             aria-label="Previous week"
-            disabled={draft.week <= localDate()}
+            disabled={draft.week <= shiftDay(localDate(), -360)}
             onClick={() =>
-              changeWeek(
-                shiftDay(draft.week, -7) < localDate()
-                  ? localDate()
-                  : shiftDay(draft.week, -7),
-              )
+              changeWeek(shiftDay(draft.week, -7))
             }
           >
             <ChevronLeft />
@@ -307,7 +310,7 @@ function WeekPlanner({ userId }: { userId: string }) {
             type="date"
             aria-label="Week starting"
             className={input}
-            min={localDate()}
+            min={shiftDay(localDate(), -366)}
             max={shiftDay(localDate(), 360)}
             value={draft.week}
             onChange={(e) => {
@@ -331,8 +334,8 @@ function WeekPlanner({ userId }: { userId: string }) {
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
           {sevenDays(draft.week).map((date) => {
             const s = outfitForDay(data.suggestions, date);
-            const events =
-              calendar?.days.find((d) => d.date === date)?.events ?? [];
+            const calendarDay = calendar?.days.find((d) => d.date === date);
+            const events = calendarDay?.events ?? [];
             return (
               <button
                 key={date}
@@ -370,6 +373,7 @@ function WeekPlanner({ userId }: { userId: string }) {
                     (s?.title ?? "No plans yet")
                   )}
                 </div>
+                {calendarDay?.truncated && <span className="text-xs text-[#685e70]">Partial calendar · some events are not shown</span>}
                 <span className="text-xs capitalize text-[#685e70]">
                   {s?.status ?? "Suggest an outfit"}
                 </span>
@@ -385,12 +389,14 @@ function WeekPlanner({ userId }: { userId: string }) {
           })}
         </div>
       )}
+      {data?.inventoryTruncated && <p className="text-sm">Planning uses your 300 most recent pieces and the pieces in saved outfits or your selected Plan.</p>}
       {calendarError && (
         <p role="status" className="text-sm">
           Calendar could not refresh. Your outfits are still here. Reconnect
           Calendar or continue with dictation.
         </p>
       )}
+      {refreshWarning && <p role="status" className="text-sm">{refreshWarning}</p>}
       {message && (
         <p role="status" className="rounded-lg bg-white p-3 text-sm">
           {message}
@@ -431,21 +437,20 @@ function WeekPlanner({ userId }: { userId: string }) {
                           </p>
                         </div>
                         {outfit.status !== "worn" && (
-                          <Button
-                            variant="outline"
-                            disabled={busy}
-                            onClick={() => setSwap(swap === id ? null : id)}
-                          >
-                            Swap
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button variant="outline" disabled={busy} onClick={() => setSwap(swap === id ? null : id)}>Swap</Button>
+                            <Button variant="ghost" disabled={busy || outfit.itemIds.length <= 1} onClick={() => void update({ operation: "planning_edit", id: outfit.id, itemIds: outfit.itemIds.filter(piece => piece !== id) })}>Remove</Button>
+                          </div>
                         )}
                       </li>
                     );
                   })}
                 </ul>
+                {outfit.status !== "worn" && outfit.itemIds.length < 12 && <Button variant="outline" disabled={busy} onClick={() => setSwap("add")}>Add a piece</Button>}
+                {outfit.status === "planned" && <p className="text-sm text-[#685e70]">Adjust the pieces to match what you actually wore before confirming.</p>}
                 {swap && (
                   <label className="block space-y-2">
-                    Replace with an owned piece
+                    {swap === "add" ? "Add an owned piece" : "Replace with an owned piece"}
                     <select
                       data-private
                       className={input}
@@ -456,7 +461,7 @@ function WeekPlanner({ userId }: { userId: string }) {
                           void update({
                             operation: "planning_edit",
                             id: outfit.id,
-                            itemIds: outfit.itemIds.map((id) =>
+                            itemIds: swap === "add" ? [...outfit.itemIds, e.target.value] : outfit.itemIds.map((id) =>
                               id === swap ? e.target.value : id,
                             ),
                           });
@@ -812,7 +817,8 @@ function WeekPlanner({ userId }: { userId: string }) {
               </p>
             </div>
           )}
-          {message && (
+          {refreshWarning && <p role="status" className="text-sm">{refreshWarning}</p>}
+      {message && (
             <p role="status" className="text-sm">
               {message}
             </p>

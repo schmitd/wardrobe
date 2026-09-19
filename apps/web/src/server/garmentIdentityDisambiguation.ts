@@ -65,11 +65,7 @@ Be conservative. Use -1 when the evidence cannot distinguish similar items.`;
       responseSchema: comparisonSchema,
     },
   });
-  const parsed = yield* parseJson<{
-    match_index?: unknown;
-    confidence?: unknown;
-    rationale?: unknown;
-  }>(generated.response.text(), "compareGarmentCrops");
+  const parsed = yield* parseJson(generated.response.text(), "compareGarmentCrops");
   const usage = generated.response.usageMetadata;
 
   return {

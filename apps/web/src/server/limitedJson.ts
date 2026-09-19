@@ -1,11 +1,12 @@
+import { RequestFailure } from "./errors";
 export async function limitedJson(
   request: Request,
   limit: number,
 ): Promise<unknown> {
   if (Number(request.headers.get("content-length")) > limit)
-    throw new Error("Request too large");
+    throw new RequestFailure({ status: 413, message: "The request is too large." });
   const reader = request.body?.getReader();
-  if (!reader) throw new Error("Missing body");
+  if (!reader) throw new RequestFailure({ status: 400, message: "The request body is missing." });
   const chunks: Uint8Array[] = [];
   let total = 0;
   try {
@@ -15,7 +16,7 @@ export async function limitedJson(
       total += value.byteLength;
       if (total > limit) {
         void reader.cancel().catch(() => {});
-        throw new Error("Request too large");
+        throw new RequestFailure({ status: 413, message: "The request is too large." });
       }
       chunks.push(value);
     }
@@ -28,5 +29,6 @@ export async function limitedJson(
     bytes.set(chunk, offset);
     offset += chunk.length;
   }
-  return JSON.parse(new TextDecoder().decode(bytes));
+  try { return JSON.parse(new TextDecoder().decode(bytes)); }
+  catch { throw new RequestFailure({ status: 400, message: "The request body must be valid JSON." }); }
 }

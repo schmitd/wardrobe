@@ -9,7 +9,7 @@ const clerkIssuers = [productionClerkIssuer, developmentClerkIssuer]
 
 const providers = Array.from(new Set(clerkIssuers)).map((domain) => ({
   domain,
-  applicationID: "convex",
+  applicationID: clerkAudience,
 }));
 
 export default {

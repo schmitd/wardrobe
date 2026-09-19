@@ -11,10 +11,9 @@ import {
   sanitizeStyleTags,
   truncateWords,
 } from "@/lib/inferenceOutputGuards";
-import { runServerAction } from "@/lib/run-effect";
+import { runInference } from "@/lib/run-effect";
 import {
   GEMINI_FLASH_LITE_MODEL,
-  GeminiLive,
   GeminiService,
 } from "@/services/GeminiService";
 import {
@@ -83,7 +82,7 @@ const analyzeImageTags = (base64: string) =>
       },
     });
 
-    const parsed = yield* parseJson<{ category?: string; style_tags: string[] }>(
+    const parsed = yield* parseJson(
       result.response.text(),
       "analyzeImageTags"
     );
@@ -138,7 +137,7 @@ ${contextTags} ${contextCategory}`.trim();
       },
     });
 
-    const parsed = yield* parseJson<{ category?: string; description: string }>(
+    const parsed = yield* parseJson(
       result.response.text(),
       "analyzeImageDescription"
     );
@@ -219,13 +218,12 @@ export const processWardrobeInference = async ({
     await onProgress?.("analyzing_tags");
     let tagResult: TagAnalysisResult;
     try {
-      tagResult = await runServerAction(
+      tagResult = await runInference(
         analyzeImageTags(base64).pipe(
           Effect.withSpan("inference.analyzeTags", {
             attributes: { userId, itemId },
           }),
-          Effect.provide(GeminiLive)
-        )
+          )
       );
     } catch (error) {
       console.warn("inference.analyzeTags.fallback", {
@@ -245,11 +243,11 @@ export const processWardrobeInference = async ({
     });
 
     await onProgress?.("analyzing_description");
-    const detailResult = await runServerAction(
+    const detailResult = await runInference(
       analyzeImageDescription(base64, {
         category: resolvedCategory,
         styleTags: tagResult.style_tags,
-      }).pipe(Effect.provide(GeminiLive))
+      })
     );
     const finalCategory = detailResult.category ?? resolvedCategory;
     await onDescription?.({
@@ -258,17 +256,15 @@ export const processWardrobeInference = async ({
     });
 
     await onProgress?.("embedding");
-    const embedding = await runServerAction(
-      embedText(`${detailResult.description} ${tagResult.style_tags.join(" ")}`.trim()).pipe(
-        Effect.provide(GeminiLive)
-      )
+    const embedding = await runInference(
+      embedText(`${detailResult.description} ${tagResult.style_tags.join(" ")}`.trim())
     );
-    const visualEmbedding = await runServerAction(
+    const visualEmbedding = await runInference(
       embedImage(
         base64,
         item.contentType ?? "image/jpeg",
         [finalCategory, detailResult.description, ...tagResult.style_tags].filter(Boolean).join(" ")
-      ).pipe(Effect.provide(GeminiLive))
+      )
     );
 
     await onProgress?.("persisting");

@@ -1,4 +1,7 @@
-import { auth } from "@clerk/nextjs/server";
+import { progressStream } from "@/server/progressStream";
+import { limitedJson } from "@/server/limitedJson";
+import { getConvexAuth, enforceAuthenticatedProtection } from "@/server/auth";
+import { publicServerFailure } from "@/server/errors";
 import { ensureTraceContext } from "@/lib/trace";
 import { processWardrobeInference } from "@/server/wardrobeInference";
 
@@ -12,36 +15,30 @@ type StreamEvent =
   | { type: "error"; error: string };
 
 export async function POST(request: Request) {
-  const { userId, getToken } = await auth();
-  if (!userId) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  let session;
+  try {
+    session = await getConvexAuth();
+    await enforceAuthenticatedProtection({ ...session, scope: "inference" });
+  } catch (error) {
+    const failure = publicServerFailure(error);
+    return Response.json({ error: failure.message }, { status: failure.status });
   }
+  const { userId, token } = session;
 
-  const token = await getToken({
-    template: process.env.CLERK_JWT_TEMPLATE ?? "convex",
-  });
-  if (!token) {
-    return Response.json({ error: "Missing Convex token" }, { status: 401 });
-  }
-
-  const body = await request.json().catch(() => null);
+  let body: Record<string, unknown>;
+  try { body = await limitedJson(request, 4000) as Record<string, unknown>; }
+  catch (error) { const failure = publicServerFailure(error); return Response.json({ error: failure.message }, { status: failure.status }); }
   const itemId = typeof body?.itemId === "string" ? body.itemId : null;
   if (!itemId) {
     return Response.json({ error: "Missing itemId" }, { status: 400 });
   }
 
   const { traceId, traceparent } = ensureTraceContext({
-    traceId: body?.traceId,
-    traceparent: body?.traceparent,
+    traceId: typeof body?.traceId === "string" ? body.traceId : undefined,
+    traceparent: typeof body?.traceparent === "string" ? body.traceparent : undefined,
   });
 
-  const encoder = new TextEncoder();
-  const send = (controller: ReadableStreamDefaultController, event: StreamEvent) => {
-    controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
-  };
-
-  const stream = new ReadableStream({
-    start: async (controller) => {
+  const stream = progressStream<StreamEvent>(request.signal, async send => {
       try {
         const result = await processWardrobeInference({
           itemId,
@@ -49,27 +46,24 @@ export async function POST(request: Request) {
           token,
           traceId,
           traceparent,
-          onProgress: (stage) => send(controller, { type: "status", stage }),
+          onProgress: (stage) => send( { type: "status", stage }),
           onTags: ({ category, styleTags }) =>
-            send(controller, { type: "tags", category, styleTags }),
+            send( { type: "tags", category, styleTags }),
           onDescription: ({ category, description }) =>
-            send(controller, { type: "description", category, description }),
+            send( { type: "description", category, description }),
         });
 
         if (!result.success) {
-          send(controller, { type: "error", error: result.error });
+          send( { type: "error", error: result.error });
         } else {
-          send(controller, { type: "complete" });
+          send( { type: "complete" });
         }
       } catch {
-        send(controller, {
+        send( {
           type: "error",
           error: "Failed to process this item right now. Please try again.",
         });
-      } finally {
-        controller.close();
       }
-    },
   });
 
   return new Response(stream, {

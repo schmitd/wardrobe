@@ -1,0 +1,58 @@
+name: Targeted probes
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        type: choice
+        options: [storage, planning, reads, fuzz, browser, performance]
+        default: fuzz
+      seed:
+        type: string
+        default: '20260918'
+      runs:
+        type: string
+        default: '100'
+      grep:
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.8
+      - run: bun install --frozen-lockfile
+      - if: inputs.suite == 'browser'
+        run: bun run --cwd apps/web playwright install --with-deps chromium
+      - name: Run selected probe
+        env:
+          SUITE: ${{ inputs.suite }}
+          SEED: ${{ inputs.seed }}
+          RUNS: ${{ inputs.runs }}
+          GREP: ${{ inputs.grep }}
+        run: |
+          if [ "$SUITE" = performance ]; then
+            bun run probe:performance
+          else
+            bun run validate "$SUITE" --seed "$SEED" --runs "$RUNS" --grep "$GREP"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: probe-evidence
+          path: output/
+          if-no-files-found: ignore
+          retention-days: 7

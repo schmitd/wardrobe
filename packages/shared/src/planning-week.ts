@@ -21,19 +21,16 @@ export function shiftDay(day: string, count: number) {
 export const sevenDays = (start: string) =>
   Array.from({ length: 7 }, (_, i) => shiftDay(start, i));
 export function outfitForDay(suggestions: OutfitSuggestion[], date: string) {
-  const matching = suggestions.filter(
-    (s) => s.date === date && s.status !== "dismissed",
-  );
-  return (
-    matching.find((s) => s.status === "worn") ??
-    matching.find((s) => s.status === "planned") ??
-    matching[0]
-  );
+  const matching = suggestions.filter(s => s.date === date);
+  // Callers return newest first. A dismissal must not reveal an older suggestion.
+  const committed = matching.find(s => s.status === "worn") ?? matching.find(s => s.status === "planned");
+  return committed ?? (matching[0]?.status === "suggested" ? matching[0] : undefined);
 }
 export function validateReviewedDays(
   value: unknown,
   timezone: string,
   now = new Date(),
+  week?: string,
 ): ReviewedDay[] {
   if (!Array.isArray(value) || !value.length || value.length > 7)
     throw Error("Choose 1–7 days.");
@@ -41,6 +38,7 @@ export function validateReviewedDays(
   return value.map((row) => {
     if (!row || typeof row !== "object") throw Error("Review each day first.");
     const date = validatePlanningDate(row.date, timezone, now).date;
+    if (week && !sevenDays(week).includes(date)) throw Error("Choose days within the selected week.");
     if (dates.has(date))
       throw Error("Combine activities for the same date before continuing.");
     dates.add(date);
@@ -64,7 +62,7 @@ export function validateWeekInterpretation(
   )
     throw Error("Could not interpret these days. Please try again.");
   const days = data.days.length
-    ? validateReviewedDays(data.days, timezone, now)
+    ? validateReviewedDays(data.days, timezone, now, week)
     : [];
   if (days.some((d) => !sevenDays(week).includes(d.date)))
     throw Error(

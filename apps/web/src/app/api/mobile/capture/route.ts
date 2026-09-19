@@ -1,3 +1,5 @@
+import { limitedJson } from "@/server/limitedJson";
+import { RequestFailure } from "@/server/errors";
 import {
   checkCompatibilityAction,
   createWardrobeItemAction,
@@ -5,7 +7,7 @@ import {
   recordDailyFitCheckAction,
   routeCaptureAction,
 } from "@/app/actions/wardrobe";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { observeMobileRequest } from "@/server/mobileTelemetry";
 
 import {
@@ -16,19 +18,13 @@ import {
 
 export const runtime = "nodejs";
 
-type CaptureBody = {
-  operation?: "route" | "record_fit" | "add_piece" | "try_on";
-  storageId?: string;
-  clientFileName?: string;
-  contentType?: string;
-  traceId?: string;
-  traceparent?: string;
-};
-
-type CompleteCaptureBody = CaptureBody & {
-  operation: NonNullable<CaptureBody["operation"]>;
-  storageId: string;
-};
+const CaptureBody = Schema.Struct({
+  operation: Schema.Literals(["route", "record_fit", "add_piece", "try_on"]),
+  storageId: Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(100)),
+  scope: Schema.optionalKey(Schema.Literals(["single_piece", "full_fit"])),
+  clientFileName: Schema.optionalKey(Schema.String), contentType: Schema.optionalKey(Schema.String),
+});
+type CompleteCaptureBody = typeof CaptureBody.Type;
 
 export async function POST(request: Request) {
   return observeMobileRequest(request, "capture", handleCapture);
@@ -36,18 +32,10 @@ export async function POST(request: Request) {
 
 async function handleCapture(request: Request, traceId: string) {
   const parseBody = Effect.tryPromise({
-    try: () => request.json() as Promise<CaptureBody>,
-    catch: (cause) => toMobileCaptureFailure(cause),
-  }).pipe(
-    Effect.flatMap((body) =>
-      body?.operation && body.storageId
-        ? Effect.succeed(body as CompleteCaptureBody)
-        : Effect.fail(new MobileCaptureFailure({
-            cause: "invalid_request",
-            message: "Missing capture operation or storageId.",
-          }))
-    )
-  );
+    try: () => limitedJson(request, 40000), catch: toMobileCaptureFailure,
+  }).pipe(Effect.flatMap(body => Schema.decodeUnknownEffect(CaptureBody)(body).pipe(
+    Effect.mapError(() => toMobileCaptureFailure(new RequestFailure({ status: 400, message: "Choose a capture operation and photo." }))),
+  )));
 
   const execute = (body: CompleteCaptureBody) =>
     Effect.tryPromise({
@@ -59,7 +47,7 @@ async function handleCapture(request: Request, traceId: string) {
           case "record_fit":
             return recordDailyFitCheckAction({ storageId: body.storageId, ...trace });
           case "try_on":
-            return checkCompatibilityAction({ storageId: body.storageId, ...trace });
+            return checkCompatibilityAction({ storageId: body.storageId, scope: body.scope, ...trace });
           case "add_piece": {
             const created = await createWardrobeItemAction({
               storageId: body.storageId,
@@ -92,9 +80,7 @@ async function handleCapture(request: Request, traceId: string) {
       Effect.flatMap(execute),
       Effect.match({
         onFailure: (failure) => {
-          const response = failure.message === "Missing capture operation or storageId."
-            ? { status: 400, message: failure.message }
-            : publicCaptureError(failure);
+          const response = publicCaptureError(failure);
           console.error("mobile.capture.failed", {
             operation: failure.operation,
             traceId: failure.traceId,

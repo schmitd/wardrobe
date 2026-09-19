@@ -1,0 +1,1596 @@
+import { getConvexAuth, enforceAuthenticatedProtection, type ConvexAuthContext } from "@/server/auth";
+import { analyzeImageFull, analyzeInspirationImage, generateStyleQuery, evaluateCompatibility, analyzeSelfie, type FitCheckKind, FIT_CHECK_CONTENT_BLOCK_MESSAGE, isGeminiContentBlock, type RecordFitCheckItemInput, normalizeBoundingBox, analyzeFitCheckPhoto, generateClosetBio, generateMaintainedStyleBio, cosineSimilarity } from "@/server/inference/analysis";
+import { uploadPhotoFile } from "@/services/photoUpload";
+
+import { Effect, Result } from "effect";
+import { SchemaType, type Schema } from "@google/generative-ai";
+import type { Id } from "@convex/_generated/dataModel";
+import { fetchAction, fetchMutation, fetchQuery } from "convex/nextjs";
+import { api } from "@convex/_generated/api";
+
+import { truncateWords } from "@/lib/inferenceOutputGuards";
+import { runServerAction, runInference } from "@/lib/run-effect";
+import { ensureTraceContext } from "@/lib/trace";
+import { ArcjetLive, ArcjetService } from "@/services/ArcjetService";
+import {
+  GEMINI_FLASH_LITE_MODEL,
+  GeminiService,
+} from "@/services/GeminiService";
+import {
+  embedImage,
+  embedText,
+  fetchImageBase64,
+  parseJson,
+  toErrorMessage,
+  toInferenceFailure,
+  withRetries,
+} from "@/server/inference/shared";
+import {
+  applyDirectGarmentComparison,
+  classifyGarmentMatch,
+  cropGarmentRegion,
+  normalizeGarmentCategory,
+  shouldDirectlyCompareGarments,
+  type GarmentIdentityCandidate,
+} from "@/server/garmentIdentity";
+import { compareGarmentCrops } from "@/server/garmentIdentityDisambiguation";
+import { normalizeCaptureRoute } from "@/server/captureRouter";
+import { captureProtectionScopes } from "@/server/captureProtection";
+import { processWardrobeInference } from "@/server/wardrobeInference";
+
+const enforceGuestBatchProtection = () =>
+  runServerAction(
+    ArcjetService.pipe(
+      Effect.flatMap((arcjet) => arcjet.protectGuestBatch()),
+      Effect.provide(ArcjetLive)
+    )
+  );
+
+export const getMobileBootstrapAction = async () => {
+  const { token } = await getConvexAuth();
+  const [items, rawFitChecks, wardrobes, profile, currentUser, latestSelfie] = await Promise.all([
+    fetchQuery(api.wardrobe.listWardrobeItems, {}, { token }),
+    fetchQuery(api.fitChecks.listFitChecks, { limit: 100 }, { token }),
+    fetchQuery(api.wardrobes.listWardrobes, {}, { token }),
+    fetchQuery(api.profile.getProfile, {}, { token }),
+    fetchQuery(api.profile.getCurrentUser, {}, { token }),
+    fetchQuery(api.storage.getLatestUploadByPurpose, { purpose: "selfie" }, { token }),
+  ]);
+
+  const collectionDetails = await Promise.all(wardrobes.map(async (wardrobe) => {
+    const [detail, inspirations] = await Promise.all([
+      fetchQuery(api.wardrobes.getWardrobeDetail, { wardrobeId: wardrobe._id }, { token }),
+      fetchQuery(api.candidates.listInspirationByWardrobe, { wardrobeId: wardrobe._id }, { token }),
+    ]);
+    return {
+      ...wardrobe,
+      items: detail?.items ?? [],
+      inspirations: inspirations.map((inspiration) => ({
+        id: inspiration._id,
+        imageUrl: inspiration.imageUrl,
+        sourceUrl: inspiration.sourceUrl ?? null,
+        category: inspiration.category ?? null,
+        description: inspiration.description ?? null,
+        styleTags: inspiration.styleTags ?? [],
+        createdAt: inspiration.createdAt,
+      })),
+    };
+  }));
+
+  const fitChecks = rawFitChecks.map((fitCheck) => ({
+    id: fitCheck._id,
+    imageUrl: fitCheck.imageUrl,
+    type: fitCheck.type,
+    transcription: fitCheck.transcription ?? null,
+    description: fitCheck.description ?? null,
+    createdAt: fitCheck.createdAt,
+    items: fitCheck.items.map((item) => ({
+      id: item._id,
+      category: item.category ?? null,
+      description: item.description ?? null,
+    })),
+    observations: fitCheck.observations.map((observation) => ({
+      id: observation._id,
+      category: observation.category,
+      description: observation.description,
+      cropUrl: observation.cropUrl,
+      resolutionStatus: observation.resolutionStatus,
+      matchScore: observation.matchScore ?? null,
+      candidates: observation.candidates.map((candidate) => ({
+        id: candidate.id,
+        imageUrl: candidate.imageUrl,
+        category: candidate.category,
+        description: candidate.description,
+        score: candidate.score,
+      })),
+    })),
+  }));
+
+  return {
+    items,
+    fitChecks,
+    wardrobes: collectionDetails,
+    profile: profile ? {
+      bio: profile.bio ?? null,
+      skinTone: profile.skinTone ?? null,
+      complexion: profile.complexion ?? null,
+      hairColor: profile.hairColor ?? null,
+      colorSeason: profile.colorSeason ?? null,
+    } : null,
+    currentUser,
+    latestSelfie,
+  };
+};
+
+export const createCollectionAction = async (input: {
+  name: string;
+  description?: string;
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { token } = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+  const name = input.name.trim();
+  if (!name) throw new Error("Give this collection a name");
+  return fetchMutation(api.wardrobes.createWardrobe, {
+    name,
+    kind: "locus",
+    ...(input.description?.trim() ? { description: input.description.trim() } : {}),
+    traceId,
+    traceparent,
+  }, { token });
+};
+
+export const addCollectionItemAction = async (input: {
+  wardrobeId: string;
+  itemId: string;
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { token } = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+  return fetchMutation(api.wardrobes.addItemToWardrobe, {
+    wardrobeId: input.wardrobeId as Id<"wardrobes">,
+    itemId: input.itemId as Id<"wardrobeItems">,
+    membershipKind: "owned",
+    traceId,
+    traceparent,
+  }, { token });
+};
+
+export const removeCollectionItemAction = async (input: {
+  wardrobeId: string;
+  itemId: string;
+}) => {
+  const { token } = await getConvexAuth();
+  return fetchMutation(api.wardrobes.removeItemFromWardrobe, {
+    wardrobeId: input.wardrobeId as Id<"wardrobes">,
+    itemId: input.itemId as Id<"wardrobeItems">,
+  }, { token });
+};
+
+export const resolveFitObservationAction = async (input: {
+  observationId: string;
+  wardrobeItemId: string;
+}) => {
+  const { token } = await getConvexAuth();
+  return fetchMutation(api.fitChecks.resolveGarmentObservation, {
+    observationId: input.observationId as Id<"garmentObservations">,
+    wardrobeItemId: input.wardrobeItemId as Id<"wardrobeItems">,
+  }, { token });
+};
+
+export const promoteFitObservationAction = async (input: { observationId: string }) => {
+  const { token } = await getConvexAuth();
+  return fetchMutation(api.fitChecks.promoteGarmentObservation, {
+    observationId: input.observationId as Id<"garmentObservations">,
+  }, { token });
+};
+
+const runBestEffort = async <A>(
+  event: string,
+  context: Record<string, string>,
+  operation: () => Promise<A>
+) => {
+  const outcome = await runServerAction(
+    Effect.tryPromise({ try: operation, catch: toErrorMessage }).pipe(Effect.result)
+  );
+  if (Result.isFailure(outcome)) {
+    console.warn(event, { ...context, message: outcome.failure });
+    return undefined;
+  }
+  return outcome.success;
+};
+
+const backfillWardrobeVisualEmbeddings = async (token: string, traceId: string, userId: string) => {
+  const missing = await fetchQuery(api.wardrobe.listItemsMissingVisualEmbedding, { limit: 12 }, { token });
+  for (const item of missing) {
+    if (!item.imageUrl) continue;
+    const imageUrl = item.imageUrl;
+    await runBestEffort("wardrobe.visual_embedding.backfill_item_failed", { traceId, userId }, async () => {
+      const base64 = await fetchImageBase64(imageUrl);
+      const context = [item.category, item.description, ...item.styleTags].filter(Boolean).join(" ");
+      const visualEmbedding = await runInference(
+        embedImage(base64, item.contentType, context)
+      );
+      await fetchMutation(api.wardrobe.applyVisualEmbedding, {
+        itemId: item.id,
+        visualEmbedding,
+        model: "gemini-embedding-2@768",
+      }, { token });
+    });
+  }
+};
+
+export const getUploadUrlAction = async () => {
+  const { token } = await getConvexAuth();
+
+  return fetchMutation(api.wardrobe.getUploadUrl, {}, { token });
+};
+
+export const routeCaptureAction = async (input: {
+  storageId: string;
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { userId, token, tier } = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+
+  await fetchMutation(
+    api.storage.registerUpload,
+    { storageId: input.storageId as Id<"_storage">, purpose: "capture_router" },
+    { token }
+  );
+  const cachedRoute = await fetchQuery(
+    api.storage.getCaptureRoute,
+    { storageId: input.storageId as Id<"_storage"> },
+    { token }
+  );
+  if (cachedRoute) {
+    console.info("capture.route_cache_hit", {
+      traceId,
+      traceparent,
+      userId,
+      scope: cachedRoute.scope,
+    });
+    return { ...cachedRoute, needsReview: false as const };
+  }
+
+  await enforceAuthenticatedProtection({ scope: captureProtectionScopes.route, tier, userId });
+
+  const imageUrl = await fetchQuery(
+    api.storage.getStorageUrl,
+    { storageId: input.storageId as Id<"_storage"> },
+    { token }
+  );
+  if (!imageUrl) throw new Error("Uploaded file missing");
+
+  const imageResponse = await fetch(imageUrl);
+  if (!imageResponse.ok) throw new Error(`Image fetch failed: ${imageResponse.statusText}`);
+  const mimeType = imageResponse.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+  const base64 = Buffer.from(await imageResponse.arrayBuffer()).toString("base64");
+  const schema: Schema = {
+    type: SchemaType.OBJECT,
+    properties: {
+      capture_scope: { type: SchemaType.STRING },
+      confidence: { type: SchemaType.NUMBER },
+      rationale: { type: SchemaType.STRING },
+    },
+    required: ["capture_scope", "confidence", "rationale"],
+  };
+  const prompt = `Route this wardrobe photo into exactly one capture scope.
+Return JSON only with capture_scope, confidence, and rationale.
+- capture_scope must be "single_piece" when the photo primarily presents one garment, shoe pair, bag, accessory, or coordinated set as one catalog item.
+- capture_scope must be "full_fit" when the photo shows a person wearing multiple garments together with enough outfit context to record what was worn.
+- A person may be visible. Do not identify or describe them and do not infer sensitive traits. Judge only the clothing composition and framing.
+- confidence must be from 0 to 1.
+- rationale must be a short, plain explanation of the clothing evidence, never a description of the person.`;
+
+  const routed = await runInference(
+    GeminiService.pipe(
+      Effect.flatMap((gemini) =>
+        gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: prompt },
+                { inlineData: { data: base64, mimeType } },
+              ],
+            },
+          ],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: schema,
+          },
+        })
+      ),
+      Effect.flatMap((result) =>
+        parseJson(result.response.text(), "routeCapture")
+      ),
+      withRetries,
+      )
+  );
+  const route = normalizeCaptureRoute(routed);
+
+  await fetchMutation(
+    api.storage.saveCaptureRoute,
+    { storageId: input.storageId as Id<"_storage">, route },
+    { token }
+  );
+
+  console.info("capture.routed", {
+    traceId,
+    traceparent,
+    userId,
+    scope: route.scope,
+    confidence: route.confidence,
+    needsReview: route.needsReview,
+  });
+  return route;
+};
+
+export const createWardrobeItemAction = async (input: {
+  storageId: string;
+  clientFileName?: string;
+  contentType?: string;
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { userId, token, tier } = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+  await enforceAuthenticatedProtection({ scope: "upload", tier, userId });
+
+  const result = await fetchMutation(
+    api.wardrobe.createWardrobeItem,
+    {
+      storageId: input.storageId as Id<"_storage">,
+      clientFileName: input.clientFileName,
+      contentType: input.contentType,
+      traceId,
+      traceparent,
+    },
+    { token }
+  );
+
+  console.info("wardrobe.create.request", { traceId, traceparent, itemId: result.id, userId });
+  return result;
+};
+
+type GuestWardrobeSeedInput = {
+  itemId: string;
+  category?: string | null;
+  description: string;
+  styleTags: string[];
+  boundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  confidence?: number;
+  traceId?: string;
+  traceparent?: string;
+};
+
+type GuestWardrobeSeedResult =
+  | {
+      success: true;
+      itemId: string;
+      storageId: Id<"_storage">;
+      categoryKey: string;
+      embedding: number[];
+      visualEmbedding: number[];
+    }
+  | {
+      success: false;
+      itemId: string;
+      error: string;
+    };
+
+const seedWardrobeItemFromGuestForAuth = async (
+  authContext: Pick<ConvexAuthContext, "userId" | "token">,
+  input: GuestWardrobeSeedInput
+): Promise<GuestWardrobeSeedResult> => {
+  const { userId, token } = authContext;
+  const { traceId, traceparent } = ensureTraceContext(input);
+
+  try {
+    await fetchMutation(
+      api.wardrobe.setAnalysisStatus,
+      { itemId: input.itemId as Id<"wardrobeItems">, status: "processing_embedding" },
+      { token }
+    );
+
+    await fetchMutation(
+      api.wardrobe.applyTags,
+      {
+        itemId: input.itemId as Id<"wardrobeItems">,
+        category: input.category ?? null,
+        styleTags: input.styleTags,
+      },
+      { token }
+    );
+
+    await fetchMutation(
+      api.wardrobe.applyDescription,
+      {
+        itemId: input.itemId as Id<"wardrobeItems">,
+        category: input.category ?? null,
+        description: input.description,
+      },
+      { token }
+    );
+
+    const embedding = await runInference(
+      embedText(`${input.description} ${input.styleTags.join(" ")}`.trim()).pipe(
+        Effect.withSpan("action.seedWardrobeItemFromGuest", {
+          attributes: { userId, itemId: input.itemId },
+        }),
+        )
+    );
+    const item = await fetchQuery(
+      api.wardrobe.getWardrobeItemWithUrl,
+      { itemId: input.itemId as Id<"wardrobeItems"> },
+      { token }
+    );
+    const visualEmbedding = await runInference(
+      embedImage(
+        await fetchImageBase64(item.imageUrl),
+        item.contentType ?? "image/jpeg",
+        `${input.category ?? "garment"}. ${input.description}`
+      )
+    );
+
+    await fetchMutation(
+      api.wardrobe.applyFullAnalysis,
+      {
+        itemId: input.itemId as Id<"wardrobeItems">,
+        category: input.category ?? null,
+        description: input.description,
+        styleTags: input.styleTags,
+        embedding,
+        visualEmbedding,
+        traceId,
+        traceparent,
+      },
+      { token }
+    );
+
+    return {
+      success: true as const,
+      itemId: input.itemId,
+      storageId: item.storageId,
+      categoryKey: normalizeGarmentCategory(input.category ?? "garment"),
+      embedding,
+      visualEmbedding,
+    };
+  } catch (error) {
+    const failure = toInferenceFailure(error);
+    try {
+      await fetchMutation(
+        api.wardrobe.setAnalysisError,
+        { itemId: input.itemId as Id<"wardrobeItems">, error: failure.userMessage },
+        { token }
+      );
+    } catch {
+      // ignore
+    }
+    console.error("guest.import.seed.failed", {
+      traceId,
+      traceparent,
+      itemId: input.itemId,
+      code: failure.code,
+      message: failure.message,
+    });
+    return {
+      success: false as const,
+      itemId: input.itemId,
+      error: failure.userMessage,
+    };
+  }
+};
+
+export const seedWardrobeItemFromGuestAction = async (input: GuestWardrobeSeedInput) => {
+  const authContext = await getConvexAuth();
+  await enforceAuthenticatedProtection({
+    scope: "inference",
+    tier: authContext.tier,
+    userId: authContext.userId,
+  });
+  return seedWardrobeItemFromGuestForAuth(authContext, input);
+};
+
+export const completeGuestOnboardingAction = async (input: {
+  items: GuestWardrobeSeedInput[];
+  sourceFit: {
+    storageId: string;
+    transcription: string;
+  };
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const authContext = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+  const items = input.items.slice(0, 8);
+  if (items.length === 0) throw new Error("No onboarding items provided");
+
+  await enforceAuthenticatedProtection({
+    scope: "onboarding",
+    tier: authContext.tier,
+    userId: authContext.userId,
+  });
+
+  const results: Array<{
+    input: GuestWardrobeSeedInput;
+    result: GuestWardrobeSeedResult;
+  }> = [];
+  for (const item of items) {
+    results.push({
+      input: item,
+      result: await seedWardrobeItemFromGuestForAuth(authContext, item),
+    });
+  }
+
+  const successful = results.filter(
+    (entry): entry is {
+      input: GuestWardrobeSeedInput;
+      result: Extract<GuestWardrobeSeedResult, { success: true }>;
+    } => entry.result.success
+  );
+  if (successful.length !== results.length) {
+    return {
+      success: false as const,
+      results: results.map(({ result }) => result),
+    };
+  }
+
+  const fitStorageId = input.sourceFit.storageId as Id<"_storage">;
+  await fetchMutation(
+    api.storage.registerUpload,
+    { storageId: fitStorageId, purpose: "daily_fit_check" },
+    { token: authContext.token }
+  );
+
+  const recorded = await fetchMutation(
+    api.fitChecks.recordFitCheck,
+    {
+      storageId: fitStorageId,
+      type: "daily_fit_check",
+      transcription: input.sourceFit.transcription,
+      items: successful.map(({ input: item, result }) => {
+        const wardrobeItemId = item.itemId as Id<"wardrobeItems">;
+        return {
+          wardrobeItemId,
+          source: "matched_existing" as const,
+          category: item.category ?? null,
+          description: item.description,
+          styleTags: item.styleTags,
+          ...(item.boundingBox ? { boundingBox: item.boundingBox } : {}),
+          ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
+          embedding: result.embedding,
+          ...(item.boundingBox && item.category
+            ? {
+                observation: {
+                  cropStorageId: result.storageId,
+                  categoryKey: result.categoryKey,
+                  visualEmbedding: result.visualEmbedding,
+                  semanticEmbedding: result.embedding,
+                  embeddingModel: "gemini-embedding-2@768",
+                  detectorModel: GEMINI_FLASH_LITE_MODEL,
+                  resolutionStatus: "auto_matched" as const,
+                  matchScore: 1,
+                  matchMargin: 1,
+                  candidateItemIds: [wardrobeItemId],
+                  candidateScores: [1],
+                },
+              }
+            : {}),
+        };
+      }),
+      traceId,
+      traceparent,
+    },
+    { token: authContext.token }
+  );
+
+  console.info("guest.onboarding.complete", {
+    traceId,
+    traceparent,
+    userId: authContext.userId,
+    fitCheckId: recorded.id,
+    itemCount: successful.length,
+  });
+
+  return {
+    success: true as const,
+    fitCheckId: recorded.id,
+    results: successful.map(({ result }) => result),
+  };
+};
+
+export const deleteWardrobeItemAction = async (input: {
+  itemId: string;
+  reason: string;
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { userId, token } = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+
+  await fetchMutation(
+    api.wardrobe.deleteWardrobeItem,
+    {
+      itemId: input.itemId as Id<"wardrobeItems">,
+      reason: input.reason,
+      traceId,
+      traceparent,
+    },
+    { token }
+  );
+
+  console.info("wardrobe.delete.request", { traceId, traceparent, itemId: input.itemId, userId });
+  return { success: true };
+};
+
+export const updateProfileBioAction = async (input: {
+  bio: string;
+  source?: "manual" | "guest_import";
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { userId, token } = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+
+  await fetchMutation(
+    api.profile.updateBio,
+    { bio: input.bio, ...(input.source ? { source: input.source } : {}), traceId, traceparent },
+    { token }
+  );
+
+  console.info("profile.update.request", { traceId, traceparent, userId });
+  return { success: true };
+};
+
+export const processWardrobeItemAction = async (input: {
+  itemId: string;
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { userId, token, tier } = await getConvexAuth();
+  await enforceAuthenticatedProtection({ scope: captureProtectionScopes.save, tier, userId });
+  const { traceId, traceparent } = ensureTraceContext(input);
+
+  console.info("inference.start", { traceId, traceparent, itemId: input.itemId, userId });
+
+  const result = await processWardrobeInference({
+    itemId: input.itemId,
+    userId,
+    token,
+    traceId,
+    traceparent,
+  });
+
+  if (!result.success) {
+    console.error("inference.error", {
+      traceId,
+      traceparent,
+      itemId: input.itemId,
+      message: result.error,
+    });
+    return result;
+  }
+
+  console.info("inference.complete", { traceId, traceparent, itemId: input.itemId, userId });
+  return result;
+};
+
+export const checkCompatibilityForAuth = async (
+  authContext: ConvexAuthContext,
+  input: {
+  storageId: string;
+  scope?: "single_piece" | "full_fit";
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { userId, token, tier } = authContext;
+  const { traceId, traceparent } = ensureTraceContext(input);
+  await enforceAuthenticatedProtection({ scope: "check", tier, userId });
+
+  console.info("compatibility.start", { traceId, traceparent, userId });
+
+  // Quick-compare uploads aren't attached to a wardrobe item, so we explicitly
+  // register them to authorize retrieval via `storage.getStorageUrl`.
+  await fetchMutation(
+    api.storage.registerUpload,
+    { storageId: input.storageId as Id<"_storage">, purpose: "quick_compare" },
+    { token }
+  );
+
+  const imageUrl = await fetchQuery(
+    api.storage.getStorageUrl,
+    { storageId: input.storageId as Id<"_storage"> },
+    { token }
+  );
+
+  if (!imageUrl) {
+    throw new Error("Uploaded file missing");
+  }
+
+  const base64 = await fetchImageBase64(imageUrl);
+
+  const fullFit = input.scope === "full_fit" ? await runInference(
+    analyzeFitCheckPhoto(base64, "try_on"),
+  ) : null;
+  const candidate = fullFit ? {
+    category: "Full outfit",
+    description: `${fullFit.transcription} ${fullFit.items.map(item => `${item.category}: ${item.description}`).join("; ")}`,
+    style_tags: [...new Set(fullFit.items.flatMap(item => item.style_tags))].slice(0, 12),
+  } : await runInference(analyzeImageFull(base64));
+
+  const styleQuery = await runInference(
+    generateStyleQuery(candidate.description, candidate.style_tags)
+  );
+
+  let memoryContext: Array<{ fact: string; relation: string; relevance: number | null }> = [];
+  try {
+    memoryContext = await fetchAction(api.zepSync.searchStyleContext, { query: styleQuery, traceId, traceparent }, { token });
+  } catch (error) {
+    console.warn("zep.search.style_context.failed", { traceId, traceparent, userId, message: error instanceof Error ? error.message : String(error) });
+  }
+
+  const embedding = await runInference(
+    embedText(styleQuery)
+  );
+
+  const similarResults = await fetchAction(
+    api.wardrobe.searchSimilarItems,
+    { embedding, limit: 5 },
+    { token }
+  );
+
+  const items = await fetchQuery(
+    api.wardrobe.listItemsForSimilarity,
+    { limit: 200 },
+    { token }
+  );
+
+  const similarIds = new Set(similarResults.map((entry) => String(entry._id)));
+  const scored = items
+    .filter((item) => Array.isArray(item.embedding))
+    .filter((item) => !similarIds.has(String(item._id)))
+    .map((item) => ({
+      item,
+      similarity: cosineSimilarity(embedding, item.embedding ?? []),
+    }))
+    .sort((a, b) => b.similarity - a.similarity);
+
+  const dissimilarItems = scored
+    .slice()
+    .reverse()
+    .slice(0, 3)
+    .filter((entry) => entry.similarity < 0.5);
+
+  const displayItems = await fetchQuery(
+    api.wardrobe.getWardrobeItemsDisplayByIds,
+    {
+      itemIds: [
+        ...similarResults.map((entry) => entry._id),
+        ...dissimilarItems.map((entry) => entry.item._id),
+      ],
+    },
+    { token }
+  );
+  const displayMap = new Map(displayItems.map((item) => [item.id, item]));
+
+  const hydrate = (entry: { itemId: Id<"wardrobeItems">; similarity: number }) => {
+    const display = displayMap.get(entry.itemId);
+    if (!display) return null;
+    return {
+      id: display.id,
+      imageUrl: display.imageUrl,
+      category: display.category ?? null,
+      description: display.description ?? null,
+      styleTags: display.styleTags ?? null,
+      similarity: entry.similarity,
+    };
+  };
+
+  const hydratedSimilar = similarResults
+    .map((entry) => ({ itemId: entry._id, similarity: entry._score }))
+    .map(hydrate)
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+
+  const hydratedDissimilar = dissimilarItems
+    .map((entry) => ({ itemId: entry.item._id, similarity: entry.similarity }))
+    .map(hydrate)
+    .filter((item): item is NonNullable<typeof item> => item !== null);
+
+  const rememberTryOn = (description: string) => fetchMutation(
+    api.fitChecks.recordFitCheck,
+    {
+      storageId: input.storageId as Id<"_storage">,
+      type: "try_on" as const,
+      description,
+      transcription: candidate.description,
+      items: (fullFit?.items ?? [candidate]).map(item => ({ source: "transcribed_only" as const, category: item.category, description: item.description, styleTags: item.style_tags })),
+      traceId,
+      traceparent,
+    },
+    { token }
+  );
+
+  if (hydratedSimilar.length === 0 && hydratedDissimilar.length === 0) {
+    const message = `This ${fullFit ? "outfit" : "piece"} opens a new direction. There is no close closet anchor yet, but it does not directly clash with what you own.`;
+    const fitCheck = await rememberTryOn(message);
+    if (fitCheck.created) try {
+      await fetchAction(
+        api.zepSync.syncCandidateComparison,
+        {
+          candidate: {
+            category: candidate.category,
+            description: candidate.description,
+            styleTags: candidate.style_tags,
+          },
+          storageId: input.storageId,
+          evaluation: null,
+          similarItems: [],
+          dissimilarItems: [],
+          traceId,
+          traceparent,
+        },
+        { token }
+      );
+    } catch (error) {
+      console.warn("zep.sync.candidate_comparison.enqueue_failed", {
+        traceId,
+        traceparent,
+        userId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    return {
+      storageId: input.storageId,
+      fitCheckId: fitCheck.id,
+      candidate,
+      similarItems: [],
+      dissimilarItems: [],
+      evaluation: null,
+      message,
+    };
+  }
+
+  const evaluation = await runInference(
+    evaluateCompatibility({
+      scope: input.scope ?? "single_piece",
+      candidate,
+      similarItems: hydratedSimilar.map((entry) => ({
+        category: entry.category,
+        description: entry.description,
+        similarity: entry.similarity,
+      })),
+      dissimilarItems: hydratedDissimilar.map((entry) => ({
+        category: entry.category,
+        description: entry.description,
+        similarity: entry.similarity,
+      })),
+      memoryContext,
+    })
+  );
+
+  const fitCheck = await rememberTryOn(evaluation.explanation);
+  if (fitCheck.created) try {
+    await fetchAction(
+      api.zepSync.syncCandidateComparison,
+      {
+        candidate: {
+          category: candidate.category,
+          description: candidate.description,
+          styleTags: candidate.style_tags,
+        },
+        storageId: input.storageId,
+        evaluation: { ...evaluation, best_pairings: [...evaluation.best_pairings], worst_clashes: [...evaluation.worst_clashes] },
+        similarItems: hydratedSimilar.map((item) => ({
+          itemId: item.id,
+          category: item.category,
+          description: item.description,
+          styleTags: item.styleTags,
+        })),
+        dissimilarItems: hydratedDissimilar.map((item) => ({
+          itemId: item.id,
+          category: item.category,
+          description: item.description,
+          styleTags: item.styleTags,
+        })),
+        traceId,
+        traceparent,
+      },
+      { token }
+    );
+  } catch (error) {
+    console.warn("zep.sync.candidate_comparison.enqueue_failed", {
+      traceId,
+      traceparent,
+      userId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  return {
+    storageId: input.storageId,
+    fitCheckId: fitCheck.id,
+    candidate,
+    similarItems: hydratedSimilar,
+    dissimilarItems: hydratedDissimilar,
+    evaluation,
+  };
+};
+
+export const checkCompatibilityAction = async (input: {
+  storageId: string;
+  scope?: "single_piece" | "full_fit";
+  traceId?: string;
+  traceparent?: string;
+}) => checkCompatibilityForAuth(await getConvexAuth(), input);
+
+const normalizeSourceUrl = (value?: string) => {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  const url = new URL(trimmed);
+  if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Source URL must use http or https");
+  return url.toString();
+};
+
+export const saveInspirationForAuth = async (
+  authContext: ConvexAuthContext,
+  input: {
+    wardrobeId: string; storageId?: string; sourceUrl?: string; sourceLabel?: string;
+    note?: string; candidate?: { category: string; description: string; style_tags: string[] };
+    traceId?: string; traceparent?: string;
+  }
+) => {
+  const { userId, token, tier } = authContext;
+  const { traceId, traceparent } = ensureTraceContext(input);
+  const sourceUrl = normalizeSourceUrl(input.sourceUrl);
+  if (!input.storageId && !sourceUrl) throw new Error("Add an image or source URL");
+  const candidate = input.candidate;
+  if (input.storageId) {
+    await fetchMutation(api.storage.registerUpload, { storageId: input.storageId as Id<"_storage">, purpose: "inspiration" }, { token });
+  }
+  const description = input.note?.trim() || candidate?.description || sourceUrl || "Saved visual reference";
+  const category = candidate?.category || "Visual reference";
+  const styleTags = candidate?.style_tags ?? [];
+  const embedding = candidate
+    ? await runInference(embedText(`${category} ${description} ${styleTags.join(" ")}`))
+    : undefined;
+  const saved = await fetchMutation(api.candidates.createInspiration, {
+    wardrobeId: input.wardrobeId as Id<"wardrobes">,
+    ...(input.storageId ? { storageId: input.storageId as Id<"_storage"> } : {}),
+    ...(sourceUrl ? { sourceUrl } : {}),
+    ...(input.sourceLabel?.trim() ? { sourceLabel: input.sourceLabel.trim() } : {}),
+    category, description, styleTags, ...(embedding ? { embedding } : {}), traceId, traceparent,
+  }, { token });
+  if (!candidate && input.storageId) {
+    await runBestEffort("inspiration.enrichment.failed", { traceId, userId }, async () => {
+      await enforceAuthenticatedProtection({ scope: "inference", tier, userId });
+      const imageUrl = await fetchQuery(api.storage.getStorageUrl, { storageId: input.storageId as Id<"_storage"> }, { token });
+      if (!imageUrl) throw new Error("Uploaded file missing");
+      const analysis = await runInference(analyzeInspirationImage(await fetchImageBase64(imageUrl)));
+      const semanticEmbedding = await runInference(embedText(`${analysis.category} ${analysis.description} ${analysis.style_tags.join(" ")}`));
+      await fetchMutation(api.candidates.enrichInspiration, {
+        candidateItemId: saved.id,
+        category: analysis.category,
+        description: analysis.description,
+        styleTags: analysis.style_tags,
+        embedding: semanticEmbedding,
+        traceId,
+        traceparent,
+      }, { token });
+    });
+  }
+  return saved;
+};
+
+export const saveInspirationAction = async (input: Parameters<typeof saveInspirationForAuth>[1]) =>
+  saveInspirationForAuth(await getConvexAuth(), input);
+
+export const enrichInspirationAction = async (input: {
+  candidateItemId: string;
+  storageId: string;
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { userId, token, tier } = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+  const enriched = await runBestEffort("inspiration.enrichment.failed", { traceId, userId }, async () => {
+    await enforceAuthenticatedProtection({ scope: "inference", tier, userId });
+    const imageUrl = await fetchQuery(api.storage.getStorageUrl, { storageId: input.storageId as Id<"_storage"> }, { token });
+    if (!imageUrl) throw new Error("Uploaded file missing");
+    const analysis = await runInference(analyzeInspirationImage(await fetchImageBase64(imageUrl)));
+    const embedding = await runInference(embedText(`${analysis.category} ${analysis.description} ${analysis.style_tags.join(" ")}`));
+    return fetchMutation(api.candidates.enrichInspiration, {
+      candidateItemId: input.candidateItemId as Id<"candidateItems">,
+      category: analysis.category,
+      description: analysis.description,
+      styleTags: analysis.style_tags,
+      embedding,
+      traceId,
+      traceparent,
+    }, { token });
+  });
+  return enriched ?? { success: false as const };
+};
+
+export const analyzeSelfieForAuth = async (
+  authContext: Pick<ConvexAuthContext, "userId" | "token">,
+  input: {
+  storageId: string;
+  traceId?: string;
+  traceparent?: string;
+}) => {
+  const { userId, token } = authContext;
+  const { traceId, traceparent } = ensureTraceContext(input);
+
+  console.info("selfie.analyze.start", { traceId, traceparent, userId });
+
+  await fetchMutation(
+    api.storage.registerUpload,
+    { storageId: input.storageId as Id<"_storage">, purpose: "selfie" },
+    { token }
+  );
+
+  const imageUrl = await fetchQuery(
+    api.storage.getStorageUrl,
+    { storageId: input.storageId as Id<"_storage"> },
+    { token }
+  );
+
+  if (!imageUrl) {
+    throw new Error("Uploaded file missing");
+  }
+
+  const base64 = await fetchImageBase64(imageUrl);
+
+  const analysis = await runInference(
+    analyzeSelfie(base64)
+  );
+
+  await fetchMutation(
+    api.profile.updateProfileAttributes,
+    {
+      skinTone: analysis.skin_tone,
+      hairColor: analysis.hair_color,
+      ...(analysis.complexion ? { complexion: analysis.complexion } : {}),
+      ...(analysis.color_season ? { colorSeason: analysis.color_season } : {}),
+      traceId,
+      traceparent,
+    },
+    { token }
+  );
+
+  console.info("selfie.analyze.complete", { traceId, traceparent, userId });
+  return analysis;
+};
+
+export const refreshStyleBioAction = async (input: {
+  force?: boolean;
+  traceId?: string;
+  traceparent?: string;
+} = {}) => {
+  const { token } = await getConvexAuth();
+  const { traceId, traceparent } = ensureTraceContext(input);
+  const context = await fetchQuery(api.profile.getStyleBioContext, {}, { token });
+  if (!context) throw new Error("Unauthorized");
+  if (!input.force && !context.shouldRefresh) {
+    return { updated: false as const, reason: context.refreshReason, bio: context.profile?.bio ?? "" };
+  }
+
+  let graphFacts: string[] = [];
+  try {
+    graphFacts = await fetchAction(api.zepSync.getStyleBioGraphContext, {}, { token });
+  } catch (error) {
+    console.warn("style_bio.graph_context.unavailable", { traceId, message: toErrorMessage(error) });
+  }
+
+  const currentBio = context.profile?.bio ?? "";
+  const manualAnchor = context.profile?.bioManualAnchor ?? "";
+  const generated = context.counts.closetItemCount === 0 && context.counts.fitCheckCount === 0 && context.counts.collectionCount === 0
+    ? { bio: manualAnchor || currentBio || "I'm building a clearer picture of what I like to wear. As my closet and outfit notes grow, this space will track the colors, shapes, textures, and combinations I return to without guessing ahead of the evidence." }
+    : await runInference(generateMaintainedStyleBio({
+        currentBio,
+        manualAnchor,
+        refreshReason: context.refreshReason,
+        closetItems: context.closetItems,
+        recentFits: context.recentFits,
+        collections: context.collections,
+        graphFacts,
+      }));
+
+  const saved = await fetchMutation(api.profile.saveGeneratedBio, {
+    bio: truncateWords(generated.bio, 110),
+    reason: context.refreshReason,
+    contextFingerprint: context.fingerprint,
+    ...context.counts,
+    ...(context.profile?.bioRevisionId ? { baseRevisionId: context.profile.bioRevisionId } : {}),
+    traceId,
+    traceparent,
+  }, { token });
+
+  return saved.success
+    ? { updated: true as const, reason: context.refreshReason, bio: generated.bio }
+    : { updated: false as const, reason: saved.reason, bio: context.profile?.bio ?? "" };
+};
+
+export const analyzeSelfieAction = async (input: {
+  storageId: string;
+  traceId?: string;
+  traceparent?: string;
+}) => analyzeSelfieForAuth(await getConvexAuth(), input);
+
+export const recordFitCheckForAuth = async (
+  authContext: Pick<ConvexAuthContext, "userId" | "token" | "tier">,
+  input: {
+    storageId: string;
+    type: FitCheckKind;
+    traceId?: string;
+    traceparent?: string;
+  }
+) => {
+  const { userId, token, tier } = authContext;
+  const { traceId, traceparent } = ensureTraceContext(input);
+  await enforceAuthenticatedProtection({ scope: "inference", tier, userId });
+
+  console.info("fit_check.analyze.start", { traceId, traceparent, userId, type: input.type });
+
+  await fetchMutation(
+    api.storage.registerUpload,
+    { storageId: input.storageId as Id<"_storage">, purpose: input.type },
+    { token }
+  );
+
+  await runBestEffort("wardrobe.visual_embedding.backfill_failed", { traceId, userId }, () =>
+    backfillWardrobeVisualEmbeddings(token, traceId, userId)
+  );
+
+  const recorded = await runBestEffort("fit_check.analysis.failed", { traceId, userId }, async () => {
+    const imageUrl = await fetchQuery(
+      api.storage.getStorageUrl,
+      { storageId: input.storageId as Id<"_storage"> },
+      { token }
+    );
+    if (!imageUrl) throw new Error("Uploaded file missing");
+
+    const imageResponse = await fetch(imageUrl);
+    if (!imageResponse.ok) throw new Error(`Image fetch failed: ${imageResponse.statusText}`);
+    const imageMimeType = imageResponse.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+    const sourceImage = Buffer.from(await imageResponse.arrayBuffer());
+    const base64 = sourceImage.toString("base64");
+    const analysis = await runInference(
+      analyzeFitCheckPhoto(base64, input.type, imageMimeType)
+    );
+    const items: RecordFitCheckItemInput[] = [];
+    for (const item of analysis.items) {
+      const semanticEmbedding = await runInference(
+        embedText(`${item.description} ${item.style_tags.join(" ")}`.trim())
+      );
+      const observation = item.bounding_box
+        ? await runBestEffort("fit_check.garment_observation.failed", { traceId, userId }, async () => {
+            const crop = await cropGarmentRegion(sourceImage, item.bounding_box!);
+            const cropBase64 = crop.toString("base64");
+            const visualEmbedding = await runInference(
+              embedImage(cropBase64, "image/jpeg", `${item.category}. ${item.description}`)
+            );
+            const categoryKey = normalizeGarmentCategory(item.category);
+            const candidates = await fetchAction(
+              api.wardrobe.searchGarmentIdentityCandidates,
+              { visualEmbedding, categoryKey, limit: 5 },
+              { token }
+            ) as GarmentIdentityCandidate[];
+            const embeddingDecision = classifyGarmentMatch(candidates);
+            const comparison = shouldDirectlyCompareGarments(embeddingDecision, candidates)
+              ? await runBestEffort("fit_check.garment_identity.direct_comparison_failed", { traceId, userId }, async () => {
+                  const candidatesWithImages = candidates.slice(0, 3).filter((candidate) => Boolean(candidate.imageUrl));
+                  const directCandidates = await Promise.all(candidatesWithImages.map(async (candidate) => {
+                    const imageUrl = candidate.imageUrl!;
+                    const response = await fetch(imageUrl);
+                    if (!response.ok) throw new Error(`Candidate image fetch failed: ${response.statusText}`);
+                    const mimeType = response.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+                    return {
+                      wardrobeItemId: candidate.wardrobeItemId,
+                      category: candidate.category,
+                      description: candidate.description,
+                      image: { data: Buffer.from(await response.arrayBuffer()).toString("base64"), mimeType },
+                    };
+                  }));
+                  const result = await runInference(compareGarmentCrops({
+                    query: { data: cropBase64, mimeType: "image/jpeg" },
+                    candidates: directCandidates,
+                  }));
+                  console.info("fit_check.garment_identity.direct_comparison_complete", {
+                    traceId,
+                    userId,
+                    model: result.model,
+                    inputTokens: result.inputTokens,
+                    outputTokens: result.outputTokens,
+                    confidence: result.confidence,
+                  });
+                  return { result, candidates: candidatesWithImages };
+                })
+              : undefined;
+            const decision = comparison
+              ? applyDirectGarmentComparison(embeddingDecision, comparison.candidates, comparison.result)
+              : embeddingDecision;
+
+            const cropStorageId = await uploadPhotoFile(
+              new Blob([new Uint8Array(crop)], { type: "image/jpeg" }),
+              () => fetchMutation(api.wardrobe.getUploadUrl, {}, { token }),
+            ) as Id<"_storage">;
+            await fetchMutation(api.storage.registerUpload, { storageId: cropStorageId, purpose: "garment_crop" }, { token });
+
+            return {
+              decision,
+              cropStorageId,
+              categoryKey,
+              visualEmbedding,
+              candidates,
+            };
+          })
+        : undefined;
+
+      const autoWardrobeItemId = observation?.decision.status === "auto_matched"
+        ? observation.decision.wardrobeItemId as Id<"wardrobeItems">
+        : undefined;
+      items.push({
+        source: autoWardrobeItemId ? "matched_existing" : "observed_unresolved",
+        category: item.category,
+        description: item.description,
+        styleTags: item.style_tags,
+        ...(autoWardrobeItemId ? { wardrobeItemId: autoWardrobeItemId } : {}),
+        ...(item.bounding_box ? { boundingBox: item.bounding_box } : {}),
+        ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
+        embedding: semanticEmbedding,
+        ...(observation ? {
+          observation: {
+            cropStorageId: observation.cropStorageId,
+            categoryKey: observation.categoryKey,
+            visualEmbedding: observation.visualEmbedding,
+            semanticEmbedding,
+            embeddingModel: "gemini-embedding-2@768",
+            detectorModel: GEMINI_FLASH_LITE_MODEL,
+            resolutionStatus: observation.decision.status,
+            matchScore: observation.decision.confidence,
+            matchMargin: observation.decision.margin,
+            candidateItemIds: observation.candidates.map((candidate) => candidate.wardrobeItemId as Id<"wardrobeItems">),
+            candidateScores: observation.candidates.map((candidate) => candidate.score),
+          },
+        } : {}),
+      });
+    }
+    const saved = await fetchMutation(
+      api.fitChecks.recordFitCheck,
+      { storageId: input.storageId as Id<"_storage">, type: input.type, transcription: analysis.transcription, items, traceId, traceparent },
+      { token }
+    );
+    return { ...saved, transcription: analysis.transcription };
+  });
+
+  if (!recorded) {
+    if (input.type !== "daily_fit_check") {
+      throw new Error("Try-on analysis failed");
+    }
+    const saved = await fetchMutation(
+      api.fitChecks.recordFitCheck,
+      {
+        storageId: input.storageId as Id<"_storage">,
+        type: input.type,
+        description: "Visual analysis is pending.",
+        items: [],
+        traceId,
+        traceparent,
+      },
+      { token }
+    );
+    console.info("fit_check.recorded_without_analysis", { traceId, traceparent, userId, fitCheckId: saved.id });
+    return { ...saved, transcription: "" };
+  }
+
+  console.info("fit_check.analyze.complete", {
+    traceId,
+    traceparent,
+    userId,
+    type: input.type,
+    fitCheckId: recorded.id,
+    itemCount: recorded.items.length,
+  });
+
+  return {
+    ...recorded,
+  };
+};
+
+export const recordDailyFitCheckAction = async (input: {
+  storageId: string;
+  traceId?: string;
+  traceparent?: string;
+}) =>
+  recordFitCheckForAuth(await getConvexAuth(), {
+    ...input,
+    type: "daily_fit_check",
+  });
+
+export const recordTryOnFitCheckAction = async (input: {
+  storageId: string;
+  traceId?: string;
+  traceparent?: string;
+}) =>
+  recordFitCheckForAuth(await getConvexAuth(), {
+    ...input,
+    type: "try_on",
+  });
+
+const GUEST_DEMO_ITEM_LIMIT = 4;
+const GUEST_DEMO_MAX_IMAGE_BYTES = 1_500_000;
+const GUEST_DEMO_MAX_TOTAL_BYTES = 4_000_000;
+const GUEST_DEMO_MAX_FILENAME_LENGTH = 140;
+const GUEST_DEMO_LIMIT_MESSAGE = "Demo paused at the free limit. Continue by signing up or signing in.";
+const GUEST_DEMO_ALLOWED_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
+
+const extractBase64Payload = (value: string) => value.replace(/^data:.*;base64,/, "").replace(/\s+/g, "");
+
+const estimateDecodedBytes = (base64: string) => {
+  if (!base64 || !/^[a-zA-Z0-9+/=]+$/.test(base64)) {
+    throw new Error("Invalid image encoding");
+  }
+
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
+};
+
+const validateGuestBatchItems = (items: { fileName: string; mimeType: string; base64: string }[]) => {
+  let totalBytes = 0;
+
+  return items.map((item) => {
+    const fileName = item.fileName.trim();
+    if (!fileName || fileName.length > GUEST_DEMO_MAX_FILENAME_LENGTH) {
+      throw new Error("Invalid file name");
+    }
+
+    if (!GUEST_DEMO_ALLOWED_MIME_TYPES.has(item.mimeType)) {
+      throw new Error(`Unsupported image type: ${item.mimeType}`);
+    }
+
+    const normalizedBase64 = extractBase64Payload(item.base64);
+    const decodedBytes = estimateDecodedBytes(normalizedBase64);
+    if (decodedBytes === 0 || decodedBytes > GUEST_DEMO_MAX_IMAGE_BYTES) {
+      throw new Error("Each image must be under 1.5MB after compression");
+    }
+
+    totalBytes += decodedBytes;
+    if (totalBytes > GUEST_DEMO_MAX_TOTAL_BYTES) {
+      throw new Error("Total upload size is too large for guest demo");
+    }
+
+    return {
+      fileName,
+      mimeType: item.mimeType,
+      normalizedBase64,
+    };
+  });
+};
+
+export type GuestBatchAnalysisResult =
+  | {
+      kind: "ok";
+      items: { fileName: string; category: string; description: string; styleTags: string[] }[];
+      suggestedBio: string;
+      capped: boolean;
+      limit: number;
+    }
+  | {
+      kind: "limit";
+      message: string;
+      limit: number;
+    };
+
+export type GuestFitCheckAnalysisResult =
+  | {
+      kind: "ok";
+      transcription: string;
+      items: {
+        fileName: string;
+        dataUrl: string;
+        category: string;
+        description: string;
+        styleTags: string[];
+        boundingBox: {
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        };
+        confidence?: number;
+      }[];
+      suggestedBio: string;
+    }
+  | {
+      kind: "limit";
+      message: string;
+    }
+  | {
+      kind: "error";
+      message: string;
+    };
+
+/**
+ * Turn one full-body guest photo into the same garment-sized inputs used by
+ * the signed-in closet. The original selfie stays client-side until signup;
+ * only the downscaled image is sent for this analysis.
+ */
+export const analyzeGuestFitCheckAction = async (input: {
+  photo: { fileName: string; mimeType: string; base64: string };
+  traceId?: string;
+  traceparent?: string;
+}): Promise<GuestFitCheckAnalysisResult> => {
+  const { traceId, traceparent } = ensureTraceContext(input);
+  const [photo] = validateGuestBatchItems([input.photo]);
+  if (!photo) throw new Error("No image provided");
+
+  const protection = await Effect.runPromise(
+    Effect.tryPromise({
+      try: enforceGuestBatchProtection,
+      catch: toErrorMessage,
+    }).pipe(Effect.result)
+  );
+  if (Result.isFailure(protection)) {
+    const message = protection.failure;
+    return {
+      kind: "limit",
+      message: /automated traffic/i.test(message) ? message : GUEST_DEMO_LIMIT_MESSAGE,
+    };
+  }
+
+  const analysisOutcome = await Effect.runPromise(
+    Effect.tryPromise({
+      try: () =>
+        runInference(
+          analyzeFitCheckPhoto(photo.normalizedBase64, "daily_fit_check", photo.mimeType)
+        ),
+      catch: (error) => error,
+    }).pipe(Effect.result)
+  );
+  if (Result.isFailure(analysisOutcome)) {
+    const message = toErrorMessage(analysisOutcome.failure);
+    console.warn("guest.fit_check.analysis_failed", {
+      traceId,
+      traceparent,
+      code: isGeminiContentBlock(message) ? "content_blocked" : "analysis_failed",
+      message,
+    });
+    return {
+      kind: "error",
+      message: isGeminiContentBlock(message)
+        ? FIT_CHECK_CONTENT_BLOCK_MESSAGE
+        : "We could not analyze this photo right now. Please try again.",
+    };
+  }
+  const analysis = analysisOutcome.success;
+  const sourceImage = Buffer.from(photo.normalizedBase64, "base64");
+  const croppedItems = [];
+
+  for (const [index, item] of analysis.items.slice(0, 8).entries()) {
+    const boundingBox = normalizeBoundingBox(item.bounding_box);
+    if (!boundingBox) continue;
+    const crop = await runBestEffort(
+      "guest.fit_check.crop_failed",
+      { traceId, itemIndex: String(index) },
+      () => cropGarmentRegion(sourceImage, boundingBox)
+    );
+    if (!crop) continue;
+    const categoryKey = normalizeGarmentCategory(item.category);
+    croppedItems.push({
+      fileName: `fit-${categoryKey}-${index + 1}.jpg`,
+      dataUrl: `data:image/jpeg;base64,${crop.toString("base64")}`,
+      category: item.category,
+      description: item.description,
+      styleTags: item.style_tags,
+      boundingBox,
+      ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
+    });
+  }
+
+  if (croppedItems.length === 0) {
+    throw new Error("We could not find a clear outfit. Try a well-lit, full-body photo.");
+  }
+
+  const summary = await runInference(
+    generateClosetBio(
+      croppedItems.map((item) => ({
+        category: item.category,
+        description: item.description,
+        style_tags: item.styleTags,
+      }))
+    )
+  );
+
+  console.info("guest.fit_check.complete", {
+    traceId,
+    traceparent,
+    itemCount: croppedItems.length,
+  });
+
+  return {
+    kind: "ok",
+    transcription: analysis.transcription,
+    items: croppedItems,
+    suggestedBio: summary.bio,
+  };
+};
+
+export const analyzeGuestBatchAction = async (input: {
+  items: { fileName: string; mimeType: string; base64: string }[];
+  traceId?: string;
+  traceparent?: string;
+}): Promise<GuestBatchAnalysisResult> => {
+  const { traceId, traceparent } = ensureTraceContext(input);
+  const cappedItems = input.items.slice(0, GUEST_DEMO_ITEM_LIMIT);
+  const validatedItems = validateGuestBatchItems(cappedItems);
+
+  if (validatedItems.length === 0) {
+    throw new Error("No images provided");
+  }
+  try {
+    await enforceGuestBatchProtection();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    return {
+      kind: "limit",
+      message: /automated traffic/i.test(message) ? message : GUEST_DEMO_LIMIT_MESSAGE,
+      limit: GUEST_DEMO_ITEM_LIMIT,
+    };
+  }
+
+  const analyzed = [];
+  for (const item of validatedItems) {
+    const analysis = await runInference(
+      analyzeImageFull(item.normalizedBase64)
+    );
+    analyzed.push({
+      fileName: item.fileName,
+      category: analysis.category,
+      description: analysis.description,
+      styleTags: analysis.style_tags,
+    });
+  }
+
+  const summary = await runInference(
+    generateClosetBio(
+      analyzed.map((item) => ({
+        category: item.category,
+        description: item.description,
+        style_tags: item.styleTags,
+      }))
+    )
+  );
+
+  console.info("guest.demo.complete", {
+    traceId,
+    traceparent,
+    itemCount: cappedItems.length,
+    capped: input.items.length > GUEST_DEMO_ITEM_LIMIT,
+  });
+
+  return {
+    kind: "ok",
+    items: analyzed,
+    suggestedBio: summary.bio,
+    capped: input.items.length > GUEST_DEMO_ITEM_LIMIT,
+    limit: GUEST_DEMO_ITEM_LIMIT,
+  };
+};

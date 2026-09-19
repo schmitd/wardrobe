@@ -1,3 +1,4 @@
+import type { QueryCtx } from "../../convex/_generated/server";
 type IdentityClaims = {
   subject: string;
   email?: string;
@@ -61,13 +62,17 @@ export const identityToUser = (identity: IdentityClaims): AuthenticatedUser => {
 
 export const getAuthenticatedUser = async (ctx: {
   auth: { getUserIdentity: () => Promise<IdentityClaims | null> };
+  db?: Pick<QueryCtx["db"], "query">;
 }) => {
   const identity = await ctx.auth.getUserIdentity();
-  return identity ? identityToUser(identity) : null;
+  if (!identity) return null;
+  if (ctx.db && await ctx.db.query("deletedAccounts").withIndex("by_user", q => q.eq("userId", identity.subject)).first()) return null;
+  return identityToUser(identity);
 };
 
 export const getAuthenticatedUserId = async (ctx: {
   auth: { getUserIdentity: () => Promise<IdentityClaims | null> };
+  db?: Pick<QueryCtx["db"], "query">;
 }) => {
   const user = await getAuthenticatedUser(ctx);
   return user?.userId ?? null;

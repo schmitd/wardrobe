@@ -14,6 +14,8 @@ jobs:
       after_install_node_modules:
         - name: Verify TestFlight configuration
           run: bun run preflight:testflight
+        - name: Verify native sign-in endpoint
+          run: bun run preflight:native-auth
 
   testflight:
     name: Upload build to TestFlight

@@ -47,7 +47,7 @@ export default function CaptureProcessing() {
     stage.current = "commit";
     if (intent === "just_trying") {
       setStatus("Reading your wardrobe and finding useful anchors…");
-      const feedback = yield* Effect.tryPromise({ try: () => tryOn(getToken, id, traceId), catch: (cause) => cause instanceof Error ? cause : new Error("Try-on feedback failed.") });
+      const feedback = yield* Effect.tryPromise({ try: () => tryOn(getToken, id, traceId, scope), catch: (cause) => cause instanceof Error ? cause : new Error("Try-on feedback failed.") });
       setResult(feedback);
       return "try_on" as const;
     }
@@ -87,7 +87,7 @@ export default function CaptureProcessing() {
       if (Exit.isFailure(exit)) {
         track("native_capture_failed", { intent, stage: stage.current, attempt: attempt.current, duration_ms: Date.now() - attemptStarted, trace_id: traceId });
         trackFailure(stage.current, { trace_id: traceId, intent });
-        const failure = Option.getOrUndefined(Cause.failureOption(exit.cause));
+        const failure = Option.getOrUndefined(Cause.findErrorOption(exit.cause));
         setError(failure?.message ?? "Could not save this photo right now. Please try again.");
       } else {
         track("native_capture_completed", { intent, onboarding, attempt: attempt.current, duration_ms: Date.now() - attemptStarted, trace_id: traceId });

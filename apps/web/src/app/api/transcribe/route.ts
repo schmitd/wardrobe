@@ -1,8 +1,10 @@
+import { runInference } from "@/lib/run-effect";
+import { publicServerFailure } from "@/server/errors";
 import { Effect } from "effect";
 import { fetchMutation } from "convex/nextjs";
 import { api } from "@convex/_generated/api";
-import { getConvexAuth } from "@/app/actions/wardrobe";
-import { GeminiService, GeminiLive } from "@/services/GeminiService";
+import { getConvexAuth } from "@/server/auth";
+import { GeminiService } from "@/services/GeminiService";
 import { observeMobileRequest } from "@/server/mobileTelemetry";
 import { limitedJson } from "@/server/limitedJson";
 
@@ -41,20 +43,9 @@ export async function POST(request: Request) {
           { error: "Confirm the recording before transcribing." },
           { status: 400 },
         );
-      try {
-        await fetchMutation(
-          api.planning.reserveGeneration,
-          { transcription: true },
-          { token },
-        );
-      } catch {
-        return Response.json(
-          { error: "Please wait 30 seconds before transcribing again." },
-          { status: 429 },
-        );
-      }
+      await fetchMutation(api.planning.reserveGeneration, { transcription: true }, { token });
       // In-memory audio only. No storage uploads, prompt logs, or Zep writes.
-      const response = await Effect.runPromise(
+      const response = await runInference(
         Effect.gen(function* () {
           const gemini = yield* GeminiService;
           return yield* gemini.generateContent("gemini-2.5-flash", {
@@ -74,7 +65,7 @@ export async function POST(request: Request) {
               maxOutputTokens: 2048,
             },
           });
-        }).pipe(Effect.provide(GeminiLive), Effect.timeout("50 seconds")),
+        }).pipe(Effect.timeout("50 seconds")),
       );
       const result = JSON.parse(response.response.text());
       if (typeof result.text !== "string" || result.text.length > 4000)
@@ -83,13 +74,13 @@ export async function POST(request: Request) {
         { text: result.text },
         { headers: { "Cache-Control": "no-store" } },
       );
-    } catch {
+    } catch (error) {
+      const failure = publicServerFailure(error, "Could not transcribe that recording. Please type your day or try a shorter note.");
       return Response.json(
         {
-          error:
-            "Could not transcribe that recording. Please type your day or try a shorter note.",
+          error: failure.message,
         },
-        { status: 400 },
+        { status: failure.status },
       );
     }
   });

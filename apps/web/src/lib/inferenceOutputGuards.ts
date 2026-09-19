@@ -26,7 +26,7 @@ export const truncateWords = (value: string, limit: number) => {
   return words.slice(0, Math.max(0, limit)).join(" ");
 };
 
-export const sanitizeStyleTags = (styleTags: string[]) =>
+export const sanitizeStyleTags = (styleTags: readonly string[]) =>
   styleTags
     .map((tag) => truncateWords(tag, STYLE_TAG_WORD_LIMIT))
     .filter((tag) => tag.length > 0)

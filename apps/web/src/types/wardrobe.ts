@@ -1,13 +1,4 @@
-export type WardrobeItem = {
-  id: string;
-  imageUrl: string;
-  category: string | null;
-  description: string | null;
-  styleTags: string[] | null;
-  analysisStatus: string;
-  analysisError?: string | null;
-  createdAt: number;
-};
+export type { WardrobeItem } from "@wardrobe/shared";
 
 export type OptimisticWardrobeItem = {
   tempId: string;

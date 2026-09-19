@@ -24,6 +24,7 @@ describe("week planning boundaries", () => {
   test("rejects duplicate dates, invalid dates, too many days and oversized context", () => {
     const day = { date: "2026-09-16", description: "Meeting" };
     expect(() => validateReviewedDays([day, day], "UTC", now)).toThrow();
+    expect(() => validateReviewedDays([{ ...day, date: "2026-09-23" }], "UTC", now, "2026-09-15")).toThrow();
     expect(() =>
       validateReviewedDays([{ ...day, date: "2026-02-30" }], "UTC", now),
     ).toThrow();
@@ -68,6 +69,7 @@ describe("week planning boundaries", () => {
       row("old", "dismissed"),
     ];
     expect(outfitForDay(rows, "2026-09-16")?.id).toBe("planned");
+    expect(outfitForDay([row("dismissed", "dismissed"), row("older", "suggested")], "2026-09-16")).toBeUndefined();
     expect(outfitForDay([row("worn", "worn"), ...rows], "2026-09-16")?.id).toBe(
       "worn",
     );

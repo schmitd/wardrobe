@@ -1,4 +1,4 @@
-import { Effect, Either } from 'effect';
+import { Effect, Result } from 'effect';
 
 export const toError = (error: unknown) =>
   error instanceof Error ? error : new Error(String(error));
@@ -11,14 +11,14 @@ export const promiseEffect = <A>(operation: () => Promise<A>) =>
  * not depend on ad-hoc try/catch blocks.
  */
 export const runEffectResult = <A, E>(effect: Effect.Effect<A, E>) =>
-  Effect.runPromise(effect.pipe(Effect.either));
+  Effect.runPromise(effect.pipe(Effect.result));
 
 /** Fire-and-forget work that must never change the result of the foreground task. */
 export const runBackground = (label: string, operation: () => Promise<unknown>) =>
   Effect.runFork(
     promiseEffect(operation).pipe(
-      Effect.catchAll((error) => Effect.sync(() => console.warn(label, error)))
+      Effect.catch((error) => Effect.sync(() => console.warn(label, error)))
     )
   );
 
-export { Either };
+export { Result };
