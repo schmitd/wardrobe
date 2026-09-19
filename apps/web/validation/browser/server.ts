@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { localDate, shiftDay, sevenDays, type PlanningData } from "@wardrobe/shared";
+import { shiftDay, sevenDays, type PlanningData } from "@wardrobe/shared";
 import { boundedInteger } from "../property-options";
 
 const port = boundedInteger(process.env.PROBE_PORT, 4173, 1024, 65535);
@@ -22,7 +22,8 @@ const bundle = build.outputs[0]!;
 type State = { data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean };
 const states = new Map<string, State>();
 function fixture(url: URL): State {
-  const today = localDate();
+  // Match the Playwright/probe browser even when the runner's local date is UTC.
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   return {
     data: { items: ["Shirt", "Trousers", "Coat"].map((category, i) => ({ id: `piece-${i}`, category, description: `Synthetic ${category.toLowerCase()}`, imageUrl: null })), plans: [], calendarEnabled: true, calendarIds: ["synthetic-calendar"], suggestions: [{ id: "outfit", date: shiftDay(today, -1), title: "Yesterday's outfit", rationale: "Synthetic plan", itemIds: ["piece-0", "piece-1"], missing: [], context: [], status: "planned", calendarDerived: false }] },
     calls: [], stale: url.searchParams.get("case") === "stale", latency: boundedInteger(url.searchParams.get("latency") ?? undefined, 0, 0, 5000), scope: url.searchParams.get("scope") === "single_piece" ? "single_piece" : "full_fit", wrote: false,

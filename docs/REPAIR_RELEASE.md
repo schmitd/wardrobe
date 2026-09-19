@@ -1,12 +1,12 @@
 # Effect 4 repair: implementation and release record
 
-Base: `449e64e75d1a369ac632bed4a7732bcc799c5546` (main at audit). Branch: `codex/effect4-storage-repair`. Validation date: 2026-09-17. No production deployment, native distribution, or branch deletion is included. Existing archive and dirty worktrees were preserved.
+Base: `449e64e75d1a369ac632bed4a7732bcc799c5546` (main at audit). Branch: `codex/effect4-storage-repair`. Initial validation: 2026-09-17. The strict Convex backend and matching web build were deployed on 2026-09-19 after the owner approved the historical-photo cutover. Native distribution remains separate. Existing archive and dirty worktrees were preserved.
 
 ## Implemented work
 
 | Tracking | Result on this branch | Remaining release evidence |
 | --- | --- | --- |
-| Private storage finding | Server-owned upload provenance, common read/write/delete enforcement, revocable tickets, bounded account cleanup, explicit legacy review | Production cutover and independently reviewed historical ownership |
+| Private storage finding | Server-owned upload provenance, common read/write/delete enforcement, revocable tickets, bounded account cleanup, explicit legacy review | Deployed; consistent current owners adopted under the approved snapshot policy |
 | [#87](https://github.com/schmitd/wardrobe/issues/87) | Native account/session providers and account-specific cache keys | Physical account switch / session expiry |
 | [#88](https://github.com/schmitd/wardrobe/issues/88) | Past planning access, add/remove actual-worn pieces, dismissed-suggestion tombstone | Web/native diary flow |
 | [#89](https://github.com/schmitd/wardrobe/issues/89) | Minimal passive Calendar fields; truncated-day disclosure | Authorized Calendar integration |
@@ -15,7 +15,7 @@ Base: `449e64e75d1a369ac632bed4a7732bcc799c5546` (main at audit). Branch: `codex
 | [#92](https://github.com/schmitd/wardrobe/issues/92) | Paginated current bootstrap, lists and details; vector-free fit projections; bounded planning/profile context | Production payload/latency comparison; old bootstrap compatibility retirement later |
 | [#93](https://github.com/schmitd/wardrobe/issues/93) | Capture intent fixed before async work; full-fit try-on follows full-fit analysis and persistence | Real multi-garment photos and provider result quality |
 | [#94](https://github.com/schmitd/wardrobe/issues/94) | Disconnect-safe progress channel and authenticated stream protection | Deployed capture after navigation/disconnect |
-| [#95](https://github.com/schmitd/wardrobe/issues/95) | Durable coalesced mutation-triggered style-memory jobs, stale-result guards and bounded retries | Convex provider secret and live native/web updates |
+| [#95](https://github.com/schmitd/wardrobe/issues/95) | Durable coalesced mutation-triggered style-memory jobs, stale-result guards and bounded retries | Convex provider secret configured and Node runtime verified; generated updates still need provider validation |
 | [#96](https://github.com/schmitd/wardrobe/issues/96) | Auth preflight deadline and successful-body schema in production/TestFlight paths | Native distribution and real sign-in |
 | [#63](https://github.com/schmitd/wardrobe/issues/63), [#69](https://github.com/schmitd/wardrobe/issues/69) | CI tests/generation drift checks; logout identity reset and OTA release dimensions | Required CI/release policy, authenticated ingestion and opt-out evidence |
 | [#75](https://github.com/schmitd/wardrobe/issues/75), [#82](https://github.com/schmitd/wardrobe/issues/82) | Style-memory masking, consent-loading guard, full-image native closet thumbnails | Physical masking/crop checks; replay gate remains off |
@@ -28,7 +28,7 @@ Commands are from the repository root unless stated otherwise. See the private l
 
 | Check | Result |
 | --- | --- |
-| `bun run test` | PASS: 89 web tests, 27 mobile tests; other workspace checks passed |
+| `bun run test` | PASS: 92 web tests, 27 mobile tests; other workspace checks passed |
 | `bun run typecheck` | PASS after explicit inventory-page typing in the operator CLI |
 | `bun run lint` | PASS, 3 pre-existing warnings; no errors |
 | `bun run --bun confect codegen` plus generation comparison | PASS, deterministic generated outputs |
@@ -45,6 +45,6 @@ Additional focused checks cover pagination/account isolation and embedding exclu
 
 ## Closure gates
 
-The storage fix is verified in the candidate code; production remains on its existing implementation. Follow [STORAGE_CUTOVER.md](STORAGE_CUTOVER.md) before publishing or deploying the repair. Do not restore the old ownership path as a rollback.
+The initial [storage cutover](STORAGE_CUTOVER.md) is deployed. All 119 original files retain their hashes; 100 consistently associated files received approved ownership records, and 19 unreferenced files were preserved without inventing owners. A live synthetic upload verified CORS, single-use tickets, owner access, cross-account rejection and cleanup. Production bootstrap and the Confect Node action runtime also executed successfully without requesting provider inference. A fresh signed-in browser loaded the closet, diary and Plans; Calendar refresh still needs operational verification. These checks do not establish provider delivery or native device behavior. Do not restore the old ownership path as a rollback.
 
 GitHub bugs remain open until deployment and both user-flow and operational verification, per [OBSERVABILITY.md](OBSERVABILITY.md). Local tests cannot establish calendar consent, generated-image quality, signed-in browser usability, real-device masking, telemetry ingestion, EAS availability, or delivery to testers. No current Expo quota or Apple release-state claim is made here.
