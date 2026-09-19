@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "bun test",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit --project convex/tsconfig.json",
     "benchmark:garment-identity": "bun run scripts/benchmark-garment-identity.ts"
   },
   "dependencies": {

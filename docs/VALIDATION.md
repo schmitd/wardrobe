@@ -1,6 +1,6 @@
 # Merge validation
 
-Policy: automatically merge a ready PR when CI and an independent Codex adversarial review pass for its current revision. Fix ordinary failures without asking the owner. Escalate a real choice about product behavior, authorization, destructive migration/retention, deployment, new credentials or spend. Findings are work to fix; a risky filename alone is not a decision. The initial storage cutover remains a separate decision in [STORAGE_CUTOVER.md](STORAGE_CUTOVER.md).
+Policy: automatically merge a ready PR when CI and an independent Codex adversarial review pass for its current revision. Fix ordinary failures without asking the owner. Escalate a real choice about product behavior, authorization, destructive migration/retention, deployment, new credentials or spend. Findings are work to fix; a risky filename alone is not a decision. David approved retaining existing photo owners and proceeding with the initial storage cutover on 2026-09-18; follow its staged sequence in [STORAGE_CUTOVER.md](STORAGE_CUTOVER.md).
 
 ## Small stable gates
 

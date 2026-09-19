@@ -51,7 +51,7 @@ if (mode === "inventory") {
     if (seen.has(entry.storageId) || !row || row.sha256 !== entry.expectedSha256 || row.createdAt !== entry.expectedCreatedAt || (row.trustedOwner && row.trustedOwner !== entry.userId)) throw new Error(`Review row ${index + 1} conflicts with the current inventory.`);
     seen.add(entry.storageId);
   }
-  if (!args.includes("--apply")) console.log(`Dry run passed for ${manifest.approvals.length} approvals. No ownership changed. Independent uploader evidence remains the reviewer's responsibility.`);
+  if (!args.includes("--apply")) console.log(`Dry run passed for ${manifest.approvals.length} approvals. No ownership changed. The operator must verify the ownership basis authorized in STORAGE_CUTOVER.md.`);
   else {
     for (const entry of manifest.approvals) await client.mutation(approve, { ...entry, storageId: entry.storageId as Id<"_storage">, evidence: `${manifest.reviewedBy}: ${entry.evidence}`.slice(0, 2000) });
     console.log(`Applied ${manifest.approvals.length} reviewed approvals. Existing conflicting owners were never replaced.`);
