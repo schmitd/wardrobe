@@ -1,3 +1,4 @@
+import { publicServerFailure } from "@/server/errors";
 import { executePlanning, PlanningError } from "@/server/planning";
 import { observeMobileRequest } from "@/server/mobileTelemetry";
 import type { PlanningOperation } from "@wardrobe/shared";
@@ -14,9 +15,9 @@ export async function POST(request: Request) {
         { status: 403 },
       );
     try {
-      if (Number(request.headers.get("content-length")) > 16000)
+      if (Number(request.headers.get("content-length")) > 40000)
         throw new PlanningError("The request is too large.", 413);
-      const body = (await limitedJson(request, 16000)) as PlanningOperation;
+      const body = (await limitedJson(request, 40000)) as PlanningOperation;
       if (!body || typeof body !== "object")
         throw new PlanningError("Invalid request.");
       return Response.json(await executePlanning(body), {
@@ -28,18 +29,8 @@ export async function POST(request: Request) {
           { error: error.message },
           { status: error.status },
         );
-      const unauthorized =
-        error instanceof Error &&
-        ["Unauthorized", "Missing Convex token"].includes(error.message);
-      // Provider/Convex errors can contain user context. Do not log or return them.
-      return Response.json(
-        {
-          error: unauthorized
-            ? "Sign in to continue."
-            : "Could not complete this request. Check your date and selected pieces, then try again.",
-        },
-        { status: unauthorized ? 401 : 400 },
-      );
+      const failure = publicServerFailure(error);
+      return Response.json({ error: failure.message }, { status: failure.status });
     }
   });
 }

@@ -2,7 +2,7 @@
 import { Effect } from "effect";
 import { mkdir } from "node:fs/promises";
 import sharp from "sharp";
-import { analyzeFitPhoto } from "../src/server/fitPhotoAnalysis";
+import { analyzeFitPhoto } from "../src/server/inference/fitPhotoAnalysis";
 import { GeminiLive, GeminiService } from "../src/services/GeminiService";
 import { cropGarmentRegion } from "../src/server/garmentIdentity";
 

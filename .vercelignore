@@ -16,6 +16,10 @@ coverage
 
 .git
 .vercel
+.private
+**/.private
+.convex
+**/.convex
 .env*
 *.tsbuildinfo
 next-env.d.ts

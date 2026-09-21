@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, mock } from "bun:test";
-import { Either } from "effect";
+import { Result } from "effect";
 
 const fetchMutationMock = mock();
 const fetchQueryMock = mock();
@@ -78,6 +78,12 @@ mock.module("@convex/_generated/api", () => ({
 
 mock.module("@/lib/run-effect", () => ({
   runServerAction: runServerActionMock,
+  runInference: runServerActionMock,
+}));
+
+mock.module("@/server/auth", () => ({
+  getConvexAuth: async () => ({ userId: "user_123", token: "token_123", tier: "free" }),
+  enforceAuthenticatedProtection: () => runServerActionMock(),
 }));
 
 process.env.ARCJET_KEY = "test_arcjet_key";
@@ -541,7 +547,7 @@ describe("wardrobe server actions", () => {
           },
         ],
       },
-      Either.right(Buffer.from("cropped-jpeg")),
+      Result.succeed(Buffer.from("cropped-jpeg")),
       { bio: "I wear clean, casual foundations." }
     );
 

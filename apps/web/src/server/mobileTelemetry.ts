@@ -13,7 +13,7 @@ export async function observeMobileRequest(request: Request, endpoint: "capture"
   let operation: string = endpoint;
   if (endpoint === "capture" || endpoint === "manage" || endpoint === "planning") {
     try {
-      const body = await limitedJson(request.clone(), 16000) as { operation?: unknown } | null;
+      const body = await limitedJson(request.clone(), 40000) as { operation?: unknown } | null;
       operation = safeMobileOperation(body?.operation);
     } catch { operation = "invalid_request"; }
   }

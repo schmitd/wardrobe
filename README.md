@@ -1,95 +1,65 @@
-# Virtual Wardrobe Stylist
+# Wardrobe
 
-Wardrobe is a Turborepo monorepo for a virtual wardrobe stylist. The web app lets users upload wardrobe photos and check whether a new clothing purchase fits their style; companion surfaces reuse the same backend context layer.
-
-## Features
-
-- **Wardrobe Management**: Upload and view your clothing items.
-- **AI Analysis**: Automatically extracts category, description, and style tags using Gemini Vision.
-- **Compatibility Check**: Upload a candidate item to see if it fits your wardrobe.
-- **Style Match**: Uses vector embeddings and RAG to find similar items and evaluate fit.
-
-## Tech Stack
-
-- **Monorepo**: Turborepo + Bun workspaces
-- **Web Framework**: Next.js (App Router)
-- **Styling**: Tailwind CSS
-- **Database + Sync**: Convex
-- **Storage**: Convex File Storage
-- **AI**: Google Gemini (Vision & Text Embeddings)
-- **Background Jobs**: Convex Scheduler + Action Retrier
+Wardrobe turns closet photos, fit checks, and style notes into a maintained personal style profile and day/week outfit plans. Web and Expo clients share Convex data and server workflows; the Chrome extension and ChatGPT app use the context API.
 
 ## Workspaces
 
-- `apps/web`: Existing Next.js + Convex application and backend context API.
-- `apps/mobile`: Expo Router iOS/Android app that calls the context API.
-- `apps/chrome-extension`: Manifest V3 extension for one-click product-page fit checks.
-- `apps/chatgpt-app`: HTTP MCP server and widget resource for a ChatGPT app.
-- `packages/context-client`: Shared client for the web backend context layer.
-- `packages/shared`: Shared request/response types and model selection constants.
+| Path | Responsibility |
+| --- | --- |
+| `apps/web` | Next.js app, HTTP adapters, Effect workflows, Confect/Convex backend |
+| `apps/mobile` | Expo Router iOS/Android client |
+| `apps/chrome-extension` | Product-page fit checks |
+| `apps/chatgpt-app` | HTTP MCP server and widget |
+| `packages/shared` | Shared mobile/planning contracts and model selection |
+| `packages/context-client` | Context API client |
 
-## Model Selection
+Read [architecture](docs/ARCHITECTURE.md), [product context](apps/web/PRODUCT.md), and [observability](docs/OBSERVABILITY.md) before changing behavior. The Effect 4 migration is **locally verified, pending rollout**; [release gates](docs/REPAIR_RELEASE.md) include legacy-photo review.
 
-Use `gemini-2.5-flash` in Google AI Studio for the app's primary fit-checking feature. It supports multimodal text/image input, structured JSON outputs, URL context, function calling, and a large context window, which covers product-page interpretation, wardrobe context, and low-latency recommendations. Use `gemini-2.5-flash-lite` for upload/image-analysis paths where free-tier availability and low latency matter more than deep reasoning. Use `gemini-embedding-2` with 768 output dimensions for wardrobe similarity embeddings so vectors match the Convex index. Keep `gemini-2.5-pro` as an escalation model for deeper styling or profile-generation flows.
+## Development
 
-## Setup
+Use Bun 1.3.8. Effect `4.0.0-rc.115`, Confect `10.0.0-next.22`, and Convex `1.46.0` are pinned together. These are deliberately selected prereleases, not an automatic upgrade policy.
 
-1.  **Clone the repository**.
-2.  **Install dependencies**:
-    ```bash
-    bun install
-    ```
-3.  **Convex Setup**:
-    ```bash
-    bunx convex dev
-    ```
-    This creates the Convex project config and generates the `convex/_generated` API types.
-4.  **Environment Variables**:
-    Copy `.env.local` (or create it) and fill in the following:
-    ```env
-    GEMINI_API_KEY=your_gemini_key
-    NEXT_PUBLIC_CONVEX_URL=your_convex_url
-    CLERK_SECRET_KEY=your_clerk_secret_key
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
-    CLERK_JWT_TEMPLATE=convex
-    ZEP_KEY=your_zep_key
-    AXIOM_TOKEN=your_axiom_token
-    AXIOM_DATASET=your_axiom_dataset
-    NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=your_posthog_project_token
-    NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
-    ```
-    Notes:
-    - Convex trusts the production Clerk issuer (`https://clerk.wardrobe.davidcschmitt.com`) and the project development issuer (`https://beloved-guppy-95.clerk.accounts.dev`) by default.
-    - The Clerk JWT template must include the `aud` claim set to `convex`.
-    - Server actions export OTLP telemetry to Axiom via Effect runtime; enable Convex log streaming separately if you want Convex logs in Axiom.
-    - PostHog is reserved for product analytics, feature flags, surveys, masked session replay, and browser exceptions. See `docs/OBSERVABILITY.md` for the telemetry contract and dashboard links.
-5.  **Run the app**:
-    ```bash
-    bun dev
-    ```
+```sh
+bun install --frozen-lockfile
+bun run --bun confect codegen
+bun run --bun convex dev
+```
 
-## Builds
+Run these commands at the repository root. `convex.json` points to `apps/web/convex`; Confect sources are in `apps/web/confect`. Use a development Convex deployment and the matching Clerk development issuer. Set the following in `apps/web/.env.local` for Next.js:
 
-```bash
-bun run build
-bun run lint
+```env
+NEXT_PUBLIC_CONVEX_URL=<development Convex URL>
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<development public key>
+CLERK_SECRET_KEY=<development secret key>
+CLERK_JWT_TEMPLATE=convex
+GEMINI_API_KEY=<server-only key>
+ZEP_KEY=<optional graph integration key>
+ARCJET_KEY=<protection key>
+AXIOM_TOKEN=<server-only telemetry token>
+AXIOM_DATASET=<dataset>
+NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=<public project token>
+NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
+```
+
+The Clerk JWT template must set `aud` to `convex`. Backend authentication configuration is in `apps/web/convex/auth.config.ts`; use matching deployments and never copy production credentials into fixtures. **Convex also needs `GEMINI_API_KEY` for scheduled style-memory generation** and `ZEP_KEY` if graph enrichment is enabled. Vercel variables do not configure Convex automatically.
+
+```sh
+bun dev
+```
+
+Use `bun run backend:watch` while editing Confect source; it regenerates and runs the backend. The anonymous local Convex backend also needs a supported Node runtime for its action executor even when its CLI is invoked with Bun. The migration was verified with Node 22 on that executor. See `apps/mobile/.env.example` for native public configuration.
+
+## Verification and release
+
+```sh
+bun run test
 bun run typecheck
+bun run lint
+bun run build
 ```
 
-Vercel builds through `bun run vercel-build`, which runs the web workspace's Convex CLI with `convex deploy --cmd "cd ../.. && bun run web-build"`. Set `CONVEX_DEPLOY_KEY` in Vercel so each production or preview web deployment deploys the matching Convex functions and schema before the frontend build completes.
+CI checks generation drift, tests, types, lint, and builds. Model constants live in `packages/shared/src`; preserve the 768-dimensional embedding index when changing models. [Observability](docs/OBSERVABILITY.md) defines privacy-safe events and the `bun run observability:smoke` ingestion check.
 
-Set `STYLE_FIT_API_TOKEN` on the web app to require `Authorization: Bearer <token>` for `/api/context/style-fit`. Companion apps can pass the token through their own runtime config (`WARDROBE_API_TOKEN` for the ChatGPT app, Chrome extension storage, or `EXPO_PUBLIC_WARDROBE_API_TOKEN` for Expo development builds).
+Vercel uses `bun run vercel-build`: Confect generation, then Convex deployment and the web build. `CONVEX_DEPLOY_KEY` must select the intended deployment. This migration cannot safely use unattended deployment until [the storage cutover](docs/STORAGE_CUTOVER.md) is completed. Native preflight/build/replay gates are in [TESTFLIGHT_ANALYTICS.md](docs/TESTFLIGHT_ANALYTICS.md) and [MOBILE_UPDATES.md](docs/MOBILE_UPDATES.md).
 
-Vercel provides the PostHog public token and host to both production and preview deployments. Axiom remains connected through the server-side `AXIOM_TOKEN` and `AXIOM_DATASET` variables, which also apply to production and previews.
-
-To verify both ingestion paths without customer data, pull the intended Vercel environment and run:
-
-```bash
-bun run observability:smoke
-```
-
-## Usage
-
-1.  Upload items to your wardrobe on the home page.
-2.  Go to "Check Compatibility" to upload a new item you are considering.
-3.  The AI will analyze the item and tell you if it fits your style!
+Set `STYLE_FIT_API_TOKEN` on the web server to require a bearer token for `/api/context/style-fit`. Configure companion credentials on their appropriate trusted surface; never embed server secrets in public Expo variables.

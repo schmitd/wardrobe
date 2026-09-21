@@ -11,7 +11,7 @@ test("bounds actual bytes even without a Content-Length header", async () => {
   ).toEqual({ operation: "planning_load" });
   await expect(
     limitedJson(request({ text: "👕".repeat(100) }), 200),
-  ).rejects.toThrow("Request too large");
+  ).rejects.toThrow("The request is too large.");
   await expect(
     limitedJson(
       new Request("http://localhost", { method: "POST", body: "broken" }),

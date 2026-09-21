@@ -1,0 +1,22 @@
+name: Enforce merge hold
+on:
+  pull_request_target:
+    types: [labeled]
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+jobs:
+  hold:
+    if: contains(fromJSON('["needs-decision","do-not-merge"]'), github.event.label.name)
+    runs-on: ubuntu-latest
+    steps:
+      # Metadata only: never check out or execute the PR's code in this job.
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: context.payload.pull_request.number });
+            if (pr.state !== 'open') return;
+            await github.rest.repos.createCommitStatus({ owner, repo, sha: pr.head.sha, state: 'pending', context: 'Wardrobe adversarial', description: 'Merge is on hold for an unresolved decision' });
+            if (pr.auto_merge) await github.graphql('mutation($id: ID!) { disablePullRequestAutoMerge(input: {pullRequestId: $id}) { clientMutationId } }', { id: pr.node_id });

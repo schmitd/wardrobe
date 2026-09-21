@@ -12,7 +12,7 @@ describe("native auth preflight", () => {
     const requests: URL[] = [];
     const fetchImplementation = async (input: string | URL) => {
       requests.push(new URL(input));
-      return Response.json({ client: {} });
+      return Response.json({ auth_config: { object: "auth_config" }, display_config: { object: "display_config" }, user_settings: {} });
     };
 
     await Effect.runPromise(checkNativeAuthConfiguration(publishableKey, fetchImplementation));
@@ -32,10 +32,15 @@ describe("native auth preflight", () => {
 
     expect(Exit.isFailure(exit)).toBe(true);
     if (Exit.isFailure(exit)) {
-      const error = Option.getOrThrow(Cause.failureOption(exit.cause));
+      const error = Option.getOrThrow(Cause.findErrorOption(exit.cause));
       expect(error).toBeInstanceOf(NativeAuthConfigurationError);
       expect((error as NativeAuthConfigurationError).code).toBe("native_api_disabled");
     }
+  });
+
+  test("rejects a successful response that is not a Clerk environment", async () => {
+    const exit = await Effect.runPromiseExit(checkNativeAuthConfiguration(publishableKey, async () => Response.json({ client: {} })));
+    expect(Exit.isFailure(exit)).toBe(true);
   });
 
   test("rejects malformed publishable keys before making a request", async () => {

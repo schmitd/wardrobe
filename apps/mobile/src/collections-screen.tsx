@@ -32,11 +32,13 @@ export function CollectionsScreen() {
                 <MaterialCommunityIcons name="chevron-right" size={25} color={colors.plum} />
               </View>
               {collection.description ? <Text selectable style={{ color: colors.muted, lineHeight: 21 }}>{collection.description}</Text> : null}
-              <Text selectable style={{ color: colors.plum, fontSize: 12, fontWeight: "800" }}>{collection.items.length} owned · {collection.inspirations.length} inspiration</Text>
+              <Text selectable style={{ color: colors.plum, fontSize: 12, fontWeight: "800" }}>Open to view pieces and inspiration</Text>
             </Pressable>
           </Link>
         ))}
       </View>
+      {query.data?.plansCursor ? <Pressable disabled={query.loadingMore} onPress={() => query.loadMore("plans")} style={{ padding: 16 }}><Text>{query.loadingMore ? "Loading…" : "Load more plans"}</Text></Pressable> : null}
+      {query.moreError ? <ErrorPanel message={query.moreError.message} /> : null}
     </Page>
   );
 }

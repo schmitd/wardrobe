@@ -1,5 +1,7 @@
 'use client';
 
+import { uploadPhotoFile } from "@/services/photoUpload";
+
 import Image from 'next/image';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { Loader2, Sparkles, Ticket } from 'lucide-react';
@@ -52,23 +54,10 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
     updatePreview(URL.createObjectURL(file));
 
     try {
-      const uploadUrl = await getUploadUrlAction();
-      const uploadResponse = await fetch(uploadUrl, {
-        method: 'POST',
-        body: file,
-      });
+      const storageId = await uploadPhotoFile(file, getUploadUrlAction);
 
-      if (!uploadResponse.ok) {
-        throw new Error(`Upload failed: ${uploadResponse.statusText}`);
-      }
-
-      const payload = await uploadResponse.json();
-      if (!payload.storageId) {
-        throw new Error('Upload response missing storageId.');
-      }
-
-      setLastStorageId(payload.storageId);
-      await runCompatibilityCheck(payload.storageId, {
+      setLastStorageId(storageId);
+      await runCompatibilityCheck(storageId, {
         startMessage: 'Comparing this piece with your closet...',
         fallbackErrorMessage: 'Quick compare failed.',
       });

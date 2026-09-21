@@ -10,7 +10,7 @@ import {
   mapBox,
   parseFitItems,
   verifiedIndices,
-} from "./fitPhotoAnalysis";
+} from "./inference/fitPhotoAnalysis";
 
 const item = (box = [200, 300, 250, 380]) => ({
   category: "accessory",
@@ -165,6 +165,11 @@ describe("automatic fit analysis", () => {
     expect(result.items[0].bounding_box.x).toBeGreaterThan(0.3);
     expect(result.items[0].bounding_box.width).toBeLessThan(0.08);
     expect(s.calls).toHaveLength(3);
+    const verification = s.calls[2] as { contents: { parts: { inlineData?: { data: string } }[] }[] };
+    const images = verification.contents[0].parts.filter(part => part.inlineData);
+    expect(images).toHaveLength(2);
+    const context = await sharp(Buffer.from(images[0].inlineData!.data, "base64")).metadata();
+    expect([context.width, context.height]).toEqual([600, 1000]);
   });
   it("never returns a crop that fails both independent checks", async () => {
     const s = service([
@@ -193,5 +198,18 @@ describe("automatic fit analysis", () => {
       ),
     );
     expect(result.items[0].category).toBe("accessory");
+  });
+});
+
+describe("localization provider boundaries", () => {
+  it("rejects malformed model success before verification or persistence", async () => {
+    const s = service([{ transcription: "Outfit", outfit_box: [], items: "not-an-array" }]);
+    await expect(Effect.runPromise(analyzeFitPhoto(await source(), "daily_fit_check").pipe(Effect.provide(s.layer)))).rejects.toThrow("invalid response");
+    expect(s.calls).toHaveLength(1);
+  });
+  it("rejects a malformed verifier response without treating truthy strings as approval", async () => {
+    const s = service([detection([item()]), { checks: [{ index: 0, contains_item: "true", well_framed: true }] }]);
+    await expect(Effect.runPromise(analyzeFitPhoto(await source(), "daily_fit_check").pipe(Effect.provide(s.layer)))).rejects.toThrow("invalid response");
+    expect(s.calls).toHaveLength(2);
   });
 });

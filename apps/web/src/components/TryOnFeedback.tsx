@@ -6,13 +6,13 @@ import { useMemo, useState } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Check, Layers3, Save } from 'lucide-react';
-import { refreshStyleBioAction, saveInspirationAction } from '@/app/actions/wardrobe';
+import { saveInspirationAction } from '@/app/actions/wardrobe';
 import type { CompatibilityCheckResult } from '@/hooks/useCompatibilityCheck';
 import { createTraceContext } from '@/lib/trace';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Either, promiseEffect, runBackground, runEffectResult } from '@/lib/effect-result';
+import { Result, promiseEffect, runEffectResult } from '@/lib/effect-result';
 
 export default function TryOnFeedback({ result, previewUrl }: { result: CompatibilityCheckResult; previewUrl?: string | null }) {
   const plans = useQuery(api.wardrobes.listWardrobes, {});
@@ -36,14 +36,13 @@ export default function TryOnFeedback({ result, previewUrl }: { result: Compatib
         ...createTraceContext(),
       }))
     );
-    if (Either.isLeft(outcome)) {
+    if (Result.isFailure(outcome)) {
       setSaveState('error');
-      setMessage(userFacingErrorMessage(outcome.left, 'Could not save this inspiration.'));
+      setMessage(userFacingErrorMessage(outcome.failure, 'Could not save this inspiration.'));
       return;
     }
     setSaveState('saved');
     setMessage(`Saved to ${selected?.name ?? 'your plan'} as inspiration.`);
-    runBackground('style_bio.background_refresh.failed', () => refreshStyleBioAction());
   };
 
   return (

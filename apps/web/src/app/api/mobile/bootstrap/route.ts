@@ -1,3 +1,7 @@
+import { publicServerFailure } from "@/server/errors";
+import { getConvexAuth } from "@/server/auth";
+import { fetchQuery } from "convex/nextjs";
+import { api } from "@convex/_generated/api";
 import { getMobileBootstrapAction } from "@/app/actions/wardrobe";
 import { observeMobileRequest } from "@/server/mobileTelemetry";
 
@@ -7,14 +11,15 @@ export async function GET(request: Request) {
   return observeMobileRequest(request, "bootstrap", handleBootstrap);
 }
 
-async function handleBootstrap() {
+async function handleBootstrap(request: Request) {
   try {
+    if (new URL(request.url).searchParams.get("v") === "2") {
+      const { token } = await getConvexAuth();
+      return Response.json(await fetchQuery(api.mobile.bootstrap, {}, { token }));
+    }
     return Response.json(await getMobileBootstrapAction());
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not load Wardrobe.";
-    return Response.json(
-      { error: message === "Unauthorized" ? message : "Could not load Wardrobe." },
-      { status: message === "Unauthorized" ? 401 : 500 }
-    );
+    const failure = publicServerFailure(error, "Could not load Wardrobe.");
+    return Response.json({ error: failure.message }, { status: failure.status });
   }
 }

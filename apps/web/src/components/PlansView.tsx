@@ -2,11 +2,10 @@
 
 import { FormEvent, useMemo, useState } from 'react';
 import Image from 'next/image';
-import { useMutation, useQuery } from 'convex/react';
+import { useMutation, useQuery, usePaginatedQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { ArrowRight, ExternalLink, FolderHeart, Plus, X } from 'lucide-react';
 import { createTraceContext } from '@/lib/trace';
-import { refreshStyleBioAction } from '@/app/actions/wardrobe';
 import InspirationIntake from '@/components/InspirationIntake';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -14,8 +13,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export default function PlansView() {
-  const plans = useQuery(api.wardrobes.listWardrobes, {});
-  const closetItems = useQuery(api.wardrobe.listWardrobeItems, {});
+  const planPages = usePaginatedQuery(api.mobile.plans, {}, { initialNumItems: 30 });
+  const plans = planPages.status === "LoadingFirstPage" ? undefined : planPages.results;
+  const closet = usePaginatedQuery(api.wardrobe.pageWardrobeItems, {}, { initialNumItems: 48 });
+  const closetItems = closet.results;
   const createPlan = useMutation(api.wardrobes.createWardrobe);
   const addItem = useMutation(api.wardrobes.addItemToWardrobe);
   const removeItem = useMutation(api.wardrobes.removeItemFromWardrobe);
@@ -31,7 +32,7 @@ export default function PlansView() {
   const [status, setStatus] = useState<'idle' | 'saving' | 'error'>('idle');
   const [error, setError] = useState('');
   const memberIds = useMemo(() => new Set((detail?.items ?? []).map((membership) => String(membership.item.id))), [detail]);
-  const availableItems = useMemo(() => (closetItems ?? []).filter((item) => !memberIds.has(String(item.id))).slice(0, 12), [closetItems, memberIds]);
+  const availableItems = useMemo(() => (closetItems ?? []).filter((item) => !memberIds.has(String(item.id))), [closetItems, memberIds]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -44,7 +45,6 @@ export default function PlansView() {
       setDescription('');
       setSelectedPlanId(String(result.id));
       setStatus('idle');
-      void refreshStyleBioAction().catch((refreshError) => console.warn('style_bio.background_refresh.failed', refreshError));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Could not create this plan');
       setStatus('error');
@@ -54,13 +54,11 @@ export default function PlansView() {
   const addToPlan = async (itemId: string, membershipKind = 'owned') => {
     if (!selectedPlan) return;
     await addItem({ wardrobeId: selectedPlan._id, itemId: itemId as never, membershipKind, ...createTraceContext() });
-    void refreshStyleBioAction().catch((refreshError) => console.warn('style_bio.background_refresh.failed', refreshError));
   };
 
   const removeFromPlan = async (itemId: string) => {
     if (!selectedPlan) return;
     await removeItem({ wardrobeId: selectedPlan._id, itemId: itemId as never });
-    void refreshStyleBioAction().catch((refreshError) => console.warn('style_bio.background_refresh.failed', refreshError));
   };
 
   return (
@@ -88,6 +86,7 @@ export default function PlansView() {
       <section className="grid gap-6 lg:grid-cols-[minmax(240px,0.7fr)_minmax(0,1.3fr)]">
         <div className="space-y-3">
           <h3 className="text-lg font-extrabold text-[#241426]">Your plans</h3>
+          {planPages.status === "CanLoadMore" && <Button variant="outline" onClick={() => planPages.loadMore(30)}>Load more plans</Button>}
           {plans === undefined ? <div className="rack-empty-state text-sm font-medium text-[#56345c]">Loading plans…</div> : plans.length === 0 ? <div className="rack-empty-state text-sm font-medium text-[#56345c]">Start with a trip, occasion, capsule, or feeling you want to explore.</div> : plans.map((plan) => {
             const active = String(plan._id) === String(selectedPlan?._id);
             return <button key={String(plan._id)} type="button" onClick={() => setSelectedPlanId(String(plan._id))} aria-pressed={active} className={`w-full border p-4 text-left transition ${active ? 'border-[#241426] bg-[#DCE66E] shadow-[3px_3px_0_var(--rack-panel-shadow)]' : 'border-[var(--rack-line)] bg-white hover:bg-[var(--rack-wash)]'}`}><span className="flex items-center justify-between gap-3 text-base font-extrabold text-[#241426]">{plan.name} <ArrowRight className="h-4 w-4 shrink-0" /></span>{plan.description && <span className="mt-2 block text-sm font-medium leading-relaxed text-[#56345c]">{plan.description}</span>}</button>;
@@ -121,6 +120,7 @@ export default function PlansView() {
                 </div>
               </div>
             )}
+          {closet.status === 'CanLoadMore' && <Button variant="outline" onClick={() => closet.loadMore(48)}>Load more closet pieces</Button>}
           </CardContent>
         </Card>
       </section>

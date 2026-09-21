@@ -161,13 +161,14 @@ h4 {
   position: relative;
   --rack-item-accent: #f0ffbd;
   display: grid;
-  grid-template-columns: minmax(0, 66%) minmax(108px, 34%);
+  grid-template-columns: minmax(0, 1.94fr) minmax(0, 1fr);
   align-items: center;
   gap: clamp(0.75rem, 2vw, 1.4rem);
   width: min(100%, 760px);
   min-height: clamp(220px, 24vw, 292px);
   margin-inline: auto;
-  padding: clamp(1rem, 2vw, 1.45rem) clamp(2.2rem, 4vw, 3.25rem) clamp(1rem, 2vw, 1.45rem)
+  /* Keep the photo inside the shape's 5% top/bottom inset as the card grows. */
+  padding: clamp(1rem, 4%, 2rem) clamp(2.2rem, 4vw, 3.25rem) clamp(1rem, 4%, 2rem)
     clamp(1rem, 2vw, 1.55rem);
   background: transparent;
   overflow: visible;
@@ -195,6 +196,7 @@ h4 {
 }
 
 .rack-item-image-wrap {
+  position: relative;
   z-index: 1;
   aspect-ratio: 1.08 / 1;
   width: 100%;
@@ -202,7 +204,8 @@ h4 {
   margin: 0;
   overflow: hidden;
   border: 0;
-  background: #fff;
+  /* Letterboxing should read as part of the garment card, not a white mat. */
+  background: var(--rack-item-accent);
 }
 
 .rack-item-image {
@@ -229,10 +232,10 @@ h4 {
 .rack-item-hanger {
   position: absolute;
   z-index: -1;
-  right: calc(5% - 59px);
+  right: calc(5% - clamp(33.5px, 8%, 59px));
   top: 50%;
-  height: 42px;
-  width: 60px;
+  height: auto;
+  width: clamp(34px, 8%, 60px);
   transform: translateY(-50%);
   overflow: visible;
   pointer-events: none;
@@ -575,10 +578,10 @@ h4 {
 
 @media (max-width: 640px) {
   .rack-item-card {
-    grid-template-columns: minmax(0, 61%) minmax(82px, 39%);
+    grid-template-columns: minmax(0, 1.56fr) minmax(0, 1fr);
     gap: 0.55rem;
     min-height: 188px;
-    padding: 0.78rem 2.25rem 0.78rem 0.78rem;
+    padding: clamp(1rem, 4%, 2rem) 2.25rem clamp(1rem, 4%, 2rem) 0.78rem;
   }
 
   .rack-item-image-wrap {

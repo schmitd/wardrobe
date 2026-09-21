@@ -1,3 +1,4 @@
+import { PostHogMaskView } from "posthog-react-native";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useAuth } from "@clerk/expo";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -34,7 +35,7 @@ export function StyleMemory({ profile }: { profile: MobileBootstrap["profile"] }
   });
 
   return (
-    <View style={{ borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: 16, gap: 12, borderRadius: 14, borderCurve: "continuous" }}>
+    <PostHogMaskView><View style={{ borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: 16, gap: 12, borderRadius: 14, borderCurve: "continuous" }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
         <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 8 }}>
           <MaterialCommunityIcons name="shimmer" size={20} color={colors.plum} />
@@ -81,6 +82,6 @@ export function StyleMemory({ profile }: { profile: MobileBootstrap["profile"] }
           {saved ? <Text selectable accessibilityRole="alert" style={{ color: colors.success, fontSize: 13, fontWeight: "800" }}>Notes updated.</Text> : null}
         </View>
       )}
-    </View>
+    </View></PostHogMaskView>
   );
 }

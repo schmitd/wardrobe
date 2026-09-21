@@ -1,10 +1,11 @@
+import { RequestFailure } from "./errors";
 import { describe, expect, it } from "bun:test";
 
 import { publicCaptureError, toMobileCaptureFailure } from "./mobileCaptureError";
 
 describe("mobile capture errors", () => {
   it("returns a useful 429 for an exhausted routing allowance", () => {
-    expect(publicCaptureError(toMobileCaptureFailure(new Error("Photo routing limit reached for your plan."))))
+    expect(publicCaptureError(toMobileCaptureFailure(new RequestFailure({ status: 429, message: "Photo routing limit reached for your plan." }))))
       .toEqual({ status: 429, message: "Photo routing limit reached for your plan." });
   });
 

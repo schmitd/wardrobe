@@ -23,7 +23,14 @@ export function AccountScreen() {
   const [analyticsError, setAnalyticsError] = useState(false);
   const [replayEnabled, setReplayEnabled] = useState(false);
   const [preferencePending, setPreferencePending] = useState(false);
-  useEffect(() => { void readReplayConsent().then(setReplayEnabled).catch(() => undefined); }, []);
+  const [preferenceLoaded, setPreferenceLoaded] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void readReplayConsent().then((value) => { if (active) setReplayEnabled(value); })
+      .catch(() => { if (active) setAnalyticsError(true); })
+      .finally(() => { if (active) setPreferenceLoaded(true); });
+    return () => { active = false; };
+  }, []);
   const name = user?.fullName ?? query.data?.currentUser?.name ?? "Wardrobe member";
   const email = user?.primaryEmailAddress?.emailAddress ?? query.data?.currentUser?.email;
 
@@ -57,7 +64,7 @@ export function AccountScreen() {
       <Panel>
         <Text style={{ color: colors.ink, fontWeight: "900" }}>Help improve Wardrobe</Text>
         <Text style={{ color: colors.muted, lineHeight: 20 }}>Share usage events and sanitized errors with PostHog. Session recordings are a separate choice below. Essential server reliability logs remain enabled.</Text>
-        <Switch accessibilityLabel="Share usage analytics" disabled={preferencePending} value={analyticsEnabled} onValueChange={(enabled) => {
+        <Switch accessibilityLabel="Share usage analytics" disabled={!preferenceLoaded || preferencePending} value={analyticsEnabled} onValueChange={(enabled) => {
           setAnalyticsError(false);
           setPreferencePending(true);
           void (async () => {
@@ -69,7 +76,7 @@ export function AccountScreen() {
         <Text style={{ color: colors.ink, fontWeight: "900" }}>Share masked session recordings</Text>
         <Text style={{ color: colors.muted, lineHeight: 20 }}>Help us see navigation and layout problems. Recordings mask photos, camera previews, text, and inputs before upload. Audio, console logs, and network contents are not recorded. Off by default; requires usage analytics.</Text>
         {!nativeReplayAvailable ? <Text style={{ color: colors.muted }}>Recordings are not available in this build while privacy masking is being verified.</Text> : null}
-        <Switch accessibilityLabel="Share masked session recordings" disabled={!nativeReplayAvailable || !analyticsEnabled || preferencePending} value={nativeReplayAvailable && analyticsEnabled && replayEnabled} onValueChange={(enabled) => {
+        <Switch accessibilityLabel="Share masked session recordings" disabled={!preferenceLoaded || !nativeReplayAvailable || !analyticsEnabled || preferencePending} value={nativeReplayAvailable && analyticsEnabled && replayEnabled} onValueChange={(enabled) => {
           setAnalyticsError(false);
           setPreferencePending(true);
           void setReplayConsent(enabled).then(() => setReplayEnabled(enabled)).catch(() => setAnalyticsError(true)).finally(() => setPreferencePending(false));

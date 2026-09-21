@@ -36,7 +36,7 @@ export function WardrobeScreen() {
             {query.data?.items.map((item) => (
               <Link key={item.id} href={{ pathname: "/item/[id]", params: { id: item.id } }} asChild>
                 <Pressable style={({ pressed }) => ({ width: itemWidth, overflow: "hidden", borderColor: colors.line, borderWidth: 1, backgroundColor: pressed ? colors.wash : colors.surface, borderRadius: 12, borderCurve: "continuous" })}>
-                  <Image source={item.imageUrl} style={{ width: "100%", aspectRatio: 0.84, backgroundColor: colors.wash }} contentFit="cover" transition={180} />
+                  <Image source={item.imageUrl} style={{ width: "100%", aspectRatio: 0.84, backgroundColor: colors.wash }} contentFit="contain" transition={180} />
                   <View style={{ padding: 10, gap: 4 }}>
                     <Text numberOfLines={1} style={{ color: colors.ink, fontWeight: "900" }}>{item.category ?? "Wardrobe piece"}</Text>
                     <Text numberOfLines={2} style={{ color: colors.muted, fontSize: 12, lineHeight: 16 }}>{item.description ?? (item.analysisStatus === "ready" ? "Part of your wardrobe" : "Learning this piece…")}</Text>
@@ -47,6 +47,8 @@ export function WardrobeScreen() {
           </View>
         </View>
       )}
+      {query.data?.closetCursor ? <Pressable disabled={query.loadingMore} onPress={() => query.loadMore("closet")} style={{ padding: 16 }}><Text>{query.loadingMore ? "Loading…" : "Load more pieces"}</Text></Pressable> : null}
+      {query.moreError ? <ErrorPanel message={query.moreError.message} /> : null}
     </Page>
   );
 }

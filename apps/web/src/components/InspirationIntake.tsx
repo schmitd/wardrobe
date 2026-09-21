@@ -1,12 +1,14 @@
 'use client';
 
+import { uploadPhotoFile } from "@/services/photoUpload";
+
 import { type ChangeEvent, useRef, useState } from 'react';
 import { useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { ImagePlus, Loader2 } from 'lucide-react';
-import { enrichInspirationAction, refreshStyleBioAction } from '@/app/actions/wardrobe';
+import { enrichInspirationAction } from '@/app/actions/wardrobe';
 import { Button } from '@/components/ui/button';
-import { Either, promiseEffect, runBackground, runEffectResult } from '@/lib/effect-result';
+import { Result, promiseEffect, runBackground, runEffectResult } from '@/lib/effect-result';
 import { createTraceContext } from '@/lib/trace';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import posthog from 'posthog-js';
@@ -35,11 +37,7 @@ export default function InspirationIntake({ collectionId, collectionName }: { co
       promiseEffect(async () => {
         // Keep this path in the authenticated Convex session. A photo reference does
         // not need a server-action round trip before it is safely persisted.
-        const uploadUrl = await getUploadUrl({});
-        const upload = await fetch(uploadUrl, { method: 'POST', body: file });
-        if (!upload.ok) throw new Error(`Upload failed: ${upload.statusText}`);
-        const { storageId } = await upload.json();
-        if (!storageId) throw new Error('Upload response missing storageId.');
+        const storageId = await uploadPhotoFile(file, () => getUploadUrl({}));
         const trace = createTraceContext();
         stage = 'register';
         await registerUpload({ storageId: storageId as never, purpose: 'inspiration' });
@@ -55,12 +53,12 @@ export default function InspirationIntake({ collectionId, collectionName }: { co
         return { saved, storageId, trace };
       })
     );
-    if (Either.isLeft(outcome)) {
-      posthog.captureException(outcome.left, { workflow: 'inspiration_add', stage });
-      console.error('inspiration.add.failed', { stage, error: outcome.left });
+    if (Result.isFailure(outcome)) {
+      posthog.captureException(outcome.failure, { workflow: 'inspiration_add', stage });
+      console.error('inspiration.add.failed', { stage, error: outcome.failure });
       setState('error');
       setMessage(userFacingErrorMessage(
-        outcome.left,
+        outcome.failure,
         stage === 'upload'
           ? 'The photo could not upload. Please try again.'
           : stage === 'register'
@@ -75,11 +73,10 @@ export default function InspirationIntake({ collectionId, collectionName }: { co
       has_photo: true,
       collection_type: 'wardrobe',
     });
-    runBackground('style_bio.background_refresh.failed', () => refreshStyleBioAction());
     runBackground('inspiration.enrichment.failed', () => enrichInspirationAction({
-      candidateItemId: String(outcome.right.saved.id),
-      storageId: outcome.right.storageId,
-      ...outcome.right.trace,
+      candidateItemId: String(outcome.success.saved.id),
+      storageId: outcome.success.storageId,
+      ...outcome.success.trace,
     }));
   };
 

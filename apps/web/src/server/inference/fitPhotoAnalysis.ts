@@ -1,21 +1,21 @@
 import sharp from "sharp";
-import { Effect } from "effect";
+import { Cause, Effect, Schedule } from "effect";
 import {
   SchemaType,
   type Schema,
   type Part,
   type GenerationConfig,
 } from "@google/generative-ai";
-import { GeminiService } from "@/services/GeminiService";
+import { GeminiError, GeminiService } from "@/services/GeminiService";
 import { sanitizeStyleTags, truncateWords } from "@/lib/inferenceOutputGuards";
 import {
   cropGarmentRegion,
   type NormalizedBoundingBox,
-} from "./garmentIdentity";
-import { parseJson } from "./inference/shared";
+} from "../garmentIdentity";
+import { parseJson, ModelResponseError } from "./shared";
 
 export const FIT_DETECTOR_MODEL = "gemini-2.5-flash" as const;
-export const FIT_DETECTOR_VERSION = "outfit-focus-box1000-v1";
+export const FIT_DETECTOR_VERSION = "outfit-focus-context-verification-v2";
 export const FIT_VISION_CONFIG: GenerationConfig & {
   thinkingConfig: { thinkingBudget: number };
 } = {
@@ -76,12 +76,6 @@ export type FitItem = {
   bounding_box: NormalizedBoundingBox;
   confidence: number;
 };
-type Detection = {
-  transcription?: unknown;
-  outfit_box?: unknown;
-  items?: unknown;
-};
-
 /** Gemini's trained localization convention is [ymin, xmin, ymax, xmax]/1000. */
 export function boxFromGemini(
   value: unknown,
@@ -251,7 +245,7 @@ export const analyzeFitPhoto = (
         .jpeg({ quality: 95 })
         .toBuffer(),
     );
-    const request = <T>(parts: Part[], schema: Schema) =>
+    const request = <L extends "fitLocalization" | "fitCropVerification">(parts: Part[], schema: Schema, label: L) =>
       gemini
         .generateContent(FIT_DETECTOR_MODEL, {
           contents: [{ role: "user", parts }],
@@ -263,19 +257,13 @@ export const analyzeFitPhoto = (
         })
         .pipe(
           Effect.flatMap((r) =>
-            parseJson<T>(r.response.text(), "fitLocalization"),
+            parseJson(r.response.text(), label),
           ),
           Effect.timeout("25 seconds"),
-          Effect.retry({
-            times: 1,
-            while: (error) =>
-              /TimeoutException|timed out|429|503|overloaded|temporarily unavailable/i.test(
-                String(error),
-              ),
-          }),
+          Effect.retry({ times: 1, schedule: Schedule.exponential("500 millis"), while: (error) => Cause.isTimeoutError(error) || (error instanceof GeminiError && error.retryable) }),
         );
     const detect = (image: Buffer, instruction = prompt) =>
-      request<Detection>(
+      request(
         [
           { text: instruction },
           {
@@ -286,6 +274,7 @@ export const analyzeFitPhoto = (
           },
         ],
         detectionSchema,
+        "fitLocalization",
       );
     const first = yield* detect(source);
     const initialItems = parseFitItems(first.items);
@@ -325,8 +314,9 @@ export const analyzeFitPhoto = (
         if (!candidates.length) return new Set<number>();
         const parts: Part[] = [
           {
-            text: `Check each numbered candidate crop independently against its label. Do not assume the label is true. contains_item means the named garment/accessory is actually visible. well_framed means the crop includes the visible item extent, not just a fragment at an edge, and is centered on the item rather than adjacent body/background. A watch crop showing mostly arm with a sliver of watch is NOT well_framed. Natural occlusion in the photo is acceptable, crop-induced cutoff is not. Return exactly one check for each index.`,
+            text: `The first image is the upright original photo; subsequent images are numbered candidate crops. Compare each crop with the original photo and check it independently against its label. Do not assume the label is true. contains_item means the named garment/accessory is actually visible. well_framed means the crop includes the visible item extent, not just a fragment at an edge, and is centered on the item rather than adjacent body/background. A watch crop showing mostly arm with a sliver of watch is NOT well_framed. Use the original photo to distinguish natural occlusion from crop-induced cutoff: a crop must include the full visible extent in the original, even when the crop alone looks plausible. Natural occlusion in the photo is acceptable, crop-induced cutoff is not. Return exactly one check for each index.`,
           },
+          { inlineData: { data: source.toString("base64"), mimeType: "image/jpeg" } },
         ];
         for (const [index, item] of candidates.entries()) {
           const crop = yield* Effect.tryPromise(() =>
@@ -342,9 +332,10 @@ export const analyzeFitPhoto = (
             },
           );
         }
-        const result = yield* request<{ checks?: unknown }>(
+        const result = yield* request(
           parts,
           verificationSchema,
+          "fitCropVerification",
         );
         return verifiedIndices(result.checks, candidates.length);
       });
@@ -395,7 +386,7 @@ export const analyzeFitPhoto = (
     // Failed candidates cannot enter garment identity matching or the catalog.
     if (!accepted.length)
       return yield* Effect.fail(
-        new Error("No verified garment crops were produced"),
+        new ModelResponseError({ message: "No verified garment crops were produced", operation: "fitLocalization" }),
       );
     return {
       transcription: truncateWords(

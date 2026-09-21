@@ -9,22 +9,20 @@
  */
 
 import type * as account from "../account.js";
-import type * as authIdentity from "../authIdentity.js";
 import type * as candidates from "../candidates.js";
 import type * as fitChecks from "../fitChecks.js";
 import type * as garmentIdentityQueries from "../garmentIdentityQueries.js";
 import type * as http from "../http.js";
+import type * as mobile from "../mobile.js";
 import type * as planning from "../planning.js";
-import type * as planningValidators from "../planningValidators.js";
 import type * as profile from "../profile.js";
-import type * as retrier from "../retrier.js";
 import type * as storage from "../storage.js";
-import type * as styleBioPolicy from "../styleBioPolicy.js";
-import type * as trace from "../trace.js";
+import type * as storageMigration from "../storageMigration.js";
+import type * as styleMemory from "../styleMemory.js";
+import type * as styleMemoryData from "../styleMemoryData.js";
+import type * as uploads from "../uploads.js";
 import type * as wardrobe from "../wardrobe.js";
 import type * as wardrobes from "../wardrobes.js";
-import type * as zep from "../zep.js";
-import type * as zepOntology from "../zepOntology.js";
 import type * as zepSync from "../zepSync.js";
 
 import type {
@@ -35,22 +33,20 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   account: typeof account;
-  authIdentity: typeof authIdentity;
   candidates: typeof candidates;
   fitChecks: typeof fitChecks;
   garmentIdentityQueries: typeof garmentIdentityQueries;
   http: typeof http;
+  mobile: typeof mobile;
   planning: typeof planning;
-  planningValidators: typeof planningValidators;
   profile: typeof profile;
-  retrier: typeof retrier;
   storage: typeof storage;
-  styleBioPolicy: typeof styleBioPolicy;
-  trace: typeof trace;
+  storageMigration: typeof storageMigration;
+  styleMemory: typeof styleMemory;
+  styleMemoryData: typeof styleMemoryData;
+  uploads: typeof uploads;
   wardrobe: typeof wardrobe;
   wardrobes: typeof wardrobes;
-  zep: typeof zep;
-  zepOntology: typeof zepOntology;
   zepSync: typeof zepSync;
 }>;
 
@@ -81,51 +77,5 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
-  actionRetrier: {
-    public: {
-      cancel: FunctionReference<
-        "mutation",
-        "internal",
-        { runId: string },
-        boolean
-      >;
-      cleanup: FunctionReference<
-        "mutation",
-        "internal",
-        { runId: string },
-        any
-      >;
-      start: FunctionReference<
-        "mutation",
-        "internal",
-        {
-          functionArgs: any;
-          functionHandle: string;
-          options: {
-            base: number;
-            initialBackoffMs: number;
-            logLevel: "DEBUG" | "INFO" | "WARN" | "ERROR";
-            maxFailures: number;
-            onComplete?: string;
-            runAfter?: number;
-            runAt?: number;
-          };
-        },
-        string
-      >;
-      status: FunctionReference<
-        "query",
-        "internal",
-        { runId: string },
-        | { type: "inProgress" }
-        | {
-            result:
-              | { returnValue: any; type: "success" }
-              | { error: string; type: "failed" }
-              | { type: "canceled" };
-            type: "completed";
-          }
-      >;
-    };
-  };
+  actionRetrier: import("@convex-dev/action-retrier/_generated/component.js").ComponentApi<"actionRetrier">;
 };

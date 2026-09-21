@@ -4,7 +4,7 @@
     "slug": "wardrobe",
     "icon": "./assets/icon.png",
     "scheme": "wardrobe",
-    "version": "0.1.4",
+    "version": "0.1.5",
     "runtimeVersion": {
       "policy": "fingerprint"
     },
@@ -26,9 +26,7 @@
     },
     "android": {
       "package": "com.wardrobe.app",
-      "permissions": [
-        "android.permission.CAMERA"
-      ],
+      "permissions": ["android.permission.CAMERA"],
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
@@ -62,7 +60,14 @@
       "expo-status-bar",
       "expo-web-browser",
       "expo-localization",
-      ["expo-audio", { "microphonePermission": "Wardrobe records your day only when you choose Dictate. You review the transcript before requesting an outfit.", "enableBackgroundRecording": false, "enableBackgroundPlayback": false }]
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Wardrobe records your day only when you choose Dictate. You review the transcript before requesting an outfit.",
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
+      ]
     ],
     "extra": {
       "router": {},

@@ -10,7 +10,7 @@ The user should take one photo and receive a decomposed outfit. Manual recroppin
 2. Normalize EXIF orientation before detection. Use Gemini 2.5 Flash with thinking disabled for bounded localization latency, instead of Flash Lite's free-form xywh predictions.
 3. Use Google's documented `[ymin, xmin, ymax, xmax] / 1000` box convention. Reject malformed/degenerate geometry rather than converting it to a one-pixel crop.
 4. Detect the outfit extent, extract a closer view from original pixels, and detect individual garments in that view. Map coordinates back using the exact integer extraction rectangle.
-5. Independently inspect the resulting garment crops. Failed items receive an automatic contextual close-up and one re-localization pass, followed by another check. Limit refinement to four items with concurrency two. No user decision screen is added.
+5. Independently inspect the resulting garment crops alongside the upright original, so the verifier can detect crop-induced cutoff rather than approving a plausible fragment. Failed items receive an automatic contextual close-up and one re-localization pass, followed by another check. Limit refinement to four items with concurrency two. No user decision screen is added.
 6. Only verified crops enter garment matching/storage. Keep the original photo. Render garment images without a second destructive cover crop.
 
 The verification model is not ground truth. Low-quality results can still pass, and missing detections can still occur. Keep human-reviewed regression fixtures and field failure rates as the quality gate; never claim perfect first-shot accuracy from these samples.
@@ -36,6 +36,14 @@ Initial evidence on the reported watch photo:
 - Correct paid-project key: the original selfie produced separate top, bottom and watch in about six seconds; the watch was visually checked inside its crop. The earlier free-tier quota failure came from an older development key, not a missing billing account for the active Wardrobe project. No billing changes were needed. Production environment values are redacted when pulled locally, so this local run does not by itself establish which key is deployed.
 
 Still required for a broader accuracy claim: the actual distant failure photo, diverse outfits/accessories, low-light/occlusion cases, physical-device capture, and deployed operational validation. These timings cover localization, not upload and all downstream embedding/storage work.
+
+## Integration validation (September 20, 2026)
+
+The pipeline now runs through the shared Effect 4 inference runtime. Schema decoding rejects malformed detection/verifier payloads; only transient provider errors and timeouts receive a single retry with backoff. Existing ownership and upload-ticket boundaries remain in force.
+
+A fresh real-photo run exposed a crop-only verification weakness: a pants fragment could look plausible without the original context. Verification now receives both the upright original and the candidate crops. The subsequent run returned three pieces in about 13 seconds, rejected the first watch framing, and accepted its automatic repair. Visual inspection confirmed the visible shirt, pants, and watch extents; the watch remains limited by the source pixels. This is one regression fixture, not a broad accuracy estimate.
+
+Targeted geometry, repair, EXIF, and malformed-provider tests pass, along with the full test suite, type checks, lint, three browser journeys, and workspace builds. Local builds use CI's synthetic Clerk configuration; real provider checks use the existing application credential. Vercel environment exports contain secret placeholders and cannot serve as inference credentials. Private artifacts are excluded from Git and deployment.
 
 ## Native design direction
 

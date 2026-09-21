@@ -2,7 +2,7 @@
   "name": "wardrobe",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "bun@1.3.0",
+  "packageManager": "bun@1.3.8",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -13,17 +13,28 @@
     "lint": "turbo lint",
     "test": "turbo test",
     "typecheck": "turbo typecheck",
+    "backend:codegen": "bun run --bun confect codegen && bun run --bun convex codegen",
+    "backend:watch": "bun run --bun confect dev",
     "observability:smoke": "bun run apps/web/scripts/observability-smoke.ts",
     "web-build": "turbo build --filter=@wardrobe/web",
-    "vercel-build": "bun run --cwd apps/web convex deploy --cmd \"cd ../.. && bun run web-build\""
+    "vercel-build": "bun run --bun confect codegen && bun run --cwd apps/web convex deploy --cmd \"cd ../.. && bun run web-build\"",
+    "validate": "bun run scripts/validate.ts",
+    "debug": "bun run scripts/debug.ts",
+    "probe:browser": "bun run --cwd apps/web scripts/probe-browser.ts",
+    "probe:performance": "bun run --cwd apps/web scripts/probe-performance.ts",
+    "review:context": "bun run scripts/review-context.ts",
+    "review:local": "bun run scripts/review-local.ts",
+    "review:merge": "bun run scripts/review-merge.ts"
   },
   "devDependencies": {
+    "@confect/cli": "10.0.0-next.22",
+    "convex": "1.46.0",
     "turbo": "^2.8.0",
     "typescript": "~6.0.3"
   },
   "overrides": {
-    "@effect/platform": "0.94.4",
-    "effect": "3.19.14"
+    "effect": "4.0.0-rc.115",
+    "convex": "1.46.0"
   },
   "patchedDependencies": {
     "react-native@0.86.3": "patches/react-native@0.86.3.patch"

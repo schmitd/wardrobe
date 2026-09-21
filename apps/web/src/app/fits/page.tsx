@@ -1,14 +1,16 @@
 'use client';
 
+import { uploadPhotoFile } from "@/services/photoUpload";
+
 import Image from 'next/image';
 import Link from 'next/link';
 import { ChangeEvent, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
-import { useQuery } from 'convex/react';
+import { usePaginatedQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { CalendarDays, Camera, FolderHeart, ImagePlus, Shirt } from 'lucide-react';
-import { getUploadUrlAction, recordDailyFitCheckAction, refreshStyleBioAction } from '@/app/actions/wardrobe';
+import { getUploadUrlAction, recordDailyFitCheckAction } from '@/app/actions/wardrobe';
 import TryOnFeedback from '@/components/TryOnFeedback';
 import { useCompatibilityCheck } from '@/hooks/useCompatibilityCheck';
 import { createTraceContext } from '@/lib/trace';
@@ -18,6 +20,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import GarmentObservationReview from '@/components/GarmentObservationReview';
 import PlansView from '@/components/PlansView';
 import DayPlanner from '@/components/DayPlanner';
+import WornOutfits from '@/components/WornOutfits';
 
 type FitCheckMode = 'daily_fit_check' | 'try_on';
 
@@ -60,7 +63,8 @@ function FitsContent() {
   const searchParams = useSearchParams();
   const activeView = searchParams.get('view') === 'plans' ? 'plans' : 'diary';
   const { isLoaded, isSignedIn } = useUser();
-  const fitChecks = useQuery(api.fitChecks.listFitChecks, isLoaded && isSignedIn ? { limit: 100 } : 'skip');
+  const history = usePaginatedQuery(api.fitChecks.pageFitChecks, isLoaded && isSignedIn ? {} : 'skip', { initialNumItems: 20 });
+  const fitChecks = history.results;
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tryOnPreview, setTryOnPreview] = useState<string | null>(null);
@@ -85,11 +89,7 @@ function FitsContent() {
     setStatus(`${copy[mode].title} is being recorded…`);
     setError(null);
     try {
-      const uploadUrl = await getUploadUrlAction();
-      const upload = await fetch(uploadUrl, { method: 'POST', body: file });
-      if (!upload.ok) throw new Error(`Upload failed: ${upload.statusText}`);
-      const { storageId } = await upload.json();
-      if (!storageId) throw new Error('Upload response missing storageId.');
+      const storageId = await uploadPhotoFile(file, getUploadUrlAction);
       const trace = createTraceContext();
       if (mode === 'try_on') {
         if (tryOnPreview) URL.revokeObjectURL(tryOnPreview);
@@ -100,7 +100,6 @@ function FitsContent() {
         await recordDailyFitCheckAction({ storageId, ...trace });
         setStatus('Fit check saved.');
       }
-      void refreshStyleBioAction().catch((refreshError) => console.warn('style_bio.background_refresh.failed', refreshError));
     } catch (caught) {
       setError(userFacingErrorMessage(caught, 'Could not save this fit right now.'));
       setStatus(null);
@@ -123,6 +122,7 @@ function FitsContent() {
       </section>
 
       {activeView === 'plans' ? <><DayPlanner /><PlansView /></> : <div id="fits-diary" className="space-y-6">
+      <WornOutfits />
       <section className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2"><CaptureCard mode="daily_fit_check" onComplete={record} /><CaptureCard mode="try_on" onComplete={record} /></div>
         {(status || error) && <p role="status" className={`border p-3 text-sm font-semibold ${error ? 'border-[#B93267] bg-[var(--rack-danger-wash)] text-[#B93267]' : 'border-[var(--rack-line)] bg-[var(--rack-success-wash)] text-[#241426]'}`}>{error ?? status}</p>}
@@ -145,7 +145,7 @@ function FitsContent() {
         </div>
       </section>
 
-      <section><h2 className="text-xl font-extrabold text-[#241426]">Recent fits</h2><div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{(fitChecks ?? []).map((fitCheck) => <article id={`fit-${String(fitCheck._id)}`} key={String(fitCheck._id)} className="overflow-hidden border border-[var(--rack-line)] bg-white shadow-[3px_3px_0_var(--rack-panel-shadow)]"><div className="relative aspect-[4/3] bg-[var(--rack-wash)]">{fitCheck.imageUrl && <Image src={fitCheck.imageUrl} alt={fitCheck.transcription ?? fitCheck.type} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />}</div><div className="p-4"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#56345c]">{fitCheck.type === 'try_on' ? 'Try on' : 'Fit check'} · {new Date(fitCheck.createdAt).toLocaleDateString()}</p><p className="mt-2 text-sm font-medium leading-relaxed text-[#241426]">{fitCheck.transcription ?? fitCheck.description ?? 'No notes yet.'}</p>{fitCheck.type === 'daily_fit_check' && <GarmentObservationReview observations={fitCheck.observations} />}</div></article>)}</div></section>
+      <section><h2 className="text-xl font-extrabold text-[#241426]">Recent fits</h2>{history.status === 'CanLoadMore' && <Button variant="outline" onClick={() => history.loadMore(20)}>Load earlier fits</Button>}<div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{(fitChecks ?? []).map((fitCheck) => <article id={`fit-${String(fitCheck._id)}`} key={String(fitCheck._id)} className="overflow-hidden border border-[var(--rack-line)] bg-white shadow-[3px_3px_0_var(--rack-panel-shadow)]"><div className="relative aspect-[4/3] bg-[var(--rack-wash)]">{fitCheck.imageUrl && <Image src={fitCheck.imageUrl} alt={fitCheck.transcription ?? fitCheck.type} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />}</div><div className="p-4"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#56345c]">{fitCheck.type === 'try_on' ? 'Try on' : 'Fit check'} · {new Date(fitCheck.createdAt).toLocaleDateString()}</p><p className="mt-2 text-sm font-medium leading-relaxed text-[#241426]">{fitCheck.transcription ?? fitCheck.description ?? 'No notes yet.'}</p>{fitCheck.type === 'daily_fit_check' && <GarmentObservationReview observations={fitCheck.observations} />}</div></article>)}</div></section>
       </div>}
     </main>
   );
