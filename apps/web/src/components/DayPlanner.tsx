@@ -210,21 +210,22 @@ function WeekPlanner({ userId, historyDate }: { userId: string; historyDate?: st
   const pieces = (ids: string[], large = false) => (
     <div
       data-private
-      className={`flex flex-wrap items-center gap-2 ${large ? "" : "mt-auto"}`}
+      className={`flex items-center gap-2 ${large ? "overflow-x-auto" : "mt-auto flex-wrap"}`}
     >
       {ids.slice(0, large ? 12 : 4).map((id) => {
         const item = data?.items.find((i) => i.id === id);
         return (
           <div
             key={id}
-            className={`relative rounded-md bg-white ${large ? "h-32 w-24" : "h-20 w-12"}`}
+            className={`relative rounded-md bg-white ${large ? "h-32 min-w-16 max-w-40 shrink-0" : "h-20 w-12"}`}
+            style={large ? { width: `calc((100% - ${(Math.min(ids.length, 4) - 1) * 8}px) / ${Math.max(1, Math.min(ids.length, 4))})` } : undefined}
           >
             {item?.imageUrl ? (
               <Image
                 src={item.imageUrl}
                 alt={item.category}
                 fill
-                sizes={large ? "96px" : "48px"}
+                sizes={large ? "(max-width: 640px) 40vw, 160px" : "48px"}
                 className="object-contain"
                 unoptimized
               />
@@ -244,7 +245,7 @@ function WeekPlanner({ userId, historyDate }: { userId: string; historyDate?: st
     >
       {!historyDate && <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold sm:text-xl">Your week, dressed.</h2>
+          <h2 className="text-lg font-semibold sm:text-xl">This week</h2>
           <p className="mt-1 hidden text-sm text-[#685e70] sm:block">
             Collections and style notes, matched to your day.
           </p>
@@ -344,6 +345,7 @@ function WeekPlanner({ userId, historyDate }: { userId: string; historyDate?: st
                 {pieces(outfit.itemIds, true)}
               {outfit.status === "suggested" ? (
                 <Button
+                  className="rack-primary-action"
                   disabled={busy || !outfit.itemIds.length}
                   onClick={() =>
                     void update({ operation: "planning_accept", id: outfit.id })
@@ -353,6 +355,7 @@ function WeekPlanner({ userId, historyDate }: { userId: string; historyDate?: st
                 </Button>
               ) : outfit.status === "planned" ? (
                 <Button
+                  className="rack-primary-action"
                   disabled={busy}
                   onClick={() =>
                     void update({ operation: "planning_worn", id: outfit.id })
@@ -717,7 +720,7 @@ function WeekPlanner({ userId, historyDate }: { userId: string; historyDate?: st
                 />
                 Use Google Calendar for suggestions
               </label>
-              <p className="text-sm">Relevant collections are recalled from your activities, calendar events, and saved style notes.</p>
+              <p className="text-sm">Your activities and calendar bring relevant collections into the outfit plan. Your style notes guide the recommendations.</p>
               <p className="text-sm">
                 Suggestions use owned wardrobe pieces and saved preferences.
                 Weather is not checked; review the forecast.

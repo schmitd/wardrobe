@@ -15,6 +15,8 @@ Week-planner release operations add `planning_interpret`, `planning_week`, and `
 
 Do not mirror server logs or trace payloads into PostHog. Never send prompts, uploaded images, filenames, style-bio text, image-derived personal attributes, raw logs, authorization material, or full error payloads to PostHog. Replay masks all inputs and any element carrying `data-private`.
 
+Collection and item-detail controls use `ph-no-capture` to exclude their content-bearing labels and attributes from autocapture. Completed note and collection changes emit only the bounded events below; their contents stay masked in replay.
+
 ## Connected surfaces
 
 - PostHog project: [Wardrobe project 281423](https://us.posthog.com/project/281423)
@@ -44,6 +46,7 @@ Native TestFlight instrumentation and release checks are documented in [TESTFLIG
 | `unified_capture_completed` | bounded `intent`, `scope` | Which capture flows complete? |
 | `planning_operation_finished` | bounded `operation`, `outcome`, `duration_ms`, `source`, `analytics_schema` | Where do planning requests fail or slow down? |
 | `wardrobe_item_note_saved` | `character_count`, bounded `surface` | Are users keeping practical context on individual pieces? |
+| `wardrobe_collection_changed` | `operation` (`created`, `updated`, `piece_added`, `piece_removed`), `surface` (`wardrobe`) | Are collections helping users organize existing pieces? |
 | `profile_bio_saved` | `character_count`, bounded `surface` | Are users personalizing recommendations? |
 | `selfie_analyzed` | `has_color_season` | Is color-profile personalization completing? |
 | `observability_smoke_test` | `smoke_id`, deploy URL, Git SHA, source | Does deployment ingestion work? |

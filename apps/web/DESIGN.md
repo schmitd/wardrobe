@@ -70,13 +70,13 @@ Fit check, Try on, and inspiration use one direct photo button. It opens the dev
 
 Try-on feedback should read like a considered styling note, not a shopping scorecard. Lead with the verdict and explanation, ground it in a few owned closet anchors, and make the ownership boundary explicit. Compatibility colors are semantic: green for strong fit, pink only for a genuinely difficult fit, and neutral mauve/ink for mixed results.
 
-Collections are named, user-described groups within Wardrobe. Use a condensed horizontal rail with an All pieces entry. The selected collection exposes Pieces and Inspiration side by side as immediate view controls; neither belongs below a long list of the other. Add existing owned pieces through a compact picker.
+Collections are named, user-described groups within Wardrobe. Use a condensed horizontal rail with an All pieces entry. Each circle composes up to three actual member images into an ensemble, with contained photos and a clear selected ring. The selected collection exposes Pieces and Inspiration side by side as immediate view controls; neither belongs below a long list of the other. Add existing owned pieces through a compact picker.
 
-The full shirt-shaped card opens a bottom drawer on phones and a side drawer on larger screens. Preserve photo-derived accents and contain the whole garment photo. Hang tags show category, a personal-note indicator, a collection indicator in collection views, and a details affordance. In the drawer, show attribute Labels, Collections with Manage, and My note with an explicit Save action.
+The full shirt-shaped card opens a bottom drawer on phones and a side drawer on larger screens. Preserve photo-derived accents and contain the whole garment photo. Use a warm wooden hanger with a thin metal hook, a lightly tinted garment silhouette, and a vertically hanging shaped tag. Tags show a collection affordance and a personal-note indicator; put the category and details arrow in the caption. In the drawer, show attribute Labels, Collections with Manage, and My note with an explicit Save action.
 
 Fits starts with a Plan / Diary switch. Plan uses a seven-day strip and one selected outfit, with a short dictation prompt and calendar context nearby. Put Use this fit beside the outfit and keep swapping and explanations available as compact disclosures. No manual collection selector or duplicate capture cards. Past planned outfits can be corrected from Diary.
 
-The prototype permits rounded rails, day selectors, and drawer corners where the approved mock uses them; keep the distinctive garment shapes and physical tags as the visual focus.
+The approved design permits rounded rails, day selectors, and drawer corners where the approved mock uses them; keep the distinctive garment shapes and physical tags as the visual focus.
 
 ## Accessibility
 

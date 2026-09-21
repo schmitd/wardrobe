@@ -8,7 +8,6 @@ import { useSearchParams } from 'next/navigation';
 import { useUser } from '@clerk/nextjs';
 import { usePaginatedQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { CalendarDays, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import GarmentObservationReview from '@/components/GarmentObservationReview';
@@ -47,11 +46,11 @@ function FitsContent() {
   return (
     <main className="mx-auto w-full max-w-[1320px] space-y-5 px-4 py-5 pb-28 sm:px-6 lg:px-10">
       <section>
-        <div className="flex items-center justify-between gap-4"><h1 className="text-3xl font-bold text-[#241426]">Fits</h1>
-        <nav className="inline-grid grid-cols-2 rounded-full bg-[#eae1ec] p-1" aria-label="Fits views">
-          <Link href="/fits?view=plan" aria-current={activeView === 'plan' ? 'page' : undefined} className={`flex min-h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold ${activeView === 'plan' ? 'bg-[#241426] text-white' : 'text-[#56345c]'}`}><Sparkles className="size-4" /> Plan</Link>
-          <Link href="/fits?view=diary" aria-current={activeView === 'diary' ? 'page' : undefined} className={`flex min-h-10 items-center justify-center gap-2 rounded-full px-4 text-sm font-semibold ${activeView === 'diary' ? 'bg-[#241426] text-white' : 'text-[#56345c]'}`}><CalendarDays className="size-4" /> Diary</Link>
-        </nav></div>
+        <h1 className="text-3xl font-bold text-[#241426]">Fits</h1>
+        <nav className="mt-2 flex gap-3 border-b border-[#d8c9dc]" aria-label="Fits views">
+          <Link href="/fits?view=plan" aria-current={activeView === 'plan' ? 'page' : undefined} className={`flex min-h-11 items-center border-b-2 px-4 text-sm font-semibold ${activeView === 'plan' ? 'border-[#241426] text-[#241426]' : 'border-transparent text-[#56345c]'}`}>Plan</Link>
+          <Link href="/fits?view=diary" aria-current={activeView === 'diary' ? 'page' : undefined} className={`flex min-h-11 items-center border-b-2 px-4 text-sm font-semibold ${activeView === 'diary' ? 'border-[#241426] text-[#241426]' : 'border-transparent text-[#56345c]'}`}>Diary</Link>
+        </nav>
       </section>
 
       {activeView === 'plan' ? <DayPlanner /> : <div id="fits-diary" className="space-y-6">

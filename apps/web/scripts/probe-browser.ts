@@ -68,7 +68,7 @@ try {
           case "select": await locator.selectOption(short(step.value)); break;
           case "press": await locator.press(short(step.value)); break;
           case "visible": await locator.waitFor({ state: "visible" }); break;
-          case "text": if (!(await locator.innerText()).includes(short(step.value))) throw new Error("Text assertion failed"); break;
+          case "text": await locator.filter({ hasText: short(step.value) }).waitFor({ state: "visible" }); break;
           case "upload": { const [chooser] = await Promise.all([page.waitForEvent("filechooser"), locator.click()]); await chooser.setFiles({ name: "synthetic.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==", "base64") }); break; }
         }
       }

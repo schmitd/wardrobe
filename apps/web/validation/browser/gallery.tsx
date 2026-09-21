@@ -15,6 +15,6 @@ function WardrobeFixture() {
 }
 const scenario = new URLSearchParams(location.search).get("scenario") ?? (location.pathname === "/" ? "wardrobe" : "fits");
 createRoot(document.getElementById("root")!).render(<>
-  <div className="fixture-banner">Interactive prototype · synthetic data</div>
+  <div className="fixture-banner">Design review · synthetic data</div>
   {scenario === "wardrobe" ? <WardrobeFixture /> : scenario === "fits" ? <><Navbar /><FitsPage /></> : scenario === "capture" ? <><UnifiedCaptureTrigger variant="desktop" /><UnifiedCaptureController /></> : <main className="p-5"><DayPlanner historyDate={scenario === "history" ? shiftDay(localDate(), -1) : undefined} /></main>}
 </>);

@@ -36,7 +36,7 @@ function fixture(url: URL): State {
 }
 const cssPath = resolve(import.meta.dir, "../../src/app/globals.css");
 const css = await postcss([tailwind()]).process(await Bun.file(cssPath).text(), { from: cssPath });
-const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Wardrobe prototype</title><link rel="stylesheet" href="/gallery.css"><style>body{font-family:Arial,sans-serif}.fixture-banner{padding:5px 12px;background:#241426;color:#eee5f0;font-size:11px;text-align:center}</style><div id="root"></div><script type="module" src="/gallery.js"></script></html>`;
+const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Wardrobe review gallery</title><link rel="stylesheet" href="/gallery.css"><style>body{font-family:Arial,sans-serif}.fixture-banner{padding:5px 12px;background:#241426;color:#eee5f0;font-size:11px;text-align:center}</style><div id="root"></div><script type="module" src="/gallery.js"></script></html>`;
 Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
   const url = new URL(request.url);
   if (url.pathname === "/favicon.ico") return new Response(null, { status: 204 });
@@ -51,6 +51,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
     if (!url.searchParams.has("scenario") || url.searchParams.get("scenario") === "fits") {
       next.data.items = next.catalog.items.map(i => ({ id: i.id, category: i.category!, description: i.description!, imageUrl: i.imageUrl }));
       next.data.suggestions[0]!.status = "suggested";
+      next.data.suggestions[0]!.itemIds = next.catalog.items.map(i => i.id);
     }
     states.set(session, next);
     return new Response(html, { headers: { "Content-Type": "text/html", "Set-Cookie": `probe_session=${session}; Path=/; HttpOnly; SameSite=Strict` } });
@@ -68,12 +69,13 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
     const c = state.catalog;
     switch (input.query) {
       case "mobile.plans": case "wardrobes.listWardrobes": return Response.json(c.collections);
+      case "wardrobe.pageCollections": return Response.json(c.collections.map(collection => ({ ...collection, previews: [...c.items.filter(i => c.memberships.some(m => m.wardrobeId === collection._id && m.itemId === i.id)), ...c.inspirations.filter(r => r.wardrobeId === collection._id).map(r => ({ id: r._id, imageUrl: r.imageUrl, category: r.category }))].slice(0, 3) })));
       case "wardrobe.pageWardrobeItems": return Response.json(c.items);
       case "wardrobe.pagePieces": return Response.json(c.items.filter(i => c.memberships.some(m => m.wardrobeId === args.wardrobeId && m.itemId === i.id)));
       case "wardrobe.itemDetails": return Response.json({ note: c.items.find(i => i.id === args.itemId)?.note ?? "", collections: c.collections.filter(collection => c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === collection._id)).map(collection => ({ id: collection._id, name: collection.name })), truncated: false });
       case "profile.getProfile": return Response.json({ bio: c.bio });
       case "planning.load": return Response.json(state.data);
-      case "candidates.listInspirationByWardrobe": return Response.json([{ _id: "reference", category: "Color reference", description: "Soft neutrals and navy layers", imageUrl: "/__fixture/piece-0.svg" }]);
+      case "wardrobe.pageInspiration": case "candidates.listInspirationByWardrobe": return Response.json(c.inspirations.filter(r => r.wardrobeId === args.wardrobeId));
       default: return Response.json([]);
     }
   }
@@ -84,12 +86,16 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
   switch (operation) {
     case "mutation": {
       const args = input.args as Record<string, string>; const c = state.catalog;
+      if (input.name === "wardrobe.getUploadUrl") return Response.json(`http://127.0.0.1:${port}/__fixture/upload`);
+      if (input.name === "candidates.createInspiration") { const id = `reference-${c.inspirations.length}`; c.inspirations.unshift({ _id: id, wardrobeId: args.wardrobeId!, category: args.category!, description: args.description!, imageUrl: "/__fixture/piece-0.svg" }); return Response.json({ id }); }
       if (input.name === "wardrobe.saveNote") { const item = c.items.find(i => i.id === args.itemId); if (item) item.note = args.note.trim(); }
       else if (input.name === "wardrobes.addItemToWardrobe") { if (!c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === args.wardrobeId)) c.memberships.push({ itemId: args.itemId!, wardrobeId: args.wardrobeId! }); }
       else if (input.name === "wardrobes.removeItemFromWardrobe") c.memberships = c.memberships.filter(m => !(m.itemId === args.itemId && m.wardrobeId === args.wardrobeId));
+      else if (input.name === "wardrobes.updateWardrobe") { const collection = c.collections.find(collection => collection._id === args.wardrobeId); if (collection) { collection.name = args.name!; collection.description = args.description ?? ""; } }
       else if (input.name === "wardrobes.createWardrobe") { const id = `collection-${c.collections.length}`; c.collections.push({ _id: id, name: args.name!, description: args.description ?? "" }); return Response.json({ id }); }
       return Response.json(null);
     }
+    case "enrich-inspiration": return Response.json({ success: true });
     case "update-bio": state.catalog.bio = String(input.bio); return Response.json({ success: true });
     case "planning_accept": state.data.suggestions[0]!.status = "planned"; return Response.json({ ok: true });
     case "planning_load": return state.stale && state.wrote ? Response.json({ error: "Synthetic refresh unavailable" }, { status: 503 }) : Response.json(state.data);

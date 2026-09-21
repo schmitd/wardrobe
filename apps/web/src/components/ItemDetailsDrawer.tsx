@@ -60,7 +60,7 @@ export default function ItemDetailsDrawer({
       }}
     >
       <DialogContent
-        className="item-details-drawer"
+        className="item-details-drawer ph-no-capture"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           (
@@ -148,18 +148,22 @@ export default function ItemDetailsDrawer({
                       disabled={busy || !details}
                       checked={checked}
                       onChange={() =>
-                        void run(
-                          () =>
-                            checked
-                              ? remove({ wardrobeId: collection._id, itemId })
-                              : add({
-                                  wardrobeId: collection._id,
-                                  itemId,
-                                  membershipKind: "owned",
-                                  ...createTraceContext(),
-                                }),
-                          "Collections updated.",
-                        )
+                        void run(async () => {
+                          await (checked
+                            ? remove({ wardrobeId: collection._id, itemId })
+                            : add({
+                                wardrobeId: collection._id,
+                                itemId,
+                                membershipKind: "owned",
+                                ...createTraceContext(),
+                              }));
+                          posthog.capture("wardrobe_collection_changed", {
+                            operation: checked
+                              ? "piece_removed"
+                              : "piece_added",
+                            surface: "wardrobe",
+                          });
+                        }, "Collections updated.")
                       }
                     />
                     {collection.name}
@@ -197,6 +201,7 @@ export default function ItemDetailsDrawer({
           />
         </label>
         <Button
+          className="rack-primary-action min-w-32 justify-self-end"
           disabled={busy || !details || note === details.note}
           onClick={() =>
             void run(async () => {

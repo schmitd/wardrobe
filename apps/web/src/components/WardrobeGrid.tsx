@@ -121,11 +121,12 @@ export default function WardrobeGrid({
 
                     return (
                         <article
+                            data-private
                             key={itemId}
                             data-wardrobe-item-id={itemId}
                             role="group"
                             aria-label={item.category ?? "Wardrobe item"}
-                            className="group relative outline-none focus-visible:ring-2 focus-visible:ring-[var(--rack-line)] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
+                            className="ph-no-capture group relative outline-none focus-visible:ring-2 focus-visible:ring-[var(--rack-line)] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
                         >
                             <button type="button" className="block w-full rounded-lg text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#735079]" data-piece-open={itemId}
                                 aria-label={`Open ${item.category ?? "piece"} details`} disabled={item.isOptimistic} onClick={() => { if (!item.isOptimistic) onOpenItem?.(item); }}>

@@ -54,8 +54,18 @@ export function collectionFixture() {
     memberships: [
       { wardrobeId: "work", itemId: "piece-0" },
       { wardrobeId: "work", itemId: "piece-1" },
+      { wardrobeId: "work", itemId: "piece-3" },
       { wardrobeId: "weekend", itemId: "piece-2" },
+      { wardrobeId: "weekend", itemId: "piece-1" },
+      { wardrobeId: "weekend", itemId: "piece-3" },
     ],
+    inspirations: [0, 1, 2].map((index) => ({
+      _id: `reference-${index}`,
+      wardrobeId: "ideas",
+      category: "Visual reference",
+      description: ["Navy layers", "Soft neutrals", "Olive textures"][index]!,
+      imageUrl: `/__fixture/piece-${index}.svg`,
+    })),
   };
 }
 export function pieceSvg(index: number) {

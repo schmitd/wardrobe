@@ -22,7 +22,7 @@ The signed-in experience has two primary destinations and one global action:
 
 Account, privacy, authentication, and sign-out stay behind the header account affordance. Do not add Profile, Collections, or Plan as primary destinations. Legacy `/profile` and `/wardrobes` links route to their home inside Wardrobe. Existing wardrobe records remain the collection data model; no migration renames or replaces saved collections.
 
-Open the entire item card to view its labels, manage collection membership, and leave a personal note. The hang tag carries category, note, and contextual collection cues, but is never the only tap target. Attribute labels, collection membership, and personal notes are distinct sections.
+Open the entire item card to view its labels, manage collection membership, and leave a personal note. A shaped hang tag carries a collection affordance and a personal-note indicator; the caption names the piece. The entire card is the tap target. Attribute labels, collection membership, and personal notes are distinct sections.
 
 Planning recalls relevant collections from reviewed activities or calendar events. It does not require a manual collection selection. Users can inspect the context, adjust pieces, accept a suggestion, and later confirm what they wore. Existing planned and worn outfits remain protected from regeneration.
 
@@ -36,7 +36,7 @@ Avoid fashion editorial layouts, generic SaaS/dashboard templates, and common AI
 
 ## Design Principles
 
-Keep the rack metaphor central where it helps recognition: item rack cards should continue to read like shirts on hangers (upright compact cards in the catalog; sideways cards may remain in other surfaces), with category tags that look like physical hang tags.
+Keep the rack metaphor central where it helps recognition: item rack cards should continue to read like shirts on hangers (upright compact cards in the catalog; sideways cards may remain in other surfaces), with softly shaded wooden hangers and physical hang tags. Collection circles show an ensemble of their actual pieces or inspiration; use a quiet folder only when no preview is available.
 
 Make the interface playful through product-specific structure, not through arbitrary decoration. The clothing metaphor should explain the screen and make it memorable.
 
