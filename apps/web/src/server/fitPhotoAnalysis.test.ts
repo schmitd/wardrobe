@@ -153,7 +153,7 @@ describe("automatic fit analysis", () => {
   });
   it("focuses distant outfits before item detection and maps resulting boxes", async () => {
     const s = service([
-      detection([item()], [200, 300, 800, 700]),
+      detection([], [200, 300, 800, 700]),
       detection([item()]),
       checked(true),
     ]);
@@ -170,6 +170,44 @@ describe("automatic fit analysis", () => {
     expect(images).toHaveLength(2);
     const context = await sharp(Buffer.from(images[0].inlineData!.data, "base64")).metadata();
     expect([context.width, context.height]).toEqual([600, 1000]);
+  });
+  it("preserves distinct accessories across zoom passes while replacing an overlapping detection", async () => {
+    const watch = { ...item([200, 200, 260, 300]), description: "Black watch" };
+    const belt = { ...item([500, 200, 560, 700]), description: "Brown belt" };
+    const s = service([
+      detection([watch, belt], [100, 100, 900, 900]),
+      detection([belt]),
+      { checks: [0, 1].map(index => ({ index, contains_item: true, well_framed: true })) },
+    ]);
+    const result = await Effect.runPromise(analyzeFitPhoto(await source(), "daily_fit_check").pipe(Effect.provide(s.layer)));
+    expect(result.items.map(piece => piece.description)).toEqual(["Brown belt", "Black watch"]);
+    expect(s.calls).toHaveLength(3);
+  });
+  it("does not save an automatic repair twice when it lands on an accepted item", async () => {
+    const bytes = await source();
+    const accepted = item([400, 400, 600, 600]);
+    const misplaced = item([400, 600, 600, 800]);
+    const target = boxFromGemini(accepted.box_2d)!;
+    const { region } = await focusOutfit(Buffer.from(bytes, "base64"), detailRegion(boxFromGemini(misplaced.box_2d)!));
+    const repairedBox = [
+      (target.y - region.y) / region.height * 1000,
+      (target.x - region.x) / region.width * 1000,
+      (target.y + target.height - region.y) / region.height * 1000,
+      (target.x + target.width - region.x) / region.width * 1000,
+    ];
+    const s = service([
+      detection([accepted, misplaced]),
+      { checks: [
+        { index: 0, contains_item: true, well_framed: true },
+        { index: 1, contains_item: true, well_framed: false },
+      ] },
+      detection([item(repairedBox)]),
+      checked(true),
+    ]);
+    const result = await Effect.runPromise(analyzeFitPhoto(bytes, "daily_fit_check").pipe(Effect.provide(s.layer)));
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].bounding_box).toEqual(target);
+    expect(s.calls).toHaveLength(4);
   });
   it("never returns a crop that fails both independent checks", async () => {
     const s = service([

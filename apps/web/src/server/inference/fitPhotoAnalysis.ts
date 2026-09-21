@@ -110,6 +110,19 @@ export function mapBox(
   };
 }
 
+// Category identifies a kind of garment, not an individual piece. Only a
+// substantial overlap in original-image coordinates can replace a first pass.
+function sameLocatedItem(a: FitItem, b: FitItem): boolean {
+  if (a.category !== b.category) return false;
+  const x = Math.max(a.bounding_box.x, b.bounding_box.x);
+  const y = Math.max(a.bounding_box.y, b.bounding_box.y);
+  const right = Math.min(a.bounding_box.x + a.bounding_box.width, b.bounding_box.x + b.bounding_box.width);
+  const bottom = Math.min(a.bounding_box.y + a.bounding_box.height, b.bounding_box.y + b.bounding_box.height);
+  const intersection = Math.max(0, right - x) * Math.max(0, bottom - y);
+  const union = a.bounding_box.width * a.bounding_box.height + b.bounding_box.width * b.bounding_box.height - intersection;
+  return union > 0 && intersection / union >= 0.5;
+}
+
 export function detailRegion(
   box: NormalizedBoundingBox,
 ): NormalizedBoundingBox {
@@ -298,7 +311,7 @@ export const analyzeFitPhoto = (
     let items = parseFitItems(detection.items, region);
     // Do not drop a small accessory solely because the second pass overlooked it.
     for (const item of initialItems) {
-      if (!items.some((i) => i.category === item.category)) items.push(item);
+      if (!items.some((i) => sameLocatedItem(i, item))) items.push(item);
     }
     // If the model produced no usable boxes, re-localize once automatically.
     if (!items.length)
@@ -373,6 +386,11 @@ export const analyzeFitPhoto = (
         }
       }
     }
+    // An inaccurate first-pass box may repair onto an already accepted item.
+    // Preserve distinct same-category pieces, but do not save the same crop twice.
+    const uniqueAccepted = accepted.filter((candidate, index) =>
+      !accepted.slice(0, index).some(other => sameLocatedItem(candidate, other)),
+    );
     console.info("fit_check.localization.complete", {
       ...trace,
       detectorVersion: FIT_DETECTOR_VERSION,
@@ -380,11 +398,11 @@ export const analyzeFitPhoto = (
       zoomed,
       detectedCount: items.length,
       initialRejectedCount: rejected.length,
-      acceptedCount: accepted.length,
+      acceptedCount: uniqueAccepted.length,
       durationMs: Date.now() - started,
     });
     // Failed candidates cannot enter garment identity matching or the catalog.
-    if (!accepted.length)
+    if (!uniqueAccepted.length)
       return yield* Effect.fail(
         new ModelResponseError({ message: "No verified garment crops were produced", operation: "fitLocalization" }),
       );
@@ -395,7 +413,7 @@ export const analyzeFitPhoto = (
           : "",
         40,
       ),
-      items: accepted,
+      items: uniqueAccepted,
     };
   }).pipe(
     Effect.withSpan("fit_check.localize", {
