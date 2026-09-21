@@ -1,0 +1,6 @@
+{
+  "prompt": "Use case: precise-object-edit. Edit this generated trousers image. Change ONLY the alpha/background edge treatment: remove the broad translucent dark haze/glow surrounding the pants and between the legs. Exterior background must be fully transparent, with crisp natural cloth edges and only narrow antialiasing. Keep all visible trouser fabric fully opaque. Preserve the trousers themselves exactly: their silhouette, color, texture, waistband, seams, proportions, and placement. No new garment details, no shadow, no checkerboard, no opaque background.",
+  "input": "1-generated.png",
+  "output": "1-refinement.png",
+  "selected": false
+}

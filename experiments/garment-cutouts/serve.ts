@@ -4,7 +4,7 @@ const allowedRoot = resolve(import.meta.dir, "../../output/cutout-prototype");
 if (relative(allowedRoot, root).startsWith("..") || isAbsolute(relative(allowedRoot, root))) throw new Error("Invalid study directory");
 const server = Bun.serve({
   hostname: "127.0.0.1",
-  port: 4918,
+  port: Number(process.argv[3] ?? 4918),
   async fetch(request) {
     const pathname = decodeURIComponent(new URL(request.url).pathname);
     const file = resolve(root, `.${pathname === "/" ? "/index.html" : pathname}`);
