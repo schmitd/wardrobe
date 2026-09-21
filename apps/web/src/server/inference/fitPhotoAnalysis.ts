@@ -18,6 +18,7 @@ export const FIT_DETECTOR_MODEL = "gemini-2.5-flash" as const;
 export const FIT_DETECTOR_VERSION = "outfit-focus-context-verification-v2";
 // Leave half of the mobile route's 180-second budget for embeddings and writes.
 export const FIT_LOCALIZATION_TIMEOUT_MS = 90_000;
+const MAX_FIT_ITEMS = 12;
 export const FIT_VISION_CONFIG: GenerationConfig & {
   thinkingConfig: { thinkingBudget: number };
 } = {
@@ -143,7 +144,7 @@ export function parseFitItems(
   region: NormalizedBoundingBox = { x: 0, y: 0, width: 1, height: 1 },
 ): FitItem[] {
   if (!Array.isArray(value)) return [];
-  return value.slice(0, 12).flatMap((item) => {
+  return value.slice(0, MAX_FIT_ITEMS).flatMap((item) => {
     if (
       !item ||
       !roles.includes(item.category) ||
@@ -315,6 +316,9 @@ export const analyzeFitPhoto = (
     for (const item of initialItems) {
       if (!items.some((i) => sameLocatedItem(i, item))) items.push(item);
     }
+    // The bound belongs to the combined workflow, not independently to each
+    // model pass: every returned item triggers downstream embeddings and writes.
+    items = items.sort((a, b) => b.confidence - a.confidence).slice(0, MAX_FIT_ITEMS);
     // If the model produced no usable boxes, re-localize once automatically.
     if (!items.length) {
       detection = yield* detect(

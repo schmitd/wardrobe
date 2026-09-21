@@ -185,6 +185,18 @@ describe("automatic fit analysis", () => {
     expect(result.items.map(piece => piece.description)).toEqual(["Brown belt", "Black watch"]);
     expect(s.calls).toHaveLength(3);
   });
+  it("bounds the combined passes before verification and downstream persistence", async () => {
+    const first = Array.from({ length: 12 }, (_, i) => item([100 + i * 15, 100, 110 + i * 15, 120]));
+    const focused = Array.from({ length: 12 }, (_, i) => item([600 + i * 15, 600, 610 + i * 15, 620]));
+    const s = service([
+      detection(first, [100, 100, 900, 900]),
+      detection(focused),
+      { checks: Array.from({ length: 12 }, (_, index) => ({ index, contains_item: true, well_framed: true })) },
+    ]);
+    const result = await Effect.runPromise(analyzeFitPhoto(await source(), "daily_fit_check").pipe(Effect.provide(s.layer)));
+    expect(result.items).toHaveLength(12);
+    expect(s.calls).toHaveLength(3);
+  });
   it("does not save an automatic repair twice when it lands on an accepted item", async () => {
     const bytes = await source();
     const accepted = item([400, 400, 600, 600]);
