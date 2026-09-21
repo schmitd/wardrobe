@@ -2,7 +2,12 @@ import { api, gh, command } from "./commands";
 import { REPOSITORY } from "./events";
 import type { Thread } from "./review";
 
-export async function pull(number: number, cwd: string) { return api(`repos/${REPOSITORY}/pulls/${number}`, cwd); }
+export async function pull(number: number, cwd: string) {
+  const pr = await api(`repos/${REPOSITORY}/pulls/${number}`, cwd);
+  // GitHub may retain an old base.sha even when the head already contains main.
+  if (pr.state === "open" && pr.base?.ref === "main") pr.base = { ...pr.base, sha: (await api(`repos/${REPOSITORY}/branches/main`, cwd)).commit.sha };
+  return pr;
+}
 export function eligible(pr: any): boolean { return pr.state === "open" && !pr.draft && pr.base?.ref === "main" && pr.head?.repo?.full_name === REPOSITORY && !pr.labels.some((label: any) => ["needs-decision", "do-not-merge"].includes(label.name)); }
 export async function protection(cwd: string) {
   const p = await api(`repos/${REPOSITORY}/branches/main/protection`, cwd);

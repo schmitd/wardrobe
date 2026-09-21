@@ -17,16 +17,18 @@ if (pr.state !== "open" || pr.draft || pr.base.ref !== "main" || pr.head.repo?.f
 if (pr.labels.some((label: { name: string }) => ["needs-decision", "do-not-merge"].includes(label.name))) throw new Error("PR is on hold");
 const reportFile = Bun.file(resolve(values.report));
 if (reportFile.size > 256_000) throw new Error("Report too large");
-const report = mergeReadiness(await reportFile.json(), pr.base.sha, pr.head.sha);
+const base = JSON.parse(gh(["api", `repos/${repo}/branches/main`])).commit.sha;
+const report = mergeReadiness(await reportFile.json(), base, pr.head.sha);
 // A changed review workflow cannot grant itself permission to publish a pass.
-console.log(JSON.stringify({ pr: values.pr, base: pr.base.sha, head: pr.head.sha, summary: report.summary, apply: values.apply }, null, 2));
+console.log(JSON.stringify({ pr: values.pr, base, head: pr.head.sha, summary: report.summary, apply: values.apply }, null, 2));
 if (values.apply) {
   // Native protections enforce CI and an up-to-date branch even if CI is still running.
   const protection = JSON.parse(gh(["api", `repos/${repo}/branches/main/protection`]));
   const contexts = protection.required_status_checks?.contexts ?? [];
   if (!protection.required_status_checks?.strict || !contexts.includes("Merge checks") || !contexts.includes("Wardrobe adversarial") || !protection.enforce_admins?.enabled) throw new Error("Required CI/review protections are not installed");
   const current = JSON.parse(gh(["api", `repos/${repo}/pulls/${values.pr}`]));
-  if (current.head.sha !== pr.head.sha || current.base.sha !== pr.base.sha || current.draft || current.state !== "open" || current.labels.some((label: { name: string }) => ["needs-decision", "do-not-merge"].includes(label.name))) throw new Error("PR changed while preparing the attestation");
+  const currentBase = JSON.parse(gh(["api", `repos/${repo}/branches/main`])).commit.sha;
+  if (current.head.sha !== pr.head.sha || currentBase !== base || current.base.ref !== "main" || current.draft || current.state !== "open" || current.labels.some((label: { name: string }) => ["needs-decision", "do-not-merge"].includes(label.name))) throw new Error("PR changed while preparing the attestation");
   gh(["api", "--method", "POST", `repos/${repo}/statuses/${pr.head.sha}`, "--input", "-"], JSON.stringify({ state: "success", context: "Wardrobe adversarial", description: "Codex review and targeted probes passed for this revision" }));
   gh(["pr", "merge", values.pr, "--repo", repo, "--auto", "--squash", "--match-head-commit", pr.head.sha]);
 }

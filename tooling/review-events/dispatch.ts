@@ -29,7 +29,8 @@ export async function dispatch(event: Event, config: Config, store: Store): Prom
     await protection(cwd);
     await command(["git", "fetch", "origin", "main", `+pull/${number}/head:refs/review-events/pr-${number}`], cwd);
     if ((await command(["git", "rev-parse", `refs/review-events/pr-${number}`], cwd)).trim() !== pr.head.sha) { outcomes.push(`#${number}: changed during fetch`); continue; }
-    const ancestor = Bun.spawnSync(["git", "merge-base", "--is-ancestor", pr.base.sha, pr.head.sha], { cwd });
+    const currentMain = (await command(["git", "rev-parse", "origin/main"], cwd)).trim();
+    const ancestor = Bun.spawnSync(["git", "merge-base", "--is-ancestor", currentMain, pr.head.sha], { cwd });
     if (ancestor.exitCode === 1) {
       // GitHub performs a non-force update conditional on this exact head. Its
       // synchronize event triggers fresh CI and review for the merged revision.
@@ -37,6 +38,8 @@ export async function dispatch(event: Event, config: Config, store: Store): Prom
       outcomes.push(`#${number}: updating branch against current main`); continue;
     }
     if (ancestor.exitCode !== 0) throw new Error("Cannot establish current base ancestry");
+    // The fetched branch, not cached PR metadata, binds this review.
+    pr.base.sha = currentMain;
     await command(["git", "cat-file", "-e", `${pr.head.sha}:.github/workflows/ci.yml`], cwd);
     const output = resolve(config.stateDirectory, "reviews", `pr-${number}`, `${pr.base.sha}-${pr.head.sha}`);
     await mkdir(output, { recursive: true, mode: 0o700 });
@@ -44,7 +47,7 @@ export async function dispatch(event: Event, config: Config, store: Store): Prom
     const feedback = await threads(number, cwd);
     const { report, path } = await independentReview(config, pr.base.sha, pr.head.sha, feedback, output);
     pr = await pull(number, cwd);
-    if (!eligible(pr) || pr.head.sha !== report.head || pr.base.sha !== report.base) { outcomes.push(`#${number}: review superseded`); continue; }
+    if (!eligible(pr) || pr.head.sha !== report.head || pr.base.sha !== report.base || (await api(`repos/${REPOSITORY}/branches/main`, cwd)).commit.sha !== report.base) { outcomes.push(`#${number}: review superseded`); continue; }
     if (report.verdict === "needs_decision" || report.decisions.length) { await hold(number, pr.head.sha, cwd); outcomes.push(`#${number}: needs decision; ${path}`); continue; }
     if (report.findings.length) {
       const attempt = resolve(output, "author-result.json");
