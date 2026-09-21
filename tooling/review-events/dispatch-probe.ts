@@ -13,19 +13,20 @@ await Bun.write(join(root, "source.txt"), "one"); realGit(["add", "."]); realGit
 const head = realGit(["rev-parse", "HEAD"]);
 await Bun.write(join(root, "source.txt"), "two"); realGit(["add", "."]); realGit(["-c", "commit.gpgsign=false", "commit", "-qm", "Second"]);
 const newer = realGit(["rev-parse", "HEAD"]);
-let pr: any, report: any, feedback: any[], ci: string, reviewReady: boolean, duringReview: () => void, calls: string[], failReview: boolean, reviewSummary: string;
+let pr: any, report: any, feedback: any[], ci: string, reviewReady: boolean, duringReview: () => void, calls: string[], failReview: boolean, reviewSummary: string, main: string;
 const clone = (v: any) => JSON.parse(JSON.stringify(v));
 const thread = (id: string) => ({ id, path: "file.ts", comments: [] });
 const disposition = (id: string) => ({ id, fingerprint: threadFingerprint(thread(id)), disposition: "fixed", reason: "verified source", evidence: "probe.log" });
 function reset() {
   pr = { number: 99, state: "open", draft: false, merged: false, merge_commit_sha: null, labels: [], base: { ref: "main", sha: head }, head: { sha: head, ref: "candidate", repo: { full_name: "schmitd/wardrobe" } } };
   report = { base: head, head, verdict: "pass", summary: "Synthetic pass", findings: [], decisions: [], coverageGaps: [], commands: [{ command: "bun test", exitCode: 0, artifact: "probe.log" }], threads: [] };
-  feedback = []; ci = "success"; reviewReady = true; duringReview = () => {}; calls = []; failReview = false; reviewSummary = "";
+  feedback = []; ci = "success"; reviewReady = true; duringReview = () => {}; calls = []; failReview = false; reviewSummary = ""; main = head;
 }
 mock.module("./commands", () => ({
   cleanEnv: () => ({}),
   api: async (route: string) => {
     if (route.includes("/pulls/99")) return clone(pr);
+    if (route.endsWith("/branches/main")) return {commit:{sha:main}};
     if (route.endsWith("/branches/main/protection")) return { required_status_checks: { strict: true, contexts: ["Merge checks", "Wardrobe adversarial"] }, enforce_admins: { enabled: true } };
     throw new Error(`Unexpected API ${route}`);
   },
@@ -40,7 +41,7 @@ mock.module("./commands", () => ({
     throw new Error(`Unexpected gh ${text}`);
   },
   command: async (args: string[]) => {
-    if (args[0] === "git") { if (args[1] === "rev-parse") return pr.head.sha; if (["fetch", "cat-file"].includes(args[1]!)) return ""; }
+    if (args[0] === "git") { if (args[1] === "rev-parse") return args[2] === "origin/main" ? main : pr.head.sha; if (["fetch", "cat-file"].includes(args[1]!)) return ""; }
     if (args[0] === "bun" && args[1] === "scripts/review-merge.ts") { calls.push(args.includes("--apply") ? "publish" : "validate-report"); if (args.includes("--apply")) { pr.merged = true; pr.state = "closed"; pr.merge_commit_sha = newer; } return ""; }
     if (args[0] === "gh" && args.includes("context=Wardrobe adversarial")) { calls.push(args.find(a => a.startsWith("state="))!); return ""; }
     if (args[0] === "gh" && args.some(a => a.endsWith("/update-branch"))) { calls.push("update-branch"); assert(args.includes(`expected_head_sha=${head}`)); return ""; }
@@ -76,5 +77,7 @@ try {
   await run(() => { failReview = true; }, result => { assert(result.includes("Synthetic subprocess failure")); assert(calls.includes("state=failure")); assert(!calls.includes("publish")); });
   await run(() => { report.verdict = "incomplete"; report.findings = ["Confirmed ordinary bug"]; }, () => { assert(calls.includes("author")); assert(!calls.includes("publish")); });
   await run(() => { pr.base.sha = newer; }, result => { assert(calls.includes("update-branch")); assert(!calls.includes("review")); assert(result.includes("updating branch")); });
+  await run(() => { main = newer; }, result => { assert(calls.includes("update-branch")); assert(!calls.includes("review")); assert(result.includes("updating branch")); });
+  await run(() => { duringReview = () => { main = newer; }; }, result => { assert(!calls.includes("publish")); assert(result.includes("superseded")); });
   console.log(`${count} controller scenarios passed`);
 } finally { await rm(root, { recursive: true, force: true }); }
