@@ -1,3 +1,4 @@
+import { analyzeFitPhoto, FIT_DETECTOR_MODEL, FIT_VISION_CONFIG } from "@/server/inference/fitPhotoAnalysis";
 import { getConvexAuth, enforceAuthenticatedProtection, type ConvexAuthContext } from "@/server/auth";
 import { analyzeImageFull, analyzeInspirationImage, generateStyleQuery, evaluateCompatibility, analyzeSelfie, type FitCheckKind, FIT_CHECK_CONTENT_BLOCK_MESSAGE, isGeminiContentBlock, type RecordFitCheckItemInput, normalizeBoundingBox, analyzeFitCheckPhoto, generateClosetBio, generateMaintainedStyleBio, cosineSimilarity } from "@/server/inference/analysis";
 import { uploadPhotoFile } from "@/services/photoUpload";
@@ -275,13 +276,17 @@ export const routeCaptureAction = async (input: {
       capture_scope: { type: SchemaType.STRING },
       confidence: { type: SchemaType.NUMBER },
       rationale: { type: SchemaType.STRING },
+      visible_garment_count: { type: SchemaType.INTEGER },
+      is_catalog_set: { type: SchemaType.BOOLEAN },
     },
-    required: ["capture_scope", "confidence", "rationale"],
+    required: ["capture_scope", "confidence", "rationale", "visible_garment_count", "is_catalog_set"],
   };
   const prompt = `Route this wardrobe photo into exactly one capture scope.
-Return JSON only with capture_scope, confidence, and rationale.
+Return JSON only with capture_scope, confidence, rationale, visible_garment_count, and is_catalog_set.
 - capture_scope must be "single_piece" when the photo primarily presents one garment, shoe pair, bag, accessory, or coordinated set as one catalog item.
 - capture_scope must be "full_fit" when the photo shows a person wearing multiple garments together with enough outfit context to record what was worn.
+- Count visible separate garments/accessories in visible_garment_count. Distant or partial multi-garment outfits are full_fit, never one generic clothing item.
+- is_catalog_set is true only when a pair or coordinated set is presented as one catalog item, such as a matching two-piece set or a shoe pair. An ordinary worn outfit is not a catalog set. A catalog set may contain several visible components while remaining single_piece.
 - A person may be visible. Do not identify or describe them and do not infer sensitive traits. Judge only the clothing composition and framing.
 - confidence must be from 0 to 1.
 - rationale must be a short, plain explanation of the clothing evidence, never a description of the person.`;
@@ -289,7 +294,7 @@ Return JSON only with capture_scope, confidence, and rationale.
   const routed = await runInference(
     GeminiService.pipe(
       Effect.flatMap((gemini) =>
-        gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+        gemini.generateContent(FIT_DETECTOR_MODEL, {
           contents: [
             {
               role: "user",
@@ -300,6 +305,7 @@ Return JSON only with capture_scope, confidence, and rationale.
             },
           ],
           generationConfig: {
+            ...FIT_VISION_CONFIG,
             responseMimeType: "application/json",
             responseSchema: schema,
           },
@@ -1167,7 +1173,7 @@ export const recordFitCheckForAuth = async (
     const sourceImage = Buffer.from(await imageResponse.arrayBuffer());
     const base64 = sourceImage.toString("base64");
     const analysis = await runInference(
-      analyzeFitCheckPhoto(base64, input.type, imageMimeType)
+      analyzeFitPhoto(base64, input.type, imageMimeType, { traceId, traceparent })
     );
     const items: RecordFitCheckItemInput[] = [];
     for (const item of analysis.items) {
@@ -1257,7 +1263,7 @@ export const recordFitCheckForAuth = async (
             visualEmbedding: observation.visualEmbedding,
             semanticEmbedding,
             embeddingModel: "gemini-embedding-2@768",
-            detectorModel: GEMINI_FLASH_LITE_MODEL,
+            detectorModel: FIT_DETECTOR_MODEL,
             resolutionStatus: observation.decision.status,
             matchScore: observation.decision.confidence,
             matchMargin: observation.decision.margin,
@@ -1460,7 +1466,7 @@ export const analyzeGuestFitCheckAction = async (input: {
     Effect.tryPromise({
       try: () =>
         runInference(
-          analyzeFitCheckPhoto(photo.normalizedBase64, "daily_fit_check", photo.mimeType)
+          analyzeFitPhoto(photo.normalizedBase64, "daily_fit_check", photo.mimeType, { traceId, traceparent })
         ),
       catch: (error) => error,
     }).pipe(Effect.result)

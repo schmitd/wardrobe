@@ -93,4 +93,22 @@ describe("garment identity policy", () => {
     expect(metadata.width).toBeGreaterThan(0);
     expect(metadata.height).toBeGreaterThan(0);
   });
+
+  it("rejects invalid bounds instead of manufacturing a one-pixel crop", async () => {
+    for (const box of [
+      { x: 0, y: 0, width: 0, height: 1 },
+      { x: NaN, y: 0, width: 1, height: 1 },
+      { x: 0.9, y: 0, width: 0.2, height: 1 },
+    ]) await expect(cropGarmentRegion(Buffer.alloc(0), box)).rejects.toThrow("Invalid garment bounding box");
+  });
+
+  it("extracts the same colored object after EXIF normalization", async () => {
+    const upright = await sharp(Buffer.from('<svg width="400" height="300"><rect width="400" height="300" fill="white"/><rect x="280" y="180" width="80" height="60" fill="red"/></svg>')).jpeg().toBuffer();
+    const rotated = await sharp(upright).rotate(90).withMetadata({ orientation: 8 }).jpeg().toBuffer();
+    const crop = await cropGarmentRegion(rotated, { x: 0.7, y: 0.6, width: 0.2, height: 0.2 });
+    const stats = await sharp(crop).stats();
+    expect(stats.channels[0].mean).toBeGreaterThan(230);
+    expect(stats.channels[1].mean).toBeLessThan(100);
+    expect(stats.channels[2].mean).toBeLessThan(100);
+  });
 });

@@ -58,3 +58,6 @@ next-env.d.ts
 # Anonymous local Convex credentials and private migration reviews
 /.convex/
 /.private/
+
+# Private capture validation artifacts when run from the web workspace
+/apps/web/output/
