@@ -15,13 +15,17 @@ export async function dispatch(event: Event, config: Config, store: Store): Prom
   else if (event.kind === "ci") numbers = event.numbers.length ? event.numbers : (await api(`repos/${REPOSITORY}/commits/${event.head}/pulls`, cwd)).map((pr: any) => pr.number);
   else numbers = (await api(`repos/${REPOSITORY}/pulls?state=open&base=main&per_page=100`, cwd)).map((pr: any) => pr.number);
   const outcomes: string[] = [];
+  const failures: string[] = [];
   for (const number of [...new Set(numbers)].slice(0, 100)) {
+    let attemptedHead: string | undefined;
+    try {
     let pr = await pull(number, cwd);
     if (!eligible(pr)) { if (pr.state === "closed") store.forget(number); outcomes.push(pr.merged ? `#${number}: merged ${pr.merge_commit_sha}` : `#${number}: not eligible`); continue; }
     if ((event.kind === "pr" || event.kind === "ci") && event.head !== pr.head.sha) { outcomes.push(`#${number}: stale event`); continue; }
     if ((event.kind === "pr" || event.kind === "ci") && event.trustHead) store.trust(number, event.head);
     if (!store.trusted(number, pr.head.sha)) { outcomes.push(`#${number}: head is not authorized for Desktop; requires isolated Cloud review`); continue; }
     if (!config.execute) { outcomes.push(`#${number}: audit-only, would review ${pr.head.sha}`); continue; }
+    attemptedHead = pr.head.sha;
     await protection(cwd);
     await command(["git", "fetch", "origin", "main", `pull/${number}/head:refs/review-events/pr-${number}`], cwd);
     if ((await command(["git", "rev-parse", `refs/review-events/pr-${number}`], cwd)).trim() !== pr.head.sha) { outcomes.push(`#${number}: changed during fetch`); continue; }
@@ -84,6 +88,17 @@ export async function dispatch(event: Event, config: Config, store: Store): Prom
     const result = after.merged ? { outcome: "merged", pr: number, sha: after.merge_commit_sha } : { outcome: "auto_merge_requested", pr: number, head: pr.head.sha };
     await Bun.write(resolve(output, "publication.json"), JSON.stringify(result, null, 2));
     outcomes.push(JSON.stringify(result));
+    } catch (error) {
+      const detail = `#${number}: ${String(error)}`;
+      failures.push(detail);
+      // A failed subprocess must not masquerade indefinitely as a running review.
+      // Never write an error onto a newer revision that superseded this attempt.
+      if (attemptedHead) try {
+        const current = await pull(number, cwd);
+        if (eligible(current) && current.head.sha === attemptedHead) await status(attemptedHead, "failure", "Review execution failed; inspect private controller evidence", cwd);
+      } catch { /* The durable failed event remains the fallback during API outages. */ }
+    }
   }
+  if (failures.length) throw new Error([...outcomes, ...failures].join("\n"));
   return outcomes.join("\n") || "No affected pull requests";
 }

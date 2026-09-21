@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { pathToFileURL } from "node:url";
 import { command, cleanEnv } from "./commands";
 import type { Config } from "./config";
+import { finishReviewWorkspace } from "./evidence";
 
 export type Thread = { id: string; path: string | null; comments: { author: string; body: string; url: string; commit: string | null }[] };
 export type Report = { base: string; head: string; verdict: string; summary: string; findings: string[]; decisions: string[]; coverageGaps: string[]; commands: { command: string; exitCode: number; artifact: string }[]; threads: { id: string; disposition: "fixed" | "not_applicable" | "unresolved"; reason: string; evidence: string }[] };
@@ -25,6 +26,7 @@ export async function independentReview(config: Config, base: string, head: stri
   await mkdir(output, { recursive: true, mode: 0o700 });
   await command(["bun", "scripts/review-context.ts", "--base", base, "--head", head, "--output", output], config.trustedRoot, resolve(output, "context.log"));
   const isolated = await mkdtemp(resolve(tmpdir(), "wardrobe-event-review-"));
+  try {
   const archive = resolve(output, "candidate.tar");
   await command(["git", "archive", "--format=tar", `--output=${archive}`, head], config.trustedRoot);
   await command(["tar", "-xf", archive, "-C", isolated], config.trustedRoot);
@@ -50,4 +52,5 @@ export async function independentReview(config: Config, base: string, head: stri
   const path = resolve(output, "result.json");
   await Bun.write(indexPath, JSON.stringify({ path }));
   return { report: await Bun.file(path).json() as Report, path };
+  } finally { await finishReviewWorkspace(isolated, output); }
 }

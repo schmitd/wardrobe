@@ -4,11 +4,13 @@ import { command } from "./commands";
 import type { Config } from "./config";
 import { pull } from "./github";
 import type { Report, Thread } from "./review";
+import { finishAuthorWorkspace } from "./evidence";
 
 export async function authorFix(config: Config, pr: any, report: Report, threads: Thread[], output: string): Promise<"pushed" | "needs_decision" | "incomplete" | "stale"> {
   const worktree = resolve(config.stateDirectory, "authors", `pr-${pr.number}-${pr.head.sha}-${Date.now()}`);
   await mkdir(resolve(config.stateDirectory, "authors"), { recursive: true });
   await command(["git", "worktree", "add", "--detach", worktree, pr.head.sha], config.trustedRoot);
+  try {
   await mkdir(resolve(worktree, "output/review-author"), { recursive: true });
   await Bun.write(resolve(worktree, "output/review-author/findings.json"), JSON.stringify({ report, threads }));
   await command(["bun", "install", "--frozen-lockfile", "--ignore-scripts"], worktree, resolve(output, "author-install.log"), 300_000);
@@ -32,4 +34,5 @@ export async function authorFix(config: Config, pr: any, report: Report, threads
   // No force push: a concurrent update also fails at the Git transport boundary.
   await command(["git", "push", "origin", `HEAD:refs/heads/${current.head.ref}`], worktree, resolve(output, "author-push.log"));
   return "pushed";
+  } finally { await finishAuthorWorkspace(worktree, output, config.trustedRoot, pr.head.sha); }
 }

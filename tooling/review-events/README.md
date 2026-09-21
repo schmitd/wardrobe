@@ -45,6 +45,8 @@ SQLite stores a durable delivery queue, replay deduplication and exact trusted h
 
 The Mac and receiver must be online to receive events. GitHub does not automatically redeliver failed webhooks. With no scheduled recovery sweep, deliveries missed while offline must be redelivered explicitly from GitHub. Transport errors, oversized review/log context, merge conflicts GitHub cannot update, and validation gaps remain visible failures for follow-up. They never become passing checks.
 
+Each completed or failed review copies its synthetic probe output into the private evidence directory and removes the installed temporary workspace. Author worktrees similarly preserve probe output, an uncommitted patch and untracked source files before removal; committed fixes remain in Git. If evidence preservation fails, cleanup fails visibly rather than silently discarding work. Retained evidence remains available independently of candidate dependency installations.
+
 Pause execution by setting `execute: false` and restarting the local service; disable the GitHub webhook to stop intake. Remove only this Funnel port when uninstalling. Do not reset unrelated Tailscale services. The old heartbeat must remain paused; no daily fallback is installed.
 
 References: [GitHub webhook delivery guidance](https://docs.github.com/en/webhooks/using-webhooks/best-practices-for-using-webhooks), [failed deliveries](https://docs.github.com/en/webhooks/using-webhooks/handling-failed-webhook-deliveries), [Tailscale Funnel](https://tailscale.com/kb/1223/funnel).
