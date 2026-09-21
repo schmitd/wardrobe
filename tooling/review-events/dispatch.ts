@@ -31,13 +31,15 @@ export async function dispatch(event: Event, config: Config, store: Store): Prom
     if ((await command(["git", "rev-parse", `refs/review-events/pr-${number}`], cwd)).trim() !== pr.head.sha) { outcomes.push(`#${number}: changed during fetch`); continue; }
     const currentMain = (await command(["git", "rev-parse", "origin/main"], cwd)).trim();
     const ancestor = Bun.spawnSync(["git", "merge-base", "--is-ancestor", currentMain, pr.head.sha], { cwd });
-    if (ancestor.exitCode === 1 || pr.base.sha !== currentMain) {
+    if (ancestor.exitCode === 1) {
       // GitHub performs a non-force update conditional on this exact head. Its
       // synchronize event triggers fresh CI and review for the merged revision.
       await command(["gh", "api", "--method", "PUT", `repos/${REPOSITORY}/pulls/${number}/update-branch`, "-f", `expected_head_sha=${pr.head.sha}`], cwd);
       outcomes.push(`#${number}: updating branch against current main`); continue;
     }
     if (ancestor.exitCode !== 0) throw new Error("Cannot establish current base ancestry");
+    // The fetched branch, not cached PR metadata, binds this review.
+    pr.base.sha = currentMain;
     await command(["git", "cat-file", "-e", `${pr.head.sha}:.github/workflows/ci.yml`], cwd);
     const output = resolve(config.stateDirectory, "reviews", `pr-${number}`, `${pr.base.sha}-${pr.head.sha}`);
     await mkdir(output, { recursive: true, mode: 0o700 });

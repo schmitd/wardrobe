@@ -76,7 +76,7 @@ try {
   await run(() => {}, () => { assert(!calls.includes("review")); }, false);
   await run(() => { failReview = true; }, result => { assert(result.includes("Synthetic subprocess failure")); assert(calls.includes("state=failure")); assert(!calls.includes("publish")); });
   await run(() => { report.verdict = "incomplete"; report.findings = ["Confirmed ordinary bug"]; }, () => { assert(calls.includes("author")); assert(!calls.includes("publish")); });
-  await run(() => { pr.base.sha = newer; }, result => { assert(calls.includes("update-branch")); assert(!calls.includes("review")); assert(result.includes("updating branch")); });
+  await run(() => { pr.base.sha = newer; }, () => { assert(!calls.includes("update-branch")); assert(calls.includes("review")); assert(calls.includes("publish")); });
   await run(() => { main = newer; }, result => { assert(calls.includes("update-branch")); assert(!calls.includes("review")); assert(result.includes("updating branch")); });
   await run(() => { duringReview = () => { main = newer; }; }, result => { assert(!calls.includes("publish")); assert(result.includes("superseded")); });
   console.log(`${count} controller scenarios passed`);
