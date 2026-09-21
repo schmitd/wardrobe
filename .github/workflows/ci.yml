@@ -2,6 +2,7 @@ name: CI
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
   push:
     branches: [main]
   merge_group:
@@ -58,14 +59,28 @@ jobs:
           name: browser-evidence
           path: output/playwright
           retention-days: 7
+  review-events:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.8
+      - run: bun install --cwd tooling/review-events --frozen-lockfile --ignore-scripts
+      - run: bun run --cwd tooling/review-events typecheck
+      - run: bun run --cwd tooling/review-events test
   merge-checks:
     name: Merge checks
     if: always()
-    needs: [build, browser]
+    needs: [build, browser, review-events]
     runs-on: ubuntu-latest
     steps:
       - name: Require every gate
         env:
           BUILD: ${{ needs.build.result }}
           BROWSER: ${{ needs.browser.result }}
-        run: test "$BUILD" = success && test "$BROWSER" = success
+          REVIEW_EVENTS: ${{ needs.review-events.result }}
+        run: test "$BUILD" = success && test "$BROWSER" = success && test "$REVIEW_EVENTS" = success
