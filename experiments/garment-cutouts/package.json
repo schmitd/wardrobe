@@ -1,0 +1,8 @@
+{
+  "name": "wardrobe-cutout-study",
+  "private": true,
+  "type": "module",
+  "scripts": { "prototype": "bun run.ts", "serve": "bun serve.ts", "typecheck": "tsc --noEmit" },
+  "dependencies": { "@huggingface/transformers": "3.8.1", "effect": "4.0.0-rc.115", "sharp": "0.34.5" },
+  "devDependencies": { "@types/bun": "1.3.8", "typescript": "~6.0.3" }
+}
