@@ -26,7 +26,9 @@ export function receiver(secret: string, actors: string[], store: Store, wake: (
     try { payload = JSON.parse(body.toString()); } catch { return new Response("Invalid JSON", { status: 400 }); }
     const event = parseEvent(request.headers.get("x-github-event"), payload, actors);
     if (!event) return new Response("Ignored", { status: 202 });
-    const inserted = store.receive(delivery, digest(body), event);
+    let inserted: boolean;
+    try { inserted = store.receive(delivery, digest(body), event); }
+    catch (error) { if (String(error) === "Error: Queue full") return new Response("Queue full; redeliver later", { status: 503 }); throw error; }
     if (inserted) wake();
     return new Response(inserted ? "Queued" : "Duplicate", { status: 202 });
   };

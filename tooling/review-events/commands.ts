@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
-export const cleanEnv = () => Object.fromEntries(["PATH", "HOME", "TMPDIR", "LANG", "CODEX_HOME", "PLAYWRIGHT_CHANNEL"].flatMap(key => process.env[key] ? [[key, process.env[key]!]] : []));
+export const cleanEnv = () => ({ ...Object.fromEntries(["PATH", "HOME", "TMPDIR", "LANG", "CODEX_HOME"].flatMap(key => process.env[key] ? [[key, process.env[key]!]] : [])), PLAYWRIGHT_CHANNEL: process.env.PLAYWRIGHT_CHANNEL ?? "chrome" });
 export async function command(args: string[], cwd: string, log?: string, timeoutMs = 120_000): Promise<string> {
   if (log) await mkdir(dirname(log), { recursive: true });
   const child = Bun.spawn(args, { cwd, env: cleanEnv(), stdin: "ignore", stdout: "pipe", stderr: "pipe" });

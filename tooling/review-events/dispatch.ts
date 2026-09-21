@@ -17,7 +17,7 @@ export async function dispatch(event: Event, config: Config, store: Store): Prom
   const outcomes: string[] = [];
   for (const number of [...new Set(numbers)].slice(0, 100)) {
     let pr = await pull(number, cwd);
-    if (!eligible(pr)) { outcomes.push(pr.merged ? `#${number}: merged ${pr.merge_commit_sha}` : `#${number}: not eligible`); continue; }
+    if (!eligible(pr)) { if (pr.state === "closed") store.forget(number); outcomes.push(pr.merged ? `#${number}: merged ${pr.merge_commit_sha}` : `#${number}: not eligible`); continue; }
     if ((event.kind === "pr" || event.kind === "ci") && event.head !== pr.head.sha) { outcomes.push(`#${number}: stale event`); continue; }
     if ((event.kind === "pr" || event.kind === "ci") && event.trustHead) store.trust(number, event.head);
     if (!store.trusted(number, pr.head.sha)) { outcomes.push(`#${number}: head is not authorized for Desktop; requires isolated Cloud review`); continue; }
@@ -42,7 +42,7 @@ export async function dispatch(event: Event, config: Config, store: Store): Prom
     pr = await pull(number, cwd);
     if (!eligible(pr) || pr.head.sha !== report.head || pr.base.sha !== report.base) { outcomes.push(`#${number}: review superseded`); continue; }
     if (report.verdict === "needs_decision" || report.decisions.length) { await hold(number, pr.head.sha, cwd); outcomes.push(`#${number}: needs decision; ${path}`); continue; }
-    if (report.verdict === "findings" && report.findings.length) {
+    if (report.findings.length) {
       const attempt = resolve(output, "author-result.json");
       if (await Bun.file(attempt).exists()) { outcomes.push(`#${number}: author already attempted this revision; inspect ${attempt}`); continue; }
       await status(pr.head.sha, "pending", "Confirmed findings are being fixed in a separate author pass", cwd);

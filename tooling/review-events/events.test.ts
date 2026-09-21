@@ -79,3 +79,20 @@ test("queued work survives a restart without replaying completed work or losing 
     expect(store.trusted(99, "b".repeat(40))).toBe(false); store.close();
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test("a bounded metadata history preserves pending work, recent replay protection and private evidence independence", () => {
+  const store = new Store(":memory:"); const event = parseEvent("pull_request", payload(), ["schmitd"])!;
+  for (let i = 0; i < Store.MAX_FINISHED + 20; i++) {
+    store.receive(`history-${i}`, `hash-${i}`, event);
+    store.finish(store.next()!.id, i % 2 ? "done" : "failed", "bounded metadata");
+  }
+  expect((store.db.query("SELECT count(*) AS count FROM events").get() as { count: number }).count).toBe(Store.MAX_FINISHED);
+  expect(store.receive("new-delivery", `hash-${Store.MAX_FINISHED + 19}`, event)).toBe(false);
+  for (let i = 0; i < Store.MAX_PENDING; i++) store.receive(`pending-${i}`, `pending-hash-${i}`, event);
+  expect(() => store.receive("overflow", "overflow-hash", event)).toThrow("Queue full");
+  expect(store.receive("pending-0", "pending-hash-0", event)).toBe(false);
+  store.trust(99, head); store.trust(99, "b".repeat(40));
+  expect(store.trusted(99, head)).toBe(false); expect(store.trusted(99, "b".repeat(40))).toBe(true);
+  store.forget(99); expect(store.trusted(99, "b".repeat(40))).toBe(false);
+  store.close();
+});
