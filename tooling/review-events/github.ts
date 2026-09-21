@@ -27,11 +27,17 @@ export async function threads(number: number, cwd: string): Promise<Thread[]> {
   return all;
 }
 export async function codexReviewCompleted(number: number, head: string, cwd: string): Promise<boolean> {
-  const reviews = await gh(["api", "--paginate", "--slurp", `repos/${REPOSITORY}/pulls/${number}/reviews?per_page=100`], cwd);
-  if (reviews.flat().some((r: any) => r.user?.login === "chatgpt-codex-connector[bot]" && r.commit_id === head && r.state !== "PENDING")) return true;
   const pages = await gh(["api", "--paginate", "--slurp", `repos/${REPOSITORY}/issues/${number}/comments?per_page=100`], cwd);
-  // A no-finding GitHub Codex review may update its summary rather than submit a review.
-  return pages.flat().some((c: any) => ["chatgpt-codex-connector[bot]", "chatgpt-codex-connector"].includes(c.user?.login) && c.body.includes("<!-- codex-pull-request-review-summary -->") && c.body.split("\n").some((line: string) => line.includes("Completed") && line.includes(head.slice(0, 7))));
+  const summaries = pages.flat().filter((c: any) => ["chatgpt-codex-connector[bot]", "chatgpt-codex-connector"].includes(c.user?.login) && c.body.includes("<!-- codex-pull-request-review-summary -->"));
+  if (summaries.length) {
+    const rows = summaries.at(-1).body.split("\n").filter((line: string) => /^\|/.test(line) && /Code Review|Security Review/.test(line));
+    // GitHub Codex runs on opening/explicit request, not every pushed fix.
+    // Its latest activity must be finished; our independent review binds all
+    // current feedback to the exact new base/head before publication.
+    return rows.length > 0 && rows.every((line: string) => line.includes("Completed"));
+  }
+  const reviews = (await gh(["api", "--paginate", "--slurp", `repos/${REPOSITORY}/pulls/${number}/reviews?per_page=100`], cwd)).flat().filter((r: any) => ["chatgpt-codex-connector[bot]", "chatgpt-codex-connector"].includes(r.user?.login));
+  return reviews.some((r: any) => r.commit_id === head && r.state !== "PENDING") && !reviews.some((r: any) => r.state === "PENDING");
 }
 export async function requiredCI(head: string, cwd: string): Promise<"passed" | "failed" | "pending"> {
   const pages = await gh(["api", "--paginate", "--slurp", `repos/${REPOSITORY}/commits/${head}/check-runs?filter=latest&per_page=100`], cwd);

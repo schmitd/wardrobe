@@ -13,14 +13,14 @@ await Bun.write(join(root, "source.txt"), "one"); realGit(["add", "."]); realGit
 const head = realGit(["rev-parse", "HEAD"]);
 await Bun.write(join(root, "source.txt"), "two"); realGit(["add", "."]); realGit(["-c", "commit.gpgsign=false", "commit", "-qm", "Second"]);
 const newer = realGit(["rev-parse", "HEAD"]);
-let pr: any, report: any, feedback: any[], ci: string, reviewReady: boolean, duringReview: () => void, calls: string[], failReview: boolean;
+let pr: any, report: any, feedback: any[], ci: string, reviewReady: boolean, duringReview: () => void, calls: string[], failReview: boolean, reviewSummary: string;
 const clone = (v: any) => JSON.parse(JSON.stringify(v));
 const thread = (id: string) => ({ id, path: "file.ts", comments: [] });
 const disposition = (id: string) => ({ id, fingerprint: threadFingerprint(thread(id)), disposition: "fixed", reason: "verified source", evidence: "probe.log" });
 function reset() {
   pr = { number: 99, state: "open", draft: false, merged: false, merge_commit_sha: null, labels: [], base: { ref: "main", sha: head }, head: { sha: head, ref: "candidate", repo: { full_name: "schmitd/wardrobe" } } };
   report = { base: head, head, verdict: "pass", summary: "Synthetic pass", findings: [], decisions: [], coverageGaps: [], commands: [{ command: "bun test", exitCode: 0, artifact: "probe.log" }], threads: [] };
-  feedback = []; ci = "success"; reviewReady = true; duringReview = () => {}; calls = []; failReview = false;
+  feedback = []; ci = "success"; reviewReady = true; duringReview = () => {}; calls = []; failReview = false; reviewSummary = "";
 }
 mock.module("./commands", () => ({
   cleanEnv: () => ({}),
@@ -34,7 +34,7 @@ mock.module("./commands", () => ({
     if (text.includes("reviewThreads")) return { data: { repository: { pullRequest: { reviewThreads: { pageInfo: { hasNextPage: false }, nodes: feedback.map(t => ({ ...t, isResolved: false, comments: { pageInfo: { hasNextPage: false }, nodes: [] } })) } } } } };
     if (text.includes("resolveReviewThread")) { const id = args.find(a => a.startsWith("id="))!.slice(3); calls.push(`resolve:${id}`); feedback = feedback.filter(t => t.id !== id); return { data: {} }; }
     if (text.includes("/reviews?")) return [reviewReady ? [{ user: { login: "chatgpt-codex-connector[bot]" }, commit_id: pr.head.sha, state: "COMMENTED" }] : []];
-    if (text.includes("/comments?")) return [[]];
+    if (text.includes("/comments?")) return [reviewSummary ? [{user:{login:"chatgpt-codex-connector[bot]"},body:"<!-- codex-pull-request-review-summary -->\n"+reviewSummary}] : []];
     if (text.includes("/check-runs?")) return [{ check_runs: ci === "missing" ? [] : [{ name: "Merge checks", app: { slug: "github-actions" }, status: ci === "pending" ? "in_progress" : "completed", conclusion: ci }] }];
     if (text.startsWith("run list")) return [];
     throw new Error(`Unexpected gh ${text}`);
@@ -65,6 +65,9 @@ try {
   await run(() => { ci = "missing"; }, result => { assert(!calls.includes("publish")); assert(result.includes("CI pending")); });
   await run(() => { ci = "failure"; }, result => { assert(!calls.includes("publish")); assert(calls.includes("state=failure")); });
   await run(() => { reviewReady = false; }, result => { assert(!calls.includes("publish")); assert(result.includes("waiting for GitHub")); });
+  await run(() => { reviewReady = false; reviewSummary = "| Code Review | Completed | old-revision |"; }, () => { assert(calls.includes("publish")); });
+  await run(() => { reviewSummary = "| Code Review | In progress | current-revision |"; }, result => { assert(!calls.includes("publish")); assert(result.includes("waiting for GitHub")); });
+  await run(() => { reviewSummary = "| Code Review | Completed | old-revision |\n| Security Review | In progress | current-revision |"; }, () => { assert(!calls.includes("publish")); });
   await run(() => { feedback = [thread("known")]; report.threads = [disposition("known")]; }, () => { assert(calls.indexOf("resolve:known") < calls.indexOf("publish")); });
   await run(() => { duringReview = () => { feedback.push(thread("late")); }; }, () => { assert(!calls.includes("publish")); assert(!calls.some(c => c.startsWith("resolve:"))); });
   await run(() => { duringReview = () => { pr.head.sha = newer; }; }, result => { assert(!calls.includes("publish")); assert(result.includes("superseded")); });
