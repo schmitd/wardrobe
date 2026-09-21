@@ -9,8 +9,10 @@ import { userFacingErrorMessage } from "@/lib/userFacingError";
 import { Button } from "@/components/ui/button";
 import RackItemCard from "./RackItemCard";
 
-interface WardrobeGridProps {
+export interface WardrobeGridProps {
     items: WardrobeItem[];
+    collectionLabel?: string;
+    onOpenItem?: (item: WardrobeItem) => void;
     optimisticItems?: OptimisticWardrobeItem[];
     onAddPiece?: () => void;
     onRemoveOptimistic?: (tempId: string) => void;
@@ -20,6 +22,8 @@ type RenderItem = (WardrobeItem & { isOptimistic: false }) | (OptimisticWardrobe
 
 export default function WardrobeGrid({
     items,
+    collectionLabel,
+    onOpenItem,
     optimisticItems = [],
     onAddPiece,
     onRemoveOptimistic,
@@ -105,7 +109,7 @@ export default function WardrobeGrid({
                 </div>
             )}
 
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div className="collection-piece-grid grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
                 {mergedItems.map((item) => {
                     const itemId = item.isOptimistic ? item.tempId : item.id;
                     const isPending = item.isOptimistic ? item.status !== "error" : item.analysisStatus !== "ready";
@@ -119,18 +123,23 @@ export default function WardrobeGrid({
                         <article
                             key={itemId}
                             data-wardrobe-item-id={itemId}
-                            tabIndex={0}
                             role="group"
                             aria-label={item.category ?? "Wardrobe item"}
                             className="group relative outline-none focus-visible:ring-2 focus-visible:ring-[var(--rack-line)] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
                         >
+                            <button type="button" className="block w-full rounded-lg text-left focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#735079]" data-piece-open={itemId}
+                                aria-label={`Open ${item.category ?? "piece"} details`} disabled={item.isOptimistic} onClick={() => { if (!item.isOptimistic) onOpenItem?.(item); }}>
                             <RackItemCard
+                                compact
+                                hasNote={!item.isOptimistic && Boolean(item.note)}
+                                collectionLabel={collectionLabel}
                                 imageUrl={item.imageUrl}
                                 category={item.category ?? null}
                                 description={item.description ?? null}
                                 styleTags={item.styleTags ?? null}
                                 badgeLabel={isPending ? "Processing" : isError ? "Needs review" : undefined}
                             />
+                            </button>
 
                             {!item.isOptimistic && (
                                 <button

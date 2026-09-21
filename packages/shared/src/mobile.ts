@@ -7,6 +7,7 @@ export type WardrobeItem = {
   category: string | null;
   description: string | null;
   styleTags: string[] | null;
+  note?: string;
   analysisStatus: string;
   analysisError?: string | null;
   createdAt: number;

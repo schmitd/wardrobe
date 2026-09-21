@@ -9,7 +9,7 @@ import { Effect, Result } from 'effect';
 import { api } from '@convex/_generated/api';
 import AddItemSection from '@/components/AddItemSection';
 import GuestClosetDemo from '@/components/GuestClosetDemo';
-import WardrobeGrid from '@/components/WardrobeGrid';
+import CollectionsWorkspace from '@/components/CollectionsWorkspace';
 import StyleNotes from '@/components/StyleNotes';
 import {
   completeGuestOnboardingAction,
@@ -277,6 +277,7 @@ export default function Home() {
           category: item.category ?? null,
           description: item.description ?? null,
           styleTags: item.styleTags ?? null,
+          note: item.note,
           analysisStatus: item.analysisStatus,
           analysisError: item.analysisError ?? null,
           createdAt: item.createdAt,
@@ -301,20 +302,16 @@ export default function Home() {
 
           {isSignedIn ? (
             <>
-              <div>
-                <p className="text-sm font-semibold text-[#56345c]">Your closet</p>
-                <h1 className="mt-2 text-4xl font-extrabold text-[#241426]">Wardrobe</h1>
-                <p className="mt-2 max-w-2xl text-sm font-medium leading-relaxed text-[#56345c]">
-                  Everything you own, with the context that makes it yours.
-                </p>
-              </div>
+              <h1 className="sr-only">Wardrobe</h1>
               <StyleNotes />
               <AddItemSection
                 onOptimisticAdd={handleOptimisticAdd}
                 onOptimisticUpdate={handleOptimisticUpdate}
                 uploaderInputId={uploadInputId}
               />
-              <WardrobeGrid
+              <CollectionsWorkspace
+                loading={closet.status === "LoadingFirstPage"}
+                loadMore={closet.status === "CanLoadMore" ? () => closet.loadMore(48) : undefined}
                 items={displayItems}
                 optimisticItems={filteredOptimisticItems}
                 onAddPiece={openCaptureMenu}
@@ -327,7 +324,6 @@ export default function Home() {
         </section>
       </div>
 
-    {(closet.status === 'CanLoadMore' || closet.status === 'LoadingMore') && <button type="button" disabled={closet.status === 'LoadingMore'} onClick={() => closet.loadMore(48)} className="border px-4 py-3">{closet.status === 'LoadingMore' ? 'Loading…' : 'Load more pieces'}</button>}
       </main>
   );
 }

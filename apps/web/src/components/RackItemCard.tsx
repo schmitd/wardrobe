@@ -1,9 +1,13 @@
 'use client';
 
 import Image from 'next/image';
+import { Folder, StickyNote } from 'lucide-react';
 import { useEffect, useState, type CSSProperties } from 'react';
 
 interface RackItemCardProps {
+  compact?: boolean;
+  hasNote?: boolean;
+  collectionLabel?: string;
   imageUrl: string;
   category: string | null;
   description: string | null;
@@ -62,6 +66,9 @@ const getImageAverageColor = async (imageUrl: string) => {
 };
 
 export default function RackItemCard({
+  compact,
+  hasNote,
+  collectionLabel,
   imageUrl,
   category,
   description,
@@ -87,13 +94,15 @@ export default function RackItemCard({
     };
   }, [imageUrl]);
 
+  const CardSurface = compact ? "div" : "article";
   return (
-    <article
-      className={`rack-item-card ${className ?? ''}`.trim()}
+    <CardSurface
+      data-private
+      className={`rack-item-card ${compact ? "rack-item-card--compact" : ""} ${className ?? ''}`.trim()}
       style={{ '--rack-item-accent': accentColor } as CSSProperties}
     >
       <svg className="rack-item-shape" viewBox="0 0 100 100" aria-hidden="true" preserveAspectRatio="none">
-        <polygon points="1.5,5 87.5,5 95,35 95,65 87.5,95 1.5,95" />
+        <polygon points={compact ? "3,97 3,21 29,7 40,7 40,12 60,12 60,7 71,7 97,21 97,97" : "1.5,5 87.5,5 95,35 95,65 87.5,95 1.5,95"} />
       </svg>
       <svg className="rack-item-hanger" viewBox="0 0 60 42" aria-hidden="true" preserveAspectRatio="none">
         <path d="M1 21 H28 V26 A 15 15 0 0 0 58 26 A 15 15 0 0 0 52 13" strokeLinecap="round" />
@@ -118,7 +127,7 @@ export default function RackItemCard({
               <polygon points="2,2 84,2 98,20 84,38 2,38" />
               <circle cx="86" cy="20" r="4.8" />
             </svg>
-            <span>{(category ?? 'item').toUpperCase()}</span>
+            <span>{(category ?? 'item').toUpperCase()}{compact && <span className="rack-tag-details">{collectionLabel && <><Folder size={11} aria-hidden="true" /><span className="sr-only">In {collectionLabel}. </span></>}{hasNote && <><StickyNote size={11} aria-hidden="true" /><span className="sr-only">Has a note. </span></>}<span aria-hidden="true">↗</span><span className="sr-only">Open details</span></span>}</span>
           </div>
         </div>
         {badgeLabel && (
@@ -133,6 +142,6 @@ export default function RackItemCard({
           </p>
         )}
       </div>
-    </article>
+    </CardSurface>
   );
 }

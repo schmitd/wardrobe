@@ -16,11 +16,15 @@ Wardrobe is a closet manager and shopping companion. It helps users upload cloth
 
 The signed-in experience has two primary destinations and one global action:
 
-- **Wardrobe** is the owned catalog. It contains the user’s pieces and compact, editable **Style notes**. Fit, color, comfort, body, and lifestyle context belong in this living note and the supporting knowledge graph; they are not separate profile features.
-- **Fits** contains the outfit diary, try-ons, and **Plans**. Plans combine owned pieces with inspiration for trips, occasions, capsules, and future outfit directions.
-- **Add** is a global capture action, not a destination.
+- **Wardrobe** contains the owned catalog, compact editable **Your style** notes, and **Collections**. Collections group owned pieces and saved inspiration around a mood, occasion, or routine. They live in a short horizontal rail directly under style notes.
+- **Fits** opens with an immediate **Plan / Diary** switch. **Plan** means outfit recommendations for today and the next six days. **Diary** holds outfit history, try-ons, and corrections to past planned outfits.
+- **Add** is the global capture action. Fits does not repeat large Fit check / Try on upload cards.
 
-Account, privacy, authentication, and sign-out stay behind the header account affordance. Do not add Profile or Plans as primary navigation destinations. “Collection” and the underlying wardrobe/collection data model are legacy implementation terms; user-facing product copy uses **Plans**. Legacy `/profile` and `/wardrobes` links should continue to route users to their new home.
+Account, privacy, authentication, and sign-out stay behind the header account affordance. Do not add Profile, Collections, or Plan as primary destinations. Legacy `/profile` and `/wardrobes` links route to their home inside Wardrobe. Existing wardrobe records remain the collection data model; no migration renames or replaces saved collections.
+
+Open the entire item card to view its labels, manage collection membership, and leave a personal note. The hang tag carries category, note, and contextual collection cues, but is never the only tap target. Attribute labels, collection membership, and personal notes are distinct sections.
+
+Planning recalls relevant collections from reviewed activities or calendar events. It does not require a manual collection selection. Users can inspect the context, adjust pieces, accept a suggestion, and later confirm what they wore. Existing planned and worn outfits remain protected from regeneration.
 
 ## Brand Personality
 
@@ -32,7 +36,7 @@ Avoid fashion editorial layouts, generic SaaS/dashboard templates, and common AI
 
 ## Design Principles
 
-Keep the rack metaphor central where it helps recognition: item rack cards should continue to read like shirts on hangers rotated 90 degrees, with category tags that look like physical hang tags.
+Keep the rack metaphor central where it helps recognition: item rack cards should continue to read like shirts on hangers (upright compact cards in the catalog; sideways cards may remain in other surfaces), with category tags that look like physical hang tags.
 
 Make the interface playful through product-specific structure, not through arbitrary decoration. The clothing metaphor should explain the screen and make it memorable.
 

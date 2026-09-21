@@ -11,6 +11,7 @@ export default Table.make(() => Schema.Struct({
   contentType: Schema.optionalKey(Schema.String),
   category: Schema.optionalKey(Schema.String),
   description: Schema.optionalKey(Schema.String),
+  note: Schema.optionalKey(Schema.String),
   styleTags: Schema.optionalKey(Schema.Array(Schema.String)),
   embedding: Schema.optionalKey(Schema.Array(Schema.Number)),
   visualEmbedding: Schema.optionalKey(Schema.Array(Schema.Number)),

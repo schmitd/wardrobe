@@ -1,7 +1,11 @@
 import { FunctionSpec, GroupSpec } from "@confect/core";
+import { pagePiecesSpec, itemDetailsSpec, saveNoteSpec } from "./collectionContracts";
 import type * as functions from "./legacy/wardrobe";
 
 export default GroupSpec.make()
+  .addFunction(pagePiecesSpec)
+  .addFunction(itemDetailsSpec)
+  .addFunction(saveNoteSpec)
   .addFunction(FunctionSpec.convexPublicQuery<typeof functions.pageWardrobeItems>()("pageWardrobeItems"))
   .addFunction(FunctionSpec.convexPublicQuery<typeof functions.listWardrobeItems>()("listWardrobeItems"))
   .addFunction(FunctionSpec.convexPublicMutation<typeof functions.getUploadUrl>()("getUploadUrl"))

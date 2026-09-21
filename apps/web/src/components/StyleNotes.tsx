@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useQuery } from 'convex/react';
-import { Sparkles } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import posthog from 'posthog-js';
 import { api } from '@convex/_generated/api';
 import { refreshStyleBioAction, updateProfileBioAction } from '@/app/actions/wardrobe';
@@ -51,21 +51,18 @@ export default function StyleNotes() {
   if (!isSignedIn) return null;
 
   return (
-    <section id="style-notes" className="rack-panel rack-panel--shell scroll-mt-24 rounded-none" aria-labelledby="style-notes-title">
+    <section id="style-notes" className="scroll-mt-24" aria-labelledby="style-notes-title">
       <details>
         <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 marker:content-none">
           <span className="flex min-w-0 items-center gap-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center border border-[var(--rack-line)] bg-[#DCE66E] text-[#241426]">
-              <Sparkles className="h-4 w-4" aria-hidden="true" />
-            </span>
             <span className="min-w-0">
-              <span id="style-notes-title" className="block text-base font-extrabold text-[#241426]">Style notes</span>
-              <span className="block truncate text-xs font-medium text-[#56345c]">
+              <span id="style-notes-title" className="block text-base font-extrabold text-[#241426]">Your style</span>
+              <span data-private className="mt-1 line-clamp-2 text-sm font-medium leading-relaxed text-[#685e70]">
                 {notes || 'Add fit preferences, practical needs, and anything Wardrobe should remember.'}
               </span>
             </span>
           </span>
-          <span className="shrink-0 text-xs font-extrabold uppercase tracking-[0.12em] text-[#56345c]">Edit</span>
+          <span className="shrink-0 text-xs font-extrabold uppercase tracking-[0.12em] text-[#56345c]"><Pencil className="size-4" aria-hidden="true" /><span className="sr-only">Edit style notes</span></span>
         </summary>
 
         <div className="mt-4 border-t border-[var(--rack-line)] pt-4">
@@ -73,6 +70,7 @@ export default function StyleNotes() {
             One living note keeps your fit, color, comfort, and lifestyle context together. Wardrobe also learns from the pieces and fits you save.
           </p>
           <Textarea
+            data-private
             value={notes}
             onChange={(event) => {
               setDraft(event.target.value);

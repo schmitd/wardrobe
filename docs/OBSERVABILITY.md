@@ -43,6 +43,7 @@ Native TestFlight instrumentation and release checks are documented in [TESTFLIG
 | `inspiration_saved` | `has_photo`, `collection_type` | Are users returning to product discovery? |
 | `unified_capture_completed` | bounded `intent`, `scope` | Which capture flows complete? |
 | `planning_operation_finished` | bounded `operation`, `outcome`, `duration_ms`, `source`, `analytics_schema` | Where do planning requests fail or slow down? |
+| `wardrobe_item_note_saved` | `character_count`, bounded `surface` | Are users keeping practical context on individual pieces? |
 | `profile_bio_saved` | `character_count`, bounded `surface` | Are users personalizing recommendations? |
 | `selfie_analyzed` | `has_color_season` | Is color-profile personalization completing? |
 | `observability_smoke_test` | `smoke_id`, deploy URL, Git SHA, source | Does deployment ingestion work? |

@@ -1,3 +1,6 @@
+import postcss from "postcss";
+import tailwind from "@tailwindcss/postcss";
+import { collectionFixture, pieceSvg } from "./collection-fixture";
 import { resolve } from "node:path";
 import { shiftDay, sevenDays, type PlanningData } from "@wardrobe/shared";
 import { boundedInteger } from "../property-options";
@@ -5,39 +8,51 @@ import { boundedInteger } from "../property-options";
 const port = boundedInteger(process.env.PROBE_PORT, 4173, 1024, 65535);
 const boundary = resolve(import.meta.dir, "boundaries.tsx");
 const modules: Record<string, string> = {
-  "@clerk/nextjs": "useUser", "convex/react": "useQuery", "@convex/_generated/api": "api",
+  "@clerk/nextjs": "useUser, SignedIn, SignedOut, SignInButton, UserButton", "convex/react": "useQuery, useMutation, usePaginatedQuery",
+  "next/navigation": "usePathname, useSearchParams", "@convex/_generated/api": "api",
   "next/image": "Image as default", "next/link": "Link as default", "posthog-js": "analytics as default",
-  "@/app/actions/wardrobe": "getUploadUrlAction, routeCaptureAction, recordDailyFitCheckAction, createWardrobeItemAction, checkCompatibilityAction, saveInspirationAction",
+  "@/app/actions/wardrobe": "getUploadUrlAction, routeCaptureAction, recordDailyFitCheckAction, createWardrobeItemAction, checkCompatibilityAction, saveInspirationAction, enrichInspirationAction, deleteWardrobeItemAction, refreshStyleBioAction, updateProfileBioAction",
 };
 const build = await Bun.build({
   entrypoints: [resolve(import.meta.dir, "gallery.tsx")], target: "browser", minify: true,
   define: { "process.env.NODE_ENV": '"development"' },
   plugins: [{ name: "test-only-boundaries", setup(builder) {
-    builder.onResolve({ filter: /^(?:@clerk\/nextjs|convex\/react|@convex\/_generated\/api|next\/image|next\/link|posthog-js|@\/app\/actions\/wardrobe)$/ }, args => ({ path: args.path, namespace: "test-boundary" }));
+    builder.onResolve({ filter: /^(?:@clerk\/nextjs|convex\/react|@convex\/_generated\/api|next\/image|next\/link|next\/navigation|posthog-js|@\/app\/actions\/wardrobe)$/ }, args => ({ path: args.path, namespace: "test-boundary" }));
     builder.onLoad({ filter: /.*/, namespace: "test-boundary" }, args => ({ contents: `export { ${modules[args.path]} } from ${JSON.stringify(boundary)};`, loader: "tsx" }));
   } }],
 });
 if (!build.success) throw new AggregateError(build.logs, "Gallery build failed");
 const bundle = build.outputs[0]!;
-type State = { data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean };
+type State = { catalog: ReturnType<typeof collectionFixture>; data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean };
 const states = new Map<string, State>();
 function fixture(url: URL): State {
   // Match the Playwright/probe browser even when the runner's local date is UTC.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   return {
-    data: { items: ["Shirt", "Trousers", "Coat"].map((category, i) => ({ id: `piece-${i}`, category, description: `Synthetic ${category.toLowerCase()}`, imageUrl: null })), plans: [], calendarEnabled: true, calendarIds: ["synthetic-calendar"], suggestions: [{ id: "outfit", date: shiftDay(today, -1), title: "Yesterday's outfit", rationale: "Synthetic plan", itemIds: ["piece-0", "piece-1"], missing: [], context: [], status: "planned", calendarDerived: false }] },
+    catalog: collectionFixture(),
+    data: { items: ["Shirt", "Trousers", "Coat"].map((category, i) => ({ id: `piece-${i}`, category, description: `Synthetic ${category.toLowerCase()}`, imageUrl: null })), plans: [], calendarEnabled: true, calendarIds: ["synthetic-calendar"], suggestions: [{ id: "outfit", date: url.searchParams.get("scenario") === "history" ? shiftDay(today, -1) : today, title: "Easy structure for your day", rationale: "Relaxed tailoring draws on Work edit; the cotton layers work together for your client meeting.", itemIds: ["piece-0", "piece-1"], missing: [], context: ["Collection: Work edit", "Style profile"], status: "planned", calendarDerived: false }] },
     calls: [], stale: url.searchParams.get("case") === "stale", latency: boundedInteger(url.searchParams.get("latency") ?? undefined, 0, 0, 5000), scope: url.searchParams.get("scope") === "single_piece" ? "single_piece" : "full_fit", wrote: false,
   };
 }
-const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Wardrobe validation</title><style>body{font-family:system-ui;margin:24px;max-width:1100px}button,input,select,textarea{font:inherit;margin:6px;padding:8px}button{cursor:pointer}button:disabled{cursor:default;opacity:.5}svg{width:20px;height:20px}button svg{vertical-align:middle}li{margin:12px}img{max-width:200px}.hidden{display:none}[role=dialog]{position:fixed;inset:5%;overflow:auto;background:white;border:2px solid;padding:20px;z-index:2}[data-slot=dialog-overlay]{position:fixed;inset:0;background:#0008;z-index:1}header{margin-bottom:20px}</style><div id="root"></div><script type="module" src="/gallery.js"></script></html>`;
+const cssPath = resolve(import.meta.dir, "../../src/app/globals.css");
+const css = await postcss([tailwind()]).process(await Bun.file(cssPath).text(), { from: cssPath });
+const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Wardrobe prototype</title><link rel="stylesheet" href="/gallery.css"><style>body{font-family:Arial,sans-serif}.fixture-banner{padding:5px 12px;background:#241426;color:#eee5f0;font-size:11px;text-align:center}</style><div id="root"></div><script type="module" src="/gallery.js"></script></html>`;
 Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
   const url = new URL(request.url);
+  if (url.pathname === "/favicon.ico") return new Response(null, { status: 204 });
   if (url.pathname === "/health") return new Response(process.env.PROBE_TOKEN ?? "ok");
   if (url.pathname === "/gallery.js") return new Response(bundle, { headers: { "Content-Type": "application/javascript" } });
-  if (url.pathname === "/") {
+  if (url.pathname === "/gallery.css") return new Response(css.css, { headers: { "Content-Type": "text/css" } });
+  if (/^\/__fixture\/piece-\d\.svg$/.test(url.pathname)) return new Response(pieceSvg(Number(url.pathname.match(/piece-(\d)/)?.[1])), { headers: { "Content-Type": "image/svg+xml" } });
+  if (url.pathname === "/" || url.pathname === "/fits") {
     const session = crypto.randomUUID();
     if (states.size > 100) states.delete(states.keys().next().value!);
-    states.set(session, fixture(url));
+    const next = fixture(url);
+    if (!url.searchParams.has("scenario") || url.searchParams.get("scenario") === "fits") {
+      next.data.items = next.catalog.items.map(i => ({ id: i.id, category: i.category!, description: i.description!, imageUrl: i.imageUrl }));
+      next.data.suggestions[0]!.status = "suggested";
+    }
+    states.set(session, next);
     return new Response(html, { headers: { "Content-Type": "text/html", "Set-Cookie": `probe_session=${session}; Path=/; HttpOnly; SameSite=Strict` } });
   }
   const session = request.headers.get("cookie")?.match(/(?:^|;\s*)probe_session=([^;]+)/)?.[1];
@@ -48,11 +63,35 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
   if (url.pathname === "/api/wardrobe/process-stream") return new Response('{"type":"status","stage":"persisting"}\n{"type":"complete"}\n', { headers: { "Content-Type": "application/x-ndjson" } });
   if (request.method !== "POST") return new Response("Not found", { status: 404 });
   const input = await request.json() as Record<string, unknown>;
+  if (url.pathname === "/__fixture/query") {
+    const args = input.args as Record<string, string>;
+    const c = state.catalog;
+    switch (input.query) {
+      case "mobile.plans": case "wardrobes.listWardrobes": return Response.json(c.collections);
+      case "wardrobe.pageWardrobeItems": return Response.json(c.items);
+      case "wardrobe.pagePieces": return Response.json(c.items.filter(i => c.memberships.some(m => m.wardrobeId === args.wardrobeId && m.itemId === i.id)));
+      case "wardrobe.itemDetails": return Response.json({ note: c.items.find(i => i.id === args.itemId)?.note ?? "", collections: c.collections.filter(collection => c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === collection._id)).map(collection => ({ id: collection._id, name: collection.name })), truncated: false });
+      case "profile.getProfile": return Response.json({ bio: c.bio });
+      case "planning.load": return Response.json(state.data);
+      case "candidates.listInspirationByWardrobe": return Response.json([{ _id: "reference", category: "Color reference", description: "Soft neutrals and navy layers", imageUrl: "/__fixture/piece-0.svg" }]);
+      default: return Response.json([]);
+    }
+  }
   const operation = url.pathname === "/api/planning" ? String(input.operation) : url.pathname.split("/").at(-1)!;
   state.calls.push({ operation, input });
   if (state.calls.length > 200) state.calls.shift();
   if (state.latency) await Bun.sleep(state.latency);
   switch (operation) {
+    case "mutation": {
+      const args = input.args as Record<string, string>; const c = state.catalog;
+      if (input.name === "wardrobe.saveNote") { const item = c.items.find(i => i.id === args.itemId); if (item) item.note = args.note.trim(); }
+      else if (input.name === "wardrobes.addItemToWardrobe") { if (!c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === args.wardrobeId)) c.memberships.push({ itemId: args.itemId!, wardrobeId: args.wardrobeId! }); }
+      else if (input.name === "wardrobes.removeItemFromWardrobe") c.memberships = c.memberships.filter(m => !(m.itemId === args.itemId && m.wardrobeId === args.wardrobeId));
+      else if (input.name === "wardrobes.createWardrobe") { const id = `collection-${c.collections.length}`; c.collections.push({ _id: id, name: args.name!, description: args.description ?? "" }); return Response.json({ id }); }
+      return Response.json(null);
+    }
+    case "update-bio": state.catalog.bio = String(input.bio); return Response.json({ success: true });
+    case "planning_accept": state.data.suggestions[0]!.status = "planned"; return Response.json({ ok: true });
     case "planning_load": return state.stale && state.wrote ? Response.json({ error: "Synthetic refresh unavailable" }, { status: 503 }) : Response.json(state.data);
     case "planning_week": return Response.json({ days: [{ date: input.week, events: [{ title: "Synthetic meeting", start: "09:00" }], truncated: true }] });
     case "planning_interpret": return Response.json({ days: sevenDays(String(input.week)).map(date => ({ date, description: "予定".repeat(600) })), clarification: "" });

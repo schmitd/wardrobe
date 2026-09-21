@@ -2,10 +2,13 @@ import { FunctionImpl, GroupImpl } from "@confect/server";
 import { Layer } from "effect";
 import databaseSchema from "./_generated/schema";
 import group from "./wardrobe.spec";
+import { pagePieces, itemDetails, saveNote } from "./collectionHandlers";
+import RequireUserLive from "./middleware/RequireUser.impl";
 import * as functions from "./legacy/wardrobe";
 
 export default GroupImpl.make(databaseSchema, group).pipe(
   Layer.provide(Layer.mergeAll(
+    pagePieces, itemDetails, saveNote, RequireUserLive,
     FunctionImpl.make(databaseSchema, group, "pageWardrobeItems", functions.pageWardrobeItems),
     FunctionImpl.make(databaseSchema, group, "listWardrobeItems", functions.listWardrobeItems),
     FunctionImpl.make(databaseSchema, group, "getUploadUrl", functions.getUploadUrl),
