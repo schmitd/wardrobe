@@ -38,4 +38,10 @@ describe("capture router policy", () => {
   it("decomposes multiple visible garments even if the route label says one piece", () => {
     expect(normalizeCaptureRoute({ capture_scope: "single_piece", visible_garment_count: 3, confidence: 0.9 }).scope).toBe("full_fit");
   });
+  it("preserves a coordinated catalog set while decomposing an ordinary worn outfit", () => {
+    const set = { capture_scope: "single_piece", visible_garment_count: 2, confidence: 0.9 };
+    expect(normalizeCaptureRoute({ ...set, is_catalog_set: true }).scope).toBe("single_piece");
+    expect(normalizeCaptureRoute({ ...set, is_catalog_set: false }).scope).toBe("full_fit");
+    expect(normalizeCaptureRoute({ ...set, is_catalog_set: "true" }).scope).toBe("full_fit");
+  });
 });

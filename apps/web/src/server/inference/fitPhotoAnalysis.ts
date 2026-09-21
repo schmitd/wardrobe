@@ -16,6 +16,8 @@ import { parseJson, ModelResponseError } from "./shared";
 
 export const FIT_DETECTOR_MODEL = "gemini-2.5-flash" as const;
 export const FIT_DETECTOR_VERSION = "outfit-focus-context-verification-v2";
+// Leave half of the mobile route's 180-second budget for embeddings and writes.
+export const FIT_LOCALIZATION_TIMEOUT_MS = 90_000;
 export const FIT_VISION_CONFIG: GenerationConfig & {
   thinkingConfig: { thinkingBudget: number };
 } = {
@@ -314,14 +316,13 @@ export const analyzeFitPhoto = (
       if (!items.some((i) => sameLocatedItem(i, item))) items.push(item);
     }
     // If the model produced no usable boxes, re-localize once automatically.
-    if (!items.length)
-      items = parseFitItems(
-        (yield* detect(
+    if (!items.length) {
+      detection = yield* detect(
           scene,
           `${prompt}\nThe previous pass did not return valid individual items. Re-examine the clothing boundaries carefully.`,
-        )).items,
-        region,
       );
+      items = parseFitItems(detection.items, region);
+    }
     const verify = (candidates: FitItem[]) =>
       Effect.gen(function* () {
         if (!candidates.length) return new Set<number>();
@@ -416,6 +417,7 @@ export const analyzeFitPhoto = (
       items: uniqueAccepted,
     };
   }).pipe(
+    Effect.timeout(FIT_LOCALIZATION_TIMEOUT_MS),
     Effect.withSpan("fit_check.localize", {
       attributes: { detectorVersion: FIT_DETECTOR_VERSION },
     }),

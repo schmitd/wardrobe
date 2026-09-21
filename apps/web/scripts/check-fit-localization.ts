@@ -1,16 +1,18 @@
 // Local-only verification. Input and output images must never be committed.
 import { Effect } from "effect";
-import { mkdir } from "node:fs/promises";
+import { resolve } from "node:path";
 import sharp from "sharp";
 import { analyzeFitPhoto } from "../src/server/inference/fitPhotoAnalysis";
 import { GeminiLive, GeminiService } from "../src/services/GeminiService";
 import { cropGarmentRegion } from "../src/server/garmentIdentity";
+import { preparePrivateCaptureOutput } from "./private-capture-output";
 
-const [input, output, variant] = process.argv.slice(2);
-if (!input || !output || !output.includes("output/"))
+const [input, outputArg, variant] = process.argv.slice(2);
+if (!input || !outputArg)
   throw new Error(
     "Usage: bun scripts/check-fit-localization.ts PRIVATE_IMAGE output/PRIVATE_DIRECTORY",
   );
+const output = await preparePrivateCaptureOutput(outputArg, resolve(import.meta.dir, "../../.."));
 let bytes = Buffer.from(await Bun.file(input).arrayBuffer());
 if (variant === "distant") {
   // Synthetic stress case, not evidence of the user's separate distant photo.
@@ -32,7 +34,6 @@ if (variant === "distant") {
     await sharp(bytes).rotate().flop().jpeg({ quality: 90 }).toBuffer(),
   );
 } else if (variant) throw new Error("Unknown fixture variant");
-await mkdir(output, { recursive: true });
 if (variant) await Bun.write(`${output}/input.private.jpg`, bytes);
 const result = await Effect.runPromise(
   Effect.gen(function* () {

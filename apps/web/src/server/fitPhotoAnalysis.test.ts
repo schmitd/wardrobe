@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import sharp from "sharp";
-import { Effect, Layer } from "effect";
+import { Cause, Deferred, Effect, Fiber, Layer, Result } from "effect";
+import { TestClock } from "effect/testing";
 import { GeminiService } from "@/services/GeminiService";
 import {
   analyzeFitPhoto,
@@ -10,6 +11,7 @@ import {
   mapBox,
   parseFitItems,
   verifiedIndices,
+  FIT_LOCALIZATION_TIMEOUT_MS,
 } from "./inference/fitPhotoAnalysis";
 
 const item = (box = [200, 300, 250, 380]) => ({
@@ -240,6 +242,36 @@ describe("automatic fit analysis", () => {
 });
 
 describe("localization provider boundaries", () => {
+  it("cancels a slow recovery within the whole-workflow budget", async () => {
+    const bytes = await source();
+    let calls = 0;
+    let interrupted = false;
+    await Effect.runPromise(Effect.gen(function* () {
+      const stages = yield* Effect.forEach([0, 1, 2, 3], () => Deferred.make<void>());
+      const responses = [detection([], [100, 100, 900, 900]), detection([item()]), checked(false)];
+      const slow = Layer.succeed(GeminiService, {
+        generateContent: () => Effect.gen(function* () {
+          const index = calls++;
+          yield* Deferred.succeed(stages[index], undefined);
+          yield* Effect.sleep("24 seconds").pipe(Effect.onInterrupt(() => Effect.sync(() => { interrupted = true; })));
+          return { response: { text: () => JSON.stringify(responses[index]) } } as never;
+        }),
+        embedContent: () => Effect.die("Unexpected embedding"),
+        batchEmbedContents: () => Effect.die("Unexpected embedding"),
+      });
+      const fiber = yield* analyzeFitPhoto(bytes, "daily_fit_check").pipe(Effect.provide(slow), Effect.result, Effect.forkChild);
+      for (let index = 0; index < 3; index++) {
+        yield* Deferred.await(stages[index]);
+        yield* TestClock.adjust("24 seconds");
+      }
+      yield* Deferred.await(stages[3]);
+      yield* TestClock.adjust(FIT_LOCALIZATION_TIMEOUT_MS - 72_000);
+      const result = yield* Fiber.join(fiber);
+      expect(Result.isFailure(result) && Cause.isTimeoutError(result.failure)).toBe(true);
+    }).pipe(Effect.provide(TestClock.layer())));
+    expect(calls).toBe(4);
+    expect(interrupted).toBe(true);
+  });
   it("rejects malformed model success before verification or persistence", async () => {
     const s = service([{ transcription: "Outfit", outfit_box: [], items: "not-an-array" }]);
     await expect(Effect.runPromise(analyzeFitPhoto(await source(), "daily_fit_check").pipe(Effect.provide(s.layer)))).rejects.toThrow("invalid response");
@@ -249,5 +281,15 @@ describe("localization provider boundaries", () => {
     const s = service([detection([item()]), { checks: [{ index: 0, contains_item: "true", well_framed: true }] }]);
     await expect(Effect.runPromise(analyzeFitPhoto(await source(), "daily_fit_check").pipe(Effect.provide(s.layer)))).rejects.toThrow("invalid response");
     expect(s.calls).toHaveLength(2);
+  });
+  it("returns the corrected transcription from successful no-items recovery", async () => {
+    const s = service([
+      { ...detection([]), transcription: "Unclear clothing" },
+      { ...detection([item()]), transcription: "A black digital watch." },
+      checked(true),
+    ]);
+    const result = await Effect.runPromise(analyzeFitPhoto(await source(), "daily_fit_check").pipe(Effect.provide(s.layer)));
+    expect(result.transcription).toBe("A black digital watch.");
+    expect(result.items).toHaveLength(1);
   });
 });

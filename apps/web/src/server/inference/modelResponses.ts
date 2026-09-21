@@ -9,7 +9,7 @@ const fitPiece = Schema.Struct({ ...piece.fields,
 });
 const bio = Schema.Struct({ bio: Schema.String.check(Schema.isMaxLength(8000)) });
 export const modelResponses = {
-  routeCapture: Schema.Struct({ visible_garment_count: Schema.optionalKey(Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0))), capture_scope: Schema.optionalKey(Schema.Literals(["single_piece", "full_fit"])), confidence: Schema.optionalKey(Schema.Number), rationale: Schema.optionalKey(Schema.String) }),
+  routeCapture: Schema.Struct({ is_catalog_set: Schema.optionalKey(Schema.Boolean), visible_garment_count: Schema.optionalKey(Schema.Number.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(0))), capture_scope: Schema.optionalKey(Schema.Literals(["single_piece", "full_fit"])), confidence: Schema.optionalKey(Schema.Number), rationale: Schema.optionalKey(Schema.String) }),
   fitLocalization: Schema.Struct({ transcription: Schema.String.check(Schema.isMaxLength(8000)), outfit_box: Schema.Array(Schema.Number).check(Schema.isMaxLength(4)), items: Schema.Array(Schema.Struct({ ...piece.fields, box_2d: Schema.Array(Schema.Number).check(Schema.isMaxLength(4)), confidence: Schema.Number })).check(Schema.isMaxLength(30)) }),
   fitCropVerification: Schema.Struct({ checks: Schema.Array(Schema.Struct({ index: Schema.Number.check(Schema.isInt()), contains_item: Schema.Boolean, well_framed: Schema.Boolean })).check(Schema.isMaxLength(30)) }),
   analyzeImageFull: piece,

@@ -277,14 +277,16 @@ export const routeCaptureAction = async (input: {
       confidence: { type: SchemaType.NUMBER },
       rationale: { type: SchemaType.STRING },
       visible_garment_count: { type: SchemaType.INTEGER },
+      is_catalog_set: { type: SchemaType.BOOLEAN },
     },
-    required: ["capture_scope", "confidence", "rationale", "visible_garment_count"],
+    required: ["capture_scope", "confidence", "rationale", "visible_garment_count", "is_catalog_set"],
   };
   const prompt = `Route this wardrobe photo into exactly one capture scope.
-Return JSON only with capture_scope, confidence, rationale, and visible_garment_count.
+Return JSON only with capture_scope, confidence, rationale, visible_garment_count, and is_catalog_set.
 - capture_scope must be "single_piece" when the photo primarily presents one garment, shoe pair, bag, accessory, or coordinated set as one catalog item.
 - capture_scope must be "full_fit" when the photo shows a person wearing multiple garments together with enough outfit context to record what was worn.
 - Count visible separate garments/accessories in visible_garment_count. Distant or partial multi-garment outfits are full_fit, never one generic clothing item.
+- is_catalog_set is true only when a pair or coordinated set is presented as one catalog item, such as a matching two-piece set or a shoe pair. An ordinary worn outfit is not a catalog set. A catalog set may contain several visible components while remaining single_piece.
 - A person may be visible. Do not identify or describe them and do not infer sensitive traits. Judge only the clothing composition and framing.
 - confidence must be from 0 to 1.
 - rationale must be a short, plain explanation of the clothing evidence, never a description of the person.`;
