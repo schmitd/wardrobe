@@ -1,6 +1,6 @@
 # Wardrobe collections and near-term Plan prototype
 
-Review hold: this branch is a draft prototype. Keep its PR in draft with `do-not-merge` until David reviews the interactions and explicitly releases the hold. Do not deploy or enable auto-merge as part of this prototype.
+Review hold: this branch is a draft prototype. Keep its PR in draft with `do-not-merge` until David reviews the interactions and explicitly releases the hold. Do not publish to production or enable auto-merge as part of this prototype.
 
 This follows the September 21 design review and [product program #60](https://github.com/schmitd/wardrobe/issues/60). It supersedes the earlier use of “Plans” for moodboards on the web; existing saved collection records are retained.
 

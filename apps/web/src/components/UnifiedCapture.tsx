@@ -282,7 +282,7 @@ export function UnifiedCaptureController() {
     const saved = outcome.success;
     setToast(
       saved.kind === 'fit'
-        ? { message: 'Fit recorded. Familiar pieces were matched when confidence was high.', href: `/fits#fit-${saved.id}` }
+        ? { message: 'Fit recorded. Familiar pieces were matched when confidence was high.', href: `/fits?view=diary#fit-${saved.id}` }
         : { message: 'Piece added to your wardrobe.', href: '/' }
     );
     posthog.capture('unified_capture_completed', { intent: capture.intent, scope });

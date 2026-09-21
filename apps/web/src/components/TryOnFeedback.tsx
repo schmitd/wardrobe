@@ -42,7 +42,7 @@ export default function TryOnFeedback({ result, previewUrl }: { result: Compatib
       return;
     }
     setSaveState('saved');
-    setMessage(`Saved to ${selected?.name ?? 'your plan'} as inspiration.`);
+    setMessage(`Saved to ${selected?.name ?? 'your collection'} as inspiration.`);
   };
 
   return (
