@@ -5,6 +5,7 @@
   "scripts": {
     "gallery": "bun generative-study.ts",
     "serve": "bun serve.ts generative-v1 4919",
+    "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
