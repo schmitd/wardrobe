@@ -54,6 +54,8 @@ export async function resolveThread(id: string, cwd: string) {
   await gh(["api", "graphql", "-f", "query=mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}", "-f", `id=${id}`], cwd);
 }
 export async function hold(number: number, head: string, cwd: string) {
+  const before = await pull(number, cwd);
+  if (!eligible(before) || before.head.sha !== head) return;
   await command(["gh", "pr", "edit", String(number), "--repo", REPOSITORY, "--add-label", "needs-decision"], cwd);
   const current = await pull(number, cwd);
   if (current.auto_merge) await command(["gh", "pr", "merge", String(number), "--repo", REPOSITORY, "--disable-auto"], cwd);

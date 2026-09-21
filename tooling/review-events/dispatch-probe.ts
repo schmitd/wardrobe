@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Store } from "./store";
-import { coversThreads as actualCoversThreads } from "./review";
+import { threadFingerprint, coversThreads as actualCoversThreads } from "./review";
 
 const root = await mkdtemp(join(tmpdir(), "wardrobe-dispatch-probe-"));
 const realGit = (args: string[]) => { const p = Bun.spawnSync(["git", ...args], { cwd: root }); if (p.exitCode) throw new Error(p.stderr.toString()); return p.stdout.toString().trim(); };
@@ -16,7 +16,7 @@ const newer = realGit(["rev-parse", "HEAD"]);
 let pr: any, report: any, feedback: any[], ci: string, reviewReady: boolean, duringReview: () => void, calls: string[], failReview: boolean;
 const clone = (v: any) => JSON.parse(JSON.stringify(v));
 const thread = (id: string) => ({ id, path: "file.ts", comments: [] });
-const disposition = (id: string) => ({ id, disposition: "fixed", reason: "verified source", evidence: "probe.log" });
+const disposition = (id: string) => ({ id, fingerprint: threadFingerprint(thread(id)), disposition: "fixed", reason: "verified source", evidence: "probe.log" });
 function reset() {
   pr = { number: 99, state: "open", draft: false, merged: false, merge_commit_sha: null, labels: [], base: { ref: "main", sha: head }, head: { sha: head, ref: "candidate", repo: { full_name: "schmitd/wardrobe" } } };
   report = { base: head, head, verdict: "pass", summary: "Synthetic pass", findings: [], decisions: [], coverageGaps: [], commands: [{ command: "bun test", exitCode: 0, artifact: "probe.log" }], threads: [] };

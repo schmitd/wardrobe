@@ -26,17 +26,18 @@ export function parseEvent(name: string | null, value: unknown, trustedActors: s
   if (!value || typeof value !== "object") return null;
   const p = value as Record<string, any>;
   if (p.repository?.id !== REPOSITORY_ID || p.repository?.full_name !== REPOSITORY) return null;
-  if (name === "pull_request" && ["opened", "reopened", "synchronize", "ready_for_review", "converted_to_draft", "labeled", "unlabeled", "closed"].includes(p.action)) {
+  if (name === "pull_request" && ["opened", "reopened", "synchronize", "ready_for_review", "converted_to_draft", "labeled", "unlabeled", "closed", "edited"].includes(p.action)) {
     const pr = p.pull_request;
+    if (p.action === "edited" && !p.changes?.base) return null;
     if (!prNumber(pr?.number) || !sha(pr?.head?.sha) || pr?.base?.ref !== "main") return null;
     return { kind: "pr", number: pr.number, head: pr.head.sha,
-      trustHead: ["opened", "reopened", "synchronize", "ready_for_review"].includes(p.action) && pr.head.repo?.id === REPOSITORY_ID && trustedActors.includes(p.sender?.login),
+      trustHead: ["opened", "reopened", "synchronize", "ready_for_review", "edited"].includes(p.action) && pr.head.repo?.id === REPOSITORY_ID && trustedActors.includes(p.sender?.login),
       reason: `pull_request.${p.action}` };
   }
   if (name === "issue_comment" && ["created", "edited"].includes(p.action) && p.issue?.pull_request && prNumber(p.issue.number) && ["chatgpt-codex-connector[bot]", "chatgpt-codex-connector"].includes(p.comment?.user?.login)) {
     return { kind: "feedback", number: p.issue.number, reason: "issue_comment.codex" };
   }
-  if (name === "pull_request_review" && p.action === "submitted") {
+  if (name === "pull_request_review" && ["submitted", "edited"].includes(p.action) && ["chatgpt-codex-connector[bot]", "chatgpt-codex-connector"].includes(p.review?.user?.login)) {
     const pr = p.pull_request;
     if (!prNumber(pr?.number) || !sha(pr?.head?.sha) || pr?.base?.ref !== "main") return null;
     return { kind: "pr", number: pr.number, head: pr.head.sha, trustHead: false, reason: "pull_request_review.submitted" };

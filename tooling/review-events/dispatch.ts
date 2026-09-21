@@ -27,7 +27,7 @@ export async function dispatch(event: Event, config: Config, store: Store): Prom
     if (!config.execute) { outcomes.push(`#${number}: audit-only, would review ${pr.head.sha}`); continue; }
     attemptedHead = pr.head.sha;
     await protection(cwd);
-    await command(["git", "fetch", "origin", "main", `pull/${number}/head:refs/review-events/pr-${number}`], cwd);
+    await command(["git", "fetch", "origin", "main", `+pull/${number}/head:refs/review-events/pr-${number}`], cwd);
     if ((await command(["git", "rev-parse", `refs/review-events/pr-${number}`], cwd)).trim() !== pr.head.sha) { outcomes.push(`#${number}: changed during fetch`); continue; }
     const ancestor = Bun.spawnSync(["git", "merge-base", "--is-ancestor", pr.base.sha, pr.head.sha], { cwd });
     if (ancestor.exitCode === 1) {

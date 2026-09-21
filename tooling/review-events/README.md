@@ -4,7 +4,7 @@ This trusted local controller replaces the six-hour Desktop heartbeat. There is 
 
 ## Events and gates
 
-- PR opened, reopened, synchronized, or marked ready: review its current revision.
+- PR opened, reopened, synchronized, retargeted to main, or marked ready: review its current revision.
 - CI workflow completed: recheck required CI and reuse completed independent evidence only for the exact base/head.
 - Codex review submitted or its summary updated: investigate late findings before publication.
 - Main updated: update affected open branches without force-pushing, then review the resulting revision.
@@ -12,7 +12,7 @@ This trusted local controller replaces the six-hour Desktop heartbeat. There is 
 
 The controller uses GitHub's current API state, not a webhook conclusion, to decide readiness. It requires `Merge checks`, `Wardrobe adversarial`, strict up-to-date checks, and admin enforcement. It calls only the installed trusted merge publisher. Missing checks remain pending. No protection bypass is provided.
 
-A fresh subscription-backed Codex process performs each independent review in an exported candidate with synthetic data. Known GitHub findings are hypotheses to investigate, with a disposition and evidence for every unresolved thread. A separate author process can fix routine findings or required CI failures. The controller commits and pushes only after checking the remote revision again, without force. A pushed fix must pass a fresh review. Actual decisions receive a `needs-decision` hold and pending auto-merge is canceled.
+A fresh subscription-backed Codex process performs each independent review in an exported candidate with synthetic data. Known GitHub findings are hypotheses to investigate, with a disposition and evidence for every unresolved thread. The trusted parent fingerprints the exact path and comment contents supplied to the reviewer, so edits and replies invalidate prior dispositions. A separate author process can fix routine findings or required CI failures. The controller commits and pushes only after checking the remote revision again, without force. A pushed fix must pass a fresh review. Actual decisions receive a `needs-decision` hold and pending auto-merge is canceled.
 
 Desktop execution is restricted to same-repository revisions attributed by signed GitHub events to configured trusted actors. Forks and other untrusted revisions stay unapproved and require isolated Cloud review; the receiver does not execute them. A GitHub Actions self-hosted runner is deliberately not registered on this public repository. Candidate instructions cannot replace the installed controller, prompts or publisher.
 
