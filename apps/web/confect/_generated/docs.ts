@@ -6,6 +6,7 @@ export type DeletedAccountsDoc = Document.Document<typeof schemaDefinition, "del
 export type FitCheckItemsDoc = Document.Document<typeof schemaDefinition, "fitCheckItems">;
 export type FitChecksDoc = Document.Document<typeof schemaDefinition, "fitChecks">;
 export type GarmentObservationsDoc = Document.Document<typeof schemaDefinition, "garmentObservations">;
+export type GarmentPreviewJobsDoc = Document.Document<typeof schemaDefinition, "garmentPreviewJobs">;
 export type OutfitSuggestionsDoc = Document.Document<typeof schemaDefinition, "outfitSuggestions">;
 export type PlanningSettingsDoc = Document.Document<typeof schemaDefinition, "planningSettings">;
 export type ProfileBioRevisionsDoc = Document.Document<typeof schemaDefinition, "profileBioRevisions">;
@@ -25,6 +26,7 @@ export interface Docs {
   fitCheckItems: FitCheckItemsDoc;
   fitChecks: FitChecksDoc;
   garmentObservations: GarmentObservationsDoc;
+  garmentPreviewJobs: GarmentPreviewJobsDoc;
   outfitSuggestions: OutfitSuggestionsDoc;
   planningSettings: PlanningSettingsDoc;
   profileBioRevisions: ProfileBioRevisionsDoc;

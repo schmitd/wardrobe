@@ -73,11 +73,42 @@ test("restore invalidates an in-flight result and stale failure cannot overwrite
   expect(await t.mutation(internal.garmentPreviewData.commit, { itemId, revision: 1, userId: "alice", sourceStorageId: source.storageId, storageId: preview })).toBe(false);
   await t.mutation(internal.garmentPreviewData.discard, { storageId: preview });
   expect(await t.run(async ctx => (await ctx.storage.get(preview)) !== null)).toBe(false);
-  await alice.mutation(api.garmentPreviewData.request, { itemId });
-  await t.mutation(internal.garmentPreviewData.finish, { itemId, revision: 1, skipped: false });
-  expect((await alice.query(api.garmentPreviewData.status, { itemId }))?.status).toBe("queued");
-  await t.mutation(internal.garmentPreviewData.expire, { itemId, revision: 3 });
+  expect(await alice.mutation(api.garmentPreviewData.request, { itemId })).toBe(true);
+  expect(await t.mutation(internal.garmentPreviewData.claim, { itemId, revision: 3 })).toBeNull();
   expect((await alice.query(api.garmentPreviewData.status, { itemId }))?.status).toBe("error");
+  await t.mutation(internal.garmentPreviewData.finish, { itemId, revision: 1, skipped: false });
+  expect(await alice.mutation(api.garmentPreviewData.request, { itemId })).toBe(true);
+  expect(await t.mutation(internal.garmentPreviewData.claim, { itemId, revision: 4 })).not.toBeNull();
+  await t.mutation(internal.garmentPreviewData.expire, { itemId, revision: 3 });
+  expect((await alice.query(api.garmentPreviewData.status, { itemId }))?.status).toBe("processing");
+});
+
+test("processing expiry starts at claim and releases the per-user generation lease", async () => {
+  const { t, itemId, alice } = await fixture();
+  await alice.mutation(api.garmentPreviewData.request, { itemId });
+  expect((await t.run(ctx => ctx.db.system.query("_scheduled_functions").collect())).length).toBe(1);
+  expect(await t.mutation(internal.garmentPreviewData.claim, { itemId, revision: 1 })).not.toBeNull();
+  const scheduled = await t.run(ctx => ctx.db.system.query("_scheduled_functions").collect());
+  expect(scheduled).toHaveLength(2);
+  expect(Math.max(...scheduled.map(job => job.scheduledTime)) - Date.now()).toBe(180_000);
+  await t.mutation(internal.garmentPreviewData.expire, { itemId, revision: 1 });
+  expect((await alice.query(api.garmentPreviewData.status, { itemId }))?.status).toBe("error");
+  expect(await alice.mutation(api.garmentPreviewData.request, { itemId })).toBe(true);
+  expect(await t.mutation(internal.garmentPreviewData.claim, { itemId, revision: 2 })).not.toBeNull();
+});
+
+test("one user cannot claim paid generation concurrently across items", async () => {
+  const { t, itemId, alice } = await fixture();
+  const otherItemId = await t.run(async ctx => {
+    const storageId = await ctx.storage.store(new Blob(["other original"]));
+    await ctx.db.insert("storageObjects", { storageId, userId: "alice", provenance: "upload", createdAt: 2 });
+    return ctx.db.insert("wardrobeItems", { userId: "alice", storageId, analysisStatus: "ready", createdAt: 2, updatedAt: 2 });
+  });
+  await alice.mutation(api.garmentPreviewData.request, { itemId });
+  await alice.mutation(api.garmentPreviewData.request, { itemId: otherItemId });
+  expect(await t.mutation(internal.garmentPreviewData.claim, { itemId, revision: 1 })).not.toBeNull();
+  expect(await t.mutation(internal.garmentPreviewData.claim, { itemId: otherItemId, revision: 1 })).toBeNull();
+  expect((await alice.query(api.garmentPreviewData.status, { itemId: otherItemId }))?.status).toBe("error");
 });
 
 test("account or item deletion rejects late results; unowned source references cannot queue", async () => {

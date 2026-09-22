@@ -1,5 +1,7 @@
 import { FunctionImpl, GroupImpl } from "@confect/server";
+import { makeFunctionReference } from "convex/server";
 import { Effect, Layer } from "effect";
+import type { Id } from "../convex/_generated/dataModel";
 import schema from "./_generated/schema";
 import { MutationCtx, QueryCtx } from "./_generated/services";
 import spec from "./garmentPreviewData.spec";
@@ -8,6 +10,8 @@ import RequireUserLive from "./middleware/RequireUser.impl";
 import { StorageNotOwned } from "./errors";
 import { queuePreview, wardrobeDisplayUrl } from "./previewQueue";
 import { deleteGeneratedPreview, discardUnregisteredPreview, ownedStorageUrl } from "./storageAccess";
+
+const expirePreviewRef = makeFunctionReference<"mutation", { itemId: Id<"wardrobeItems">; revision: number }, null>("garmentPreviewData:expire");
 
 const request = FunctionImpl.make(schema, spec, "request", ({ itemId }) => Effect.gen(function* () {
   const ctx = yield* MutationCtx;
@@ -39,13 +43,20 @@ const claim = FunctionImpl.make(schema, spec, "claim", ({ itemId, revision }) =>
   const ctx = yield* MutationCtx;
   const item = yield* Effect.promise(() => ctx.db.get(itemId));
   if (!item || item.previewRevision !== revision || item.previewStatus !== "queued") return null;
+  const active = yield* Effect.promise(() => ctx.db.query("garmentPreviewJobs").withIndex("by_user", q => q.eq("userId", item.userId)).unique());
+  if (active) {
+    yield* Effect.promise(() => ctx.db.patch(itemId, { previewStatus: "error" }));
+    return null;
+  }
   const deleted = yield* Effect.promise(() => ctx.db.query("deletedAccounts").withIndex("by_user", q => q.eq("userId", item.userId)).first());
   const url = yield* Effect.promise(() => ownedStorageUrl(ctx, item.userId, item.storageId));
   if (deleted || !url || process.env.GARMENT_PREVIEWS_ENABLED !== "true") {
     yield* Effect.promise(() => ctx.db.patch(itemId, { previewStatus: "error" }));
     return null;
   }
+  yield* Effect.promise(() => ctx.db.insert("garmentPreviewJobs", { userId: item.userId, itemId, revision }));
   yield* Effect.promise(() => ctx.db.patch(itemId, { previewStatus: "processing" }));
+  yield* Effect.promise(() => ctx.scheduler.runAfter(180_000, expirePreviewRef, { itemId, revision }));
   return { userId: item.userId, storageId: item.storageId, traceId: item.traceId ?? null };
 }));
 const commit = FunctionImpl.make(schema, spec, "commit", ({ itemId, revision, storageId, sourceStorageId, userId }) => Effect.gen(function* () {
@@ -64,6 +75,8 @@ const finish = FunctionImpl.make(schema, spec, "finish", ({ itemId, revision, sk
   const item = yield* Effect.promise(() => ctx.db.get(itemId));
   if (item?.previewRevision === revision && (item.previewStatus === "queued" || item.previewStatus === "processing"))
     yield* Effect.promise(() => ctx.db.patch(itemId, { previewStatus: skipped ? "skipped" : "error" }));
+  const job = yield* Effect.promise(() => ctx.db.query("garmentPreviewJobs").withIndex("by_item_revision", q => q.eq("itemId", itemId).eq("revision", revision)).unique());
+  if (job) yield* Effect.promise(() => ctx.db.delete(job._id));
   return null;
 }));
 const expire = FunctionImpl.make(schema, spec, "expire", ({ itemId, revision }) => Effect.gen(function* () {
@@ -71,6 +84,8 @@ const expire = FunctionImpl.make(schema, spec, "expire", ({ itemId, revision }) 
   const item = yield* Effect.promise(() => ctx.db.get(itemId));
   if (item?.previewRevision === revision && (item.previewStatus === "queued" || item.previewStatus === "processing"))
     yield* Effect.promise(() => ctx.db.patch(itemId, { previewStatus: "error" }));
+  const job = yield* Effect.promise(() => ctx.db.query("garmentPreviewJobs").withIndex("by_item_revision", q => q.eq("itemId", itemId).eq("revision", revision)).unique());
+  if (job) yield* Effect.promise(() => ctx.db.delete(job._id));
   return null;
 }));
 const discard = FunctionImpl.make(schema, spec, "discard", ({ storageId }) => Effect.gen(function* () {

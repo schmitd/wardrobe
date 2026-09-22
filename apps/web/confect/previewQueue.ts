@@ -12,7 +12,6 @@ export async function queuePreview(ctx: MutationCtx, itemId: Id<"wardrobeItems">
   const revision = (item.previewRevision ?? 0) + 1;
   await ctx.db.patch(itemId, { previewStatus: "queued", previewRevision: revision });
   await ctx.scheduler.runAfter(0, internal.garmentPreview.generate, { itemId, revision });
-  await ctx.scheduler.runAfter(180_000, internal.garmentPreviewData.expire, { itemId, revision });
   return true;
 }
 
