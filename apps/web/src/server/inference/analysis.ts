@@ -1,13 +1,13 @@
 import { Effect } from "effect";
-import { SchemaType, type Schema } from "@google/generative-ai";
+import { SchemaType, type JsonSchema as Schema } from "@/services/InferenceService";
 import type { Id } from "@convex/_generated/dataModel";
 import { DESCRIPTION_MAX_OUTPUT_TOKENS, ITEM_DESCRIPTION_WORD_LIMIT, STYLE_LABEL_MAX_OUTPUT_TOKENS, sanitizeStyleTags, truncateWords } from "@/lib/inferenceOutputGuards";
-import { GEMINI_FLASH_LITE_MODEL, GeminiService } from "@/services/GeminiService";
+import { InferenceError, InferenceService } from "@/services/InferenceService";
 import { parseJson, toErrorMessage, withRetries } from "./shared";
 
 export const analyzeImageFull = (base64: string) =>
   Effect.gen(function* () {
-    const gemini = yield* GeminiService;
+    const inference = yield* InferenceService;
     const schema: Schema = {
       type: SchemaType.OBJECT,
       properties: {
@@ -27,7 +27,7 @@ export const analyzeImageFull = (base64: string) =>
 - category: short noun phrase.
 - description: at most ${ITEM_DESCRIPTION_WORD_LIMIT} words.`;
 
-    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+    const result = yield* inference.generateContent({
       contents: [
         {
           role: "user",
@@ -58,7 +58,7 @@ export const analyzeImageFull = (base64: string) =>
 
 export const analyzeInspirationImage = (base64: string) =>
   Effect.gen(function* () {
-    const gemini = yield* GeminiService;
+    const inference = yield* InferenceService;
     const schema: Schema = {
       type: SchemaType.OBJECT,
       properties: {
@@ -75,7 +75,7 @@ export const analyzeInspirationImage = (base64: string) =>
 - style_tags: 4-6 associative labels, each at most 3 words.
 - category: a concise reference type, not a retail product title.
 - description: at most ${ITEM_DESCRIPTION_WORD_LIMIT} words; describe what this image could contribute to a future outfit or collection.`;
-    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+    const result = yield* inference.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }, { inlineData: { data: base64, mimeType: "image/jpeg" } }] }],
       generationConfig: { responseMimeType: "application/json", responseSchema: schema, maxOutputTokens: DESCRIPTION_MAX_OUTPUT_TOKENS + STYLE_LABEL_MAX_OUTPUT_TOKENS },
     });
@@ -85,12 +85,12 @@ export const analyzeInspirationImage = (base64: string) =>
 
 export const generateStyleQuery = (description: string, styleTags: string[]) =>
   Effect.gen(function* () {
-    const gemini = yield* GeminiService;
+    const inference = yield* InferenceService;
     const prompt = `Given this clothing item description: "${description}" and style tags: "${styleTags.join(
       ", "
     )}", generate a search query to find compatible items in a wardrobe. Return just the query string.`;
 
-    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, prompt);
+    const result = yield* inference.generateContent(prompt);
     return result.response.text().trim();
   }).pipe(withRetries);
 
@@ -102,7 +102,7 @@ export const evaluateCompatibility = (input: {
   memoryContext: Array<{ fact: string; relation: string; relevance: number | null }>;
 }) =>
   Effect.gen(function* () {
-    const gemini = yield* GeminiService;
+    const inference = yield* InferenceService;
     const schema: Schema = {
       type: SchemaType.OBJECT,
       properties: {
@@ -169,7 +169,7 @@ Return JSON with keys:
 - best_pairings (array of indices): Which wardrobe items it pairs best with
 - worst_clashes (array of indices): Which wardrobe items it clashes with most (if any)`;
 
-    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+    const result = yield* inference.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",
@@ -182,7 +182,7 @@ Return JSON with keys:
 
 export const analyzeSelfie = (base64: string) =>
   Effect.gen(function* () {
-    const gemini = yield* GeminiService;
+    const inference = yield* InferenceService;
     const schema: Schema = {
       type: SchemaType.OBJECT,
       properties: {
@@ -197,7 +197,7 @@ export const analyzeSelfie = (base64: string) =>
     const prompt =
       "Analyze only visible color characteristics that can help coordinate clothing. Extract approximate skin tone, complexion/undertone notes, hair color, and a tentative color season. Do not infer profession, personality, lifestyle, gender identity, or style taste from the face. Return JSON: { skin_tone, complexion, hair_color, color_season }.";
 
-    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+    const result = yield* inference.generateContent({
       contents: [
         {
           role: "user",
@@ -224,8 +224,8 @@ export type FitCheckKind = "daily_fit_check" | "try_on";
 export const FIT_CHECK_CONTENT_BLOCK_MESSAGE =
   "This photo could not be analyzed. Try another well-lit photo where your full outfit is visible.";
 
-export const isGeminiContentBlock = (error: unknown) =>
-  /PROHIBITED_CONTENT|prompt was blocked|response was blocked|finishReason.*SAFETY/i.test(
+export const isInferenceContentBlock = (error: unknown) =>
+  (error instanceof InferenceError && error.code === "content_blocked") || /PROHIBITED_CONTENT|prompt was blocked|response was blocked|finishReason.*SAFETY/i.test(
     toErrorMessage(error)
   );
 
@@ -281,7 +281,7 @@ export const normalizeBoundingBox = (box: DetectedFitCheckItem["bounding_box"]) 
 
 export const analyzeFitCheckPhoto = (base64: string, type: FitCheckKind, mimeType = "image/jpeg") =>
   Effect.gen(function* () {
-    const gemini = yield* GeminiService;
+    const inference = yield* InferenceService;
     const schema: Schema = {
       type: SchemaType.OBJECT,
       properties: {
@@ -328,11 +328,10 @@ Return JSON only.
 - confidence: 0 to 1.`;
 
     const requestAnalysis = (
-      model: typeof GEMINI_FLASH_LITE_MODEL | "gemini-2.5-flash",
       instruction: string
     ) =>
       Effect.gen(function* () {
-        const result = yield* gemini.generateContent(model, {
+        const result = yield* inference.generateContent({
           contents: [
             {
               role: "user",
@@ -356,10 +355,10 @@ Return JSON only.
 
     const fallbackPrompt = `${prompt}
 This is a wardrobe cataloging task. Focus narrowly on fabric, color, silhouette, and garment boundaries; produce no commentary about the wearer.`;
-    const parsed = yield* requestAnalysis(GEMINI_FLASH_LITE_MODEL, prompt).pipe(
+    const parsed = yield* requestAnalysis(prompt).pipe(
       Effect.catch((error) =>
-        isGeminiContentBlock(error)
-          ? requestAnalysis("gemini-2.5-flash", fallbackPrompt)
+        isInferenceContentBlock(error)
+          ? requestAnalysis(fallbackPrompt)
           : Effect.fail(error)
       )
     );
@@ -381,7 +380,7 @@ This is a wardrobe cataloging task. Focus narrowly on fabric, color, silhouette,
 
 export const generateClosetBio = (items: { category: string; description: string; style_tags: string[] }[]) =>
   Effect.gen(function* () {
-    const gemini = yield* GeminiService;
+    const inference = yield* InferenceService;
     const schema: Schema = {
       type: SchemaType.OBJECT,
       properties: {
@@ -401,7 +400,7 @@ ${items
   )
   .join("\n")}`;
 
-    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+    const result = yield* inference.generateContent({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       generationConfig: {
         responseMimeType: "application/json",

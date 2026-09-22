@@ -1,6 +1,6 @@
 import { Data, Effect, Schema, Schedule } from "effect";
 
-import { GeminiError, GeminiService } from "../../services/GeminiService";
+import { InferenceError, InferenceService } from "../../services/InferenceService";
 import { modelResponses } from "./modelResponses";
 
 export class ModelResponseError extends Data.TaggedError("ModelResponseError")<{ message: string; operation: string }> {}
@@ -11,7 +11,7 @@ export const parseJson = <L extends keyof typeof modelResponses>(text: string, l
 });
 
 export const withRetries = <A, E, R>(effect: Effect.Effect<A, E, R>, attempts = 3) =>
-  effect.pipe(Effect.retry({ times: attempts - 1, schedule: Schedule.exponential("500 millis"), while: error => error instanceof GeminiError && error.retryable }));
+  effect.pipe(Effect.retry({ times: attempts - 1, schedule: Schedule.exponential("500 millis"), while: error => error instanceof InferenceError && error.retryable }));
 
 export const toErrorMessage = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
@@ -37,18 +37,18 @@ export const fetchImageBase64 = async (imageUrl: string) => {
 
 export const embedText = (text: string) =>
   Effect.gen(function* () {
-    const gemini = yield* GeminiService;
-    const result = yield* gemini.embedContent(text);
+    const inference = yield* InferenceService;
+    const result = yield* inference.embedContent(text);
     return result.embedding.values;
   }).pipe(withRetries);
 
 export const embedImage = (base64: string, mimeType: string, context?: string) =>
   Effect.gen(function* () {
-    const gemini = yield* GeminiService;
+    const inference = yield* InferenceService;
     const parts = [
       ...(context ? [{ text: context }] : []),
       { inlineData: { data: base64, mimeType } },
     ];
-    const result = yield* gemini.embedContent(parts);
+    const result = yield* inference.embedContent(parts);
     return result.embedding.values;
   }).pipe(withRetries);

@@ -16,7 +16,7 @@ import {
 } from "@wardrobe/shared";
 import { getConvexAuth } from "@/server/auth";
 import { runInference } from "@/lib/run-effect";
-import { GeminiService } from "@/services/GeminiService";
+import { InferenceService } from "@/services/InferenceService";
 import { projectPlanningItems } from "./planningProjection";
 
 export class PlanningError extends RequestFailure {
@@ -179,8 +179,8 @@ async function calendarDay(
 export async function generateJson(prompt: string, maxOutputTokens = 4096) {
   const result = await runInference(
     Effect.gen(function* () {
-      const gemini = yield* GeminiService;
-      return yield* gemini.generateContent("gemini-2.5-flash", {
+      const inference = yield* InferenceService;
+      return yield* inference.generateContent({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
           responseMimeType: "application/json",

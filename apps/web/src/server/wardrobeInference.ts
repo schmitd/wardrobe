@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { SchemaType, type Schema } from "@google/generative-ai";
+import { SchemaType, type JsonSchema as Schema } from "@/services/InferenceService";
 import type { Id } from "@convex/_generated/dataModel";
 import { fetchMutation, fetchQuery } from "convex/nextjs";
 
@@ -13,9 +13,8 @@ import {
 } from "@/lib/inferenceOutputGuards";
 import { runInference } from "@/lib/run-effect";
 import {
-  GEMINI_FLASH_LITE_MODEL,
-  GeminiService,
-} from "@/services/GeminiService";
+  InferenceService,
+} from "@/services/InferenceService";
 import {
   embedImage,
   embedText,
@@ -45,9 +44,9 @@ const fetchWithRetry = async <T>(
   throw lastError;
 };
 
-const analyzeImageTags = (base64: string) =>
+export const analyzeImageTags = (base64: string) =>
   Effect.gen(function* () {
-    const gemini = yield* GeminiService;
+    const inference = yield* InferenceService;
     const schema: Schema = {
       type: SchemaType.OBJECT,
       properties: {
@@ -60,7 +59,7 @@ const analyzeImageTags = (base64: string) =>
       required: ["style_tags"],
     };
 
-    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+    const result = yield* inference.generateContent({
       contents: [
         {
           role: "user",
@@ -93,12 +92,12 @@ const analyzeImageTags = (base64: string) =>
     };
   }).pipe(withRetries);
 
-const analyzeImageDescription = (
+export const analyzeImageDescription = (
   base64: string,
   context?: { category?: string | null; styleTags?: string[] | null }
 ) =>
   Effect.gen(function* () {
-    const gemini = yield* GeminiService;
+    const inference = yield* InferenceService;
     const schema: Schema = {
       type: SchemaType.OBJECT,
       properties: {
@@ -120,7 +119,7 @@ The description must be no more than ${ITEM_DESCRIPTION_WORD_LIMIT} words.
 Keep category short and specific.
 ${contextTags} ${contextCategory}`.trim();
 
-    const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+    const result = yield* inference.generateContent({
       contents: [
         {
           role: "user",

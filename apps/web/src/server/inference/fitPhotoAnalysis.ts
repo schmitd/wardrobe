@@ -2,11 +2,11 @@ import sharp from "sharp";
 import { Cause, Effect, Schedule } from "effect";
 import {
   SchemaType,
-  type Schema,
-  type Part,
+  type JsonSchema as Schema,
+  type ContentPart as Part,
   type GenerationConfig,
-} from "@google/generative-ai";
-import { GeminiError, GeminiService } from "@/services/GeminiService";
+} from "@/services/InferenceService";
+import { INFERENCE_MODEL, InferenceError, InferenceService } from "@/services/InferenceService";
 import { sanitizeStyleTags, truncateWords } from "@/lib/inferenceOutputGuards";
 import {
   cropGarmentRegion,
@@ -14,17 +14,13 @@ import {
 } from "../garmentIdentity";
 import { parseJson, ModelResponseError } from "./shared";
 
-export const FIT_DETECTOR_MODEL = "gemini-2.5-flash" as const;
-export const FIT_DETECTOR_VERSION = "outfit-focus-context-verification-v2";
+export const FIT_DETECTOR_MODEL = INFERENCE_MODEL;
+export const FIT_DETECTOR_VERSION = "luna-outfit-focus-context-verification-v3";
 // Leave half of the mobile route's 180-second budget for embeddings and writes.
 export const FIT_LOCALIZATION_TIMEOUT_MS = 90_000;
 const MAX_FIT_ITEMS = 12;
-export const FIT_VISION_CONFIG: GenerationConfig & {
-  thinkingConfig: { thinkingBudget: number };
-} = {
-  temperature: 0,
+export const FIT_VISION_CONFIG: GenerationConfig = {
   maxOutputTokens: 4096,
-  thinkingConfig: { thinkingBudget: 0 },
 };
 const roles = [
   "top",
@@ -79,8 +75,8 @@ export type FitItem = {
   bounding_box: NormalizedBoundingBox;
   confidence: number;
 };
-/** Gemini's trained localization convention is [ymin, xmin, ymax, xmax]/1000. */
-export function boxFromGemini(
+/** The localization output contract is [ymin, xmin, ymax, xmax]/1000. */
+export function boxFromModel(
   value: unknown,
 ): NormalizedBoundingBox | undefined {
   if (
@@ -152,7 +148,7 @@ export function parseFitItems(
       !item.description.trim()
     )
       return [];
-    const box = boxFromGemini(item.box_2d);
+    const box = boxFromModel(item.box_2d);
     if (
       !box ||
       typeof item.confidence !== "number" ||
@@ -251,7 +247,7 @@ export const analyzeFitPhoto = (
   trace: { traceId?: string; traceparent?: string } = {},
 ) =>
   Effect.gen(function* () {
-    const gemini = yield* GeminiService;
+    const inference = yield* InferenceService;
     const started = Date.now();
     // Strip EXIF and orient once BEFORE vision. All boxes, zooms and final crops
     // refer to this same upright pixel space, on both native and web uploads.
@@ -262,8 +258,8 @@ export const analyzeFitPhoto = (
         .toBuffer(),
     );
     const request = <L extends "fitLocalization" | "fitCropVerification">(parts: Part[], schema: Schema, label: L) =>
-      gemini
-        .generateContent(FIT_DETECTOR_MODEL, {
+      inference
+        .generateContent({
           contents: [{ role: "user", parts }],
           generationConfig: {
             ...FIT_VISION_CONFIG,
@@ -276,7 +272,7 @@ export const analyzeFitPhoto = (
             parseJson(r.response.text(), label),
           ),
           Effect.timeout("25 seconds"),
-          Effect.retry({ times: 1, schedule: Schedule.exponential("500 millis"), while: (error) => Cause.isTimeoutError(error) || (error instanceof GeminiError && error.retryable) }),
+          Effect.retry({ times: 1, schedule: Schedule.exponential("500 millis"), while: (error) => Cause.isTimeoutError(error) || (error instanceof InferenceError && error.retryable) }),
         );
     const detect = (image: Buffer, instruction = prompt) =>
       request(
@@ -294,7 +290,7 @@ export const analyzeFitPhoto = (
       );
     const first = yield* detect(source);
     const initialItems = parseFitItems(first.items);
-    const outfitBox = boxFromGemini(first.outfit_box);
+    const outfitBox = boxFromModel(first.outfit_box);
     let scene = source;
     let region = { x: 0, y: 0, width: 1, height: 1 };
     let detection = first;
@@ -334,7 +330,8 @@ export const analyzeFitPhoto = (
           {
             text: `The first image is the upright original photo; subsequent images are numbered candidate crops. Compare each crop with the original photo and check it independently against its label. Do not assume the label is true. contains_item means the named garment/accessory is actually visible. well_framed means the crop includes the visible item extent, not just a fragment at an edge, and is centered on the item rather than adjacent body/background. A watch crop showing mostly arm with a sliver of watch is NOT well_framed. Use the original photo to distinguish natural occlusion from crop-induced cutoff: a crop must include the full visible extent in the original, even when the crop alone looks plausible. Natural occlusion in the photo is acceptable, crop-induced cutoff is not. Return exactly one check for each index.`,
           },
-          { inlineData: { data: source.toString("base64"), mimeType: "image/jpeg" } },
+          // The original-photo prefix is reused by the crop repair verification pass.
+          { inlineData: { data: source.toString("base64"), mimeType: "image/jpeg" }, cache: "reuse" },
         ];
         for (const [index, item] of candidates.entries()) {
           const crop = yield* Effect.tryPromise(() =>

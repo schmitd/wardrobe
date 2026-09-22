@@ -2,10 +2,10 @@ import { describe, expect, it } from "bun:test";
 import sharp from "sharp";
 import { Cause, Deferred, Effect, Fiber, Layer, Result } from "effect";
 import { TestClock } from "effect/testing";
-import { GeminiService } from "@/services/GeminiService";
+import { InferenceService } from "@/services/InferenceService";
 import {
   analyzeFitPhoto,
-  boxFromGemini,
+  boxFromModel,
   detailRegion,
   focusOutfit,
   mapBox,
@@ -41,8 +41,8 @@ function service(responses: unknown[]) {
   const calls: unknown[] = [];
   return {
     calls,
-    layer: Layer.succeed(GeminiService, {
-      generateContent: (_model, request) => {
+    layer: Layer.succeed(InferenceService, {
+      generateContent: (request) => {
         calls.push(request);
         if (!responses.length)
           return Effect.die("Unexpected extra vision call");
@@ -53,12 +53,13 @@ function service(responses: unknown[]) {
       },
       embedContent: () => Effect.die("No embedding before verification"),
       batchEmbedContents: () => Effect.die("Unexpected embedding"),
+      transcribe: () => Effect.die("Unexpected transcription"),
     }),
   };
 }
 describe("fit localization geometry", () => {
   it("converts y/x corners without interpreting them as x/y/width/height", () => {
-    expect(boxFromGemini([200, 300, 250, 380])).toEqual({
+    expect(boxFromModel([200, 300, 250, 380])).toEqual({
       x: 0.3,
       y: 0.2,
       width: 0.08,
@@ -73,7 +74,7 @@ describe("fit localization geometry", () => {
       [-1, 0, 500, 500],
       [0, 0, 1001, 500],
     ])
-      expect(boxFromGemini(value)).toBeUndefined();
+      expect(boxFromModel(value)).toBeUndefined();
   });
   it("maps close-view coordinates back onto the original image", () => {
     expect(
@@ -146,10 +147,10 @@ describe("automatic fit analysis", () => {
     expect(result.items).toHaveLength(1);
     const focused = await focusOutfit(
       Buffer.from(await source(), "base64"),
-      detailRegion(boxFromGemini(item().box_2d)!),
+      detailRegion(boxFromModel(item().box_2d)!),
     );
     expect(result.items[0].bounding_box).toEqual(
-      mapBox(boxFromGemini([700, 300, 750, 380])!, focused.region),
+      mapBox(boxFromModel([700, 300, 750, 380])!, focused.region),
     );
     expect(s.calls).toHaveLength(4);
   });
@@ -201,8 +202,8 @@ describe("automatic fit analysis", () => {
     const bytes = await source();
     const accepted = item([400, 400, 600, 600]);
     const misplaced = item([400, 600, 600, 800]);
-    const target = boxFromGemini(accepted.box_2d)!;
-    const { region } = await focusOutfit(Buffer.from(bytes, "base64"), detailRegion(boxFromGemini(misplaced.box_2d)!));
+    const target = boxFromModel(accepted.box_2d)!;
+    const { region } = await focusOutfit(Buffer.from(bytes, "base64"), detailRegion(boxFromModel(misplaced.box_2d)!));
     const repairedBox = [
       (target.y - region.y) / region.height * 1000,
       (target.x - region.x) / region.width * 1000,
@@ -261,7 +262,7 @@ describe("localization provider boundaries", () => {
     await Effect.runPromise(Effect.gen(function* () {
       const stages = yield* Effect.forEach([0, 1, 2, 3], () => Deferred.make<void>());
       const responses = [detection([], [100, 100, 900, 900]), detection([item()]), checked(false)];
-      const slow = Layer.succeed(GeminiService, {
+      const slow = Layer.succeed(InferenceService, {
         generateContent: () => Effect.gen(function* () {
           const index = calls++;
           yield* Deferred.succeed(stages[index], undefined);
@@ -270,6 +271,7 @@ describe("localization provider boundaries", () => {
         }),
         embedContent: () => Effect.die("Unexpected embedding"),
         batchEmbedContents: () => Effect.die("Unexpected embedding"),
+        transcribe: () => Effect.die("Unexpected transcription"),
       });
       const fiber = yield* analyzeFitPhoto(bytes, "daily_fit_check").pipe(Effect.provide(slow), Effect.result, Effect.forkChild);
       for (let index = 0; index < 3; index++) {

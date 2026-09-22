@@ -1,10 +1,10 @@
 import { analyzeFitPhoto, FIT_DETECTOR_MODEL, FIT_VISION_CONFIG } from "@/server/inference/fitPhotoAnalysis";
 import { getConvexAuth, enforceAuthenticatedProtection, type ConvexAuthContext } from "@/server/auth";
-import { analyzeImageFull, analyzeInspirationImage, generateStyleQuery, evaluateCompatibility, analyzeSelfie, type FitCheckKind, FIT_CHECK_CONTENT_BLOCK_MESSAGE, isGeminiContentBlock, type RecordFitCheckItemInput, normalizeBoundingBox, analyzeFitCheckPhoto, generateClosetBio, generateMaintainedStyleBio, cosineSimilarity } from "@/server/inference/analysis";
+import { analyzeImageFull, analyzeInspirationImage, generateStyleQuery, evaluateCompatibility, analyzeSelfie, type FitCheckKind, FIT_CHECK_CONTENT_BLOCK_MESSAGE, isInferenceContentBlock, type RecordFitCheckItemInput, normalizeBoundingBox, analyzeFitCheckPhoto, generateClosetBio, generateMaintainedStyleBio, cosineSimilarity } from "@/server/inference/analysis";
 import { uploadPhotoFile } from "@/services/photoUpload";
 
 import { Effect, Result } from "effect";
-import { SchemaType, type Schema } from "@google/generative-ai";
+import { SchemaType, type JsonSchema as Schema } from "@/services/InferenceService";
 import type { Id } from "@convex/_generated/dataModel";
 import { fetchAction, fetchMutation, fetchQuery } from "convex/nextjs";
 import { api } from "@convex/_generated/api";
@@ -14,9 +14,9 @@ import { runServerAction, runInference } from "@/lib/run-effect";
 import { ensureTraceContext } from "@/lib/trace";
 import { ArcjetLive, ArcjetService } from "@/services/ArcjetService";
 import {
-  GEMINI_FLASH_LITE_MODEL,
-  GeminiService,
-} from "@/services/GeminiService";
+  INFERENCE_MODEL,
+  InferenceService,
+} from "@/services/InferenceService";
 import {
   embedImage,
   embedText,
@@ -292,9 +292,9 @@ Return JSON only with capture_scope, confidence, rationale, visible_garment_coun
 - rationale must be a short, plain explanation of the clothing evidence, never a description of the person.`;
 
   const routed = await runInference(
-    GeminiService.pipe(
-      Effect.flatMap((gemini) =>
-        gemini.generateContent(FIT_DETECTOR_MODEL, {
+    InferenceService.pipe(
+      Effect.flatMap((inference) =>
+        inference.generateContent({
           contents: [
             {
               role: "user",
@@ -583,7 +583,7 @@ export const completeGuestOnboardingAction = async (input: {
                   visualEmbedding: result.visualEmbedding,
                   semanticEmbedding: result.embedding,
                   embeddingModel: "gemini-embedding-2@768",
-                  detectorModel: GEMINI_FLASH_LITE_MODEL,
+                  detectorModel: INFERENCE_MODEL,
                   resolutionStatus: "auto_matched" as const,
                   matchScore: 1,
                   matchMargin: 1,
@@ -1476,12 +1476,12 @@ export const analyzeGuestFitCheckAction = async (input: {
     console.warn("guest.fit_check.analysis_failed", {
       traceId,
       traceparent,
-      code: isGeminiContentBlock(message) ? "content_blocked" : "analysis_failed",
+      code: isInferenceContentBlock(analysisOutcome.failure) ? "content_blocked" : "analysis_failed",
       message,
     });
     return {
       kind: "error",
-      message: isGeminiContentBlock(message)
+      message: isInferenceContentBlock(analysisOutcome.failure)
         ? FIT_CHECK_CONTENT_BLOCK_MESSAGE
         : "We could not analyze this photo right now. Please try again.",
     };
