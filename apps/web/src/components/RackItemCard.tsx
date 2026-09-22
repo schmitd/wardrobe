@@ -118,20 +118,16 @@ export default function RackItemCard({
           </svg>
           <svg
             className="rack-piece-hanger"
-            viewBox="0 0 100 60"
+            viewBox="0 0 100 66"
             aria-hidden="true"
           >
             <path
               className="rack-piece-hook"
-              d="M45 12C42 2 59 1 57 11C56 15 50 16 50 21V26"
+              d="M46 12C42 5 49 0 54 4C61 10 53 16 50 20V28"
             />
             <path
-              className="rack-piece-wood"
-              d="M46 25Q50 21 54 25L91 43Q95 47 90 49Q70 50 53 44Q50 43 47 44Q30 50 10 49Q5 47 9 43Z"
-            />
-            <path
-              className="rack-piece-grain"
-              d="M12 45L46 28Q50 26 54 28L88 45"
+              className="rack-piece-frame"
+              d="M50 28C43 28 37 31 31 35L7 47Q3 49 4 53Q4 56 8 56H92Q96 56 96 52Q96 49 93 47L69 35C63 31 57 28 50 28Z"
             />
           </svg>
           <div className="rack-piece-photo">

@@ -36,7 +36,7 @@ Avoid fashion editorial layouts, generic SaaS/dashboard templates, and common AI
 
 ## Design Principles
 
-Keep the rack metaphor central where it helps recognition: item rack cards should continue to read like shirts on hangers (upright compact cards in the catalog; sideways cards may remain in other surfaces), with softly shaded wooden hangers and physical hang tags. Collection circles show an ensemble of their actual pieces or inspiration; use a quiet folder only when no preview is available.
+Keep the rack metaphor central where it helps recognition: item rack cards should continue to read like shirts on hangers (upright compact cards in the catalog; sideways cards may remain in other surfaces), with slim neutral hangers and physical hang tags. The upright hanger is a complete closed outline with an empty center, layered behind the item photo. Collection circles show an ensemble of their actual pieces or inspiration; use a quiet folder only when no preview is available.
 
 Make the interface playful through product-specific structure, not through arbitrary decoration. The clothing metaphor should explain the screen and make it memorable.
 

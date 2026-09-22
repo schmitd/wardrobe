@@ -7,7 +7,7 @@ This follows the September 21 design review and [product program #60](https://gi
 ## Review the interaction
 
 - Wardrobe begins with compact editable style notes, then a horizontal collection rail. Collection circles compose actual member photos into small ensembles; empty collections use a quiet folder. Collections have immediate Pieces and Inspiration views, an edit control, and an Add from wardrobe picker.
-- The entire shirt-shaped card opens its drawer. Labels, Collections, and My note are distinct; Manage changes membership and Save note persists the personal note. Warm wooden hangers, lightly tinted garment silhouettes, and shaped hanging tags follow the approved render. Tags carry a collection affordance and an actual note indicator; the caption names the piece.
+- The entire shirt-shaped card opens its drawer. Labels, Collections, and My note are distinct; Manage changes membership and Save note persists the personal note. Slim neutral gray hangers have a complete closed outline with an empty center, layered behind the garment photo so pieces overlap naturally. Lightly tinted garment silhouettes and shaped hanging tags retain the approved render's styling. Tags carry a collection affordance and an actual note indicator; the caption names the piece.
 - Fits opens with Plan / Diary. Plan shows today plus six days, a description/dictation entry, nearby calendar context, and one selected outfit. The global Add action serves capture; duplicate upload cards are removed.
 - Relevant collections are recalled automatically when generating a reviewed day or week. Already planned/worn outfits remain protected. Past planned outfits can still be corrected from Diary.
 
@@ -15,7 +15,9 @@ This follows the September 21 design review and [product program #60](https://gi
 | --- | --- | --- |
 | ![Wardrobe on a phone](wardrobe-mobile.png) | ![Item labels, collections, and note](item-drawer-mobile.png) | ![Near-term outfit Plan](plan-mobile.png) |
 
-[Approved render](approved-render.png) · [Desktop Wardrobe](wardrobe-desktop.png)
+[Original approved render](approved-render.png) · [Desktop Wardrobe](wardrobe-desktop.png)
+
+The screenshots include the September 22 refinement: thin neutral hangers with an open center replace the original render's filled wooden shoulders, following David's real hanger reference.
 
 Screenshots and the standalone gallery use synthetic garment illustrations, account data, and calendar events. The gallery renders the real components and stylesheet; external auth, storage, provider calls, and persistence boundaries are simulated. The application uses authenticated Convex functions, not gallery state.
 

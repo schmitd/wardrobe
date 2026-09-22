@@ -746,17 +746,16 @@ h4 {
 .collection-ensemble-piece--2 { left:32%; top:36%; height:63%; transform:rotate(-3deg); z-index:3; }
 .collection-ensemble--1 .collection-ensemble-piece { width:80%; height:90%; left:10%; top:5%; transform:rotate(-5deg); }
 .collection-piece-grid { padding-top:13px; row-gap:26px; }
-/* Upright garment silhouette, warm wood hanger, and a real hanging paper tag. */
+/* A complete open-center hanger sits behind the garment photo and paper tag. */
 .rack-piece { --rack-item-accent:#d7c8b9; position:relative; width:100%; min-width:0; color:var(--rack-ink); }
 .rack-piece-stage { position:relative; aspect-ratio:.85; isolation:isolate; }
 .rack-piece-silhouette { position:absolute; inset:0; width:100%; height:100%; overflow:visible; filter:drop-shadow(0 2px 2px rgb(36 20 38 / .07)); }
 .rack-piece-silhouette path { fill:color-mix(in srgb,var(--rack-item-accent) 13%,#f7f5f2); stroke:#e3dde3; stroke-width:1; vector-effect:non-scaling-stroke; stroke-linejoin:round; }
-.rack-piece-hanger { position:absolute; width:61%; height:auto; top:-13px; left:19.5%; z-index:1; overflow:visible; }
-.rack-piece-hook { fill:none; stroke:#493b34; stroke-width:1.65; stroke-linecap:round; }
-.rack-piece-wood { fill:#b2967e; stroke:#785f50; stroke-width:.9; stroke-linejoin:round; filter:drop-shadow(0 1px 1px rgb(36 20 38 / .15)); }
-.rack-piece-grain { fill:none; stroke:#d2bda7; stroke-width:1; opacity:.8; }
+.rack-piece-hanger { position:absolute; width:86%; height:auto; top:-13px; left:7%; z-index:1; overflow:visible; }
+.rack-piece-hook, .rack-piece-frame { fill:none; stroke:#666; stroke-linecap:round; stroke-linejoin:round; vector-effect:non-scaling-stroke; }
+.rack-piece-hook { stroke-width:1.6; }
+.rack-piece-frame { stroke-width:2.2; }
 .rack-piece-photo { position:absolute; inset:12% 5% 0; z-index:2; }
-.rack-piece-photo img { mix-blend-mode:multiply; }
 .rack-piece-tag { position:absolute; z-index:3; right:3px; top:8px; width:34px; height:53px; transform:rotate(4deg); filter:drop-shadow(1px 2px 1px rgb(36 20 38 / .22)); }
 .rack-piece-tag-outline { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
 .rack-piece-tag-cord { fill:none; stroke:#9a8570; stroke-width:1; }
