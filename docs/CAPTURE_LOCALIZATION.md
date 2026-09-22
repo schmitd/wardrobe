@@ -7,8 +7,8 @@ The user should take one photo and receive a decomposed outfit. Manual recroppin
 ## Pipeline
 
 1. Route worn multi-piece outfits to decomposition, including distant/partial outfits. Preserve an explicitly identified catalog pair or coordinated set as one catalog item. Unknown routing never silently creates a generic catalog item.
-2. Normalize EXIF orientation before detection. Use Gemini 2.5 Flash with thinking disabled for bounded localization latency, instead of Flash Lite's free-form xywh predictions.
-3. Use Google's documented `[ymin, xmin, ymax, xmax] / 1000` box convention. Reject malformed/degenerate geometry rather than converting it to a one-pixel crop.
+2. Normalize EXIF orientation before detection. Use GPT-6 Luna with reasoning disabled for bounded localization latency.
+3. Retain the existing `[ymin, xmin, ymax, xmax] / 1000` box convention. Reject malformed/degenerate geometry rather than converting it to a one-pixel crop.
 4. Detect the outfit extent, extract a closer view from original pixels, and detect individual garments in that view. Map coordinates back using the exact integer extraction rectangle.
 5. Independently inspect the resulting garment crops alongside the upright original, so the verifier can detect crop-induced cutoff rather than approving a plausible fragment. Failed items receive an automatic contextual close-up and one re-localization pass, followed by another check. Limit refinement to four items with concurrency two. No user decision screen is added.
 6. Only verified crops enter garment matching/storage. Keep the original photo. Render garment images without a second destructive cover crop.

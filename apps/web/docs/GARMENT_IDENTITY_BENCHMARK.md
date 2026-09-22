@@ -40,7 +40,7 @@ bun run --cwd apps/web benchmark:garment-identity --fixtures=/absolute/path/to/f
 Embedding policy plus live direct comparison:
 
 ```sh
-GEMINI_API_KEY=... bun run --cwd apps/web benchmark:garment-identity --fixtures=/absolute/path/to/fixtures.json --model
+OPENAI_API_KEY=... GEMINI_API_KEY=... bun run --cwd apps/web benchmark:garment-identity --fixtures=/absolute/path/to/fixtures.json --model
 ```
 
 To estimate dollars from observed token usage, also provide current prices rather than baking volatile prices into code:
@@ -48,7 +48,7 @@ To estimate dollars from observed token usage, also provide current prices rathe
 ```sh
 BENCHMARK_INPUT_USD_PER_MILLION_TOKENS=... \
 BENCHMARK_OUTPUT_USD_PER_MILLION_TOKENS=... \
-GEMINI_API_KEY=... \
+OPENAI_API_KEY=... GEMINI_API_KEY=... \
 bun run --cwd apps/web benchmark:garment-identity --fixtures=/absolute/path/to/fixtures.json --model
 ```
 

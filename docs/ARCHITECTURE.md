@@ -23,7 +23,7 @@ The exact Confect package source is the API authority for this prerelease. See [
 | Generated adapters | `apps/web/confect/_generated`, `apps/web/convex` |
 | Transport and deterministic planning contracts | `packages/shared/src` |
 
-Use Context services and Layers for capabilities and scoped dependencies, typed errors for recoverable failures, and schemas at untrusted boundaries. Provider inference uses the shared ManagedRuntime with a memoized Gemini layer and telemetry. Never memoize a user's identity in a process-wide Layer. Pass authenticated context only inside server modules; context-taking helpers must not be exported from a `use server` module.
+Use Context services and Layers for capabilities and scoped dependencies, typed errors for recoverable failures, and schemas at untrusted boundaries. Provider inference uses the shared ManagedRuntime with memoized Luna generation and Google embedding capabilities plus telemetry. Never memoize a user's identity in a process-wide Layer. Pass authenticated context only inside server modules; context-taking helpers must not be exported from a `use server` module.
 
 Confect owns all function specs and table schemas. Storage, upload finalization, deletion, migration, and scheduled style-memory execution use Effect implementations. Existing domain functions use Confect's supported native Convex interop so public function paths and validators survive the migration. `legacy` denotes that adapter boundary, not dead code. Move a domain to Effect when changing its I/O/error behavior; do not mechanically wrap pure transforms or React state.
 

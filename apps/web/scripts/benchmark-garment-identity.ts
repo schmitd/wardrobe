@@ -1,7 +1,7 @@
 import { resolve, dirname, extname } from "node:path";
 import { Effect } from "effect";
 
-import { GeminiLive } from "@/services/GeminiService";
+import { InferenceLive } from "@/services/InferenceService";
 import {
   applyDirectGarmentComparison,
   classifyGarmentMatch,
@@ -76,8 +76,8 @@ const runModel = process.argv.includes("--model");
 if (!fixtureArgument) {
   throw new Error("Usage: bun run benchmark:garment-identity --fixtures=path/to/fixtures.json [--model]");
 }
-if (runModel && !process.env.GEMINI_API_KEY) {
-  throw new Error("--model requires GEMINI_API_KEY. No model benchmark was run.");
+if (runModel && (!process.env.OPENAI_API_KEY || !process.env.GEMINI_API_KEY)) {
+  throw new Error("--model requires OPENAI_API_KEY and GEMINI_API_KEY. No model benchmark was run.");
 }
 
 const fixturePath = resolve(process.cwd(), fixtureArgument);
@@ -133,7 +133,7 @@ for (const benchmarkCase of cases) {
     }))
   );
   const comparison = await Effect.runPromise(
-    compareGarmentCrops({ query, candidates: modelCandidates }).pipe(Effect.provide(GeminiLive))
+    compareGarmentCrops({ query, candidates: modelCandidates }).pipe(Effect.provide(InferenceLive))
   );
   directComparisonLatencyMs.push(performance.now() - comparisonStart);
   modelCalls += 1;
@@ -185,6 +185,6 @@ console.log(JSON.stringify({
   } : {
     skipped: true,
     eligibleCases: fallbackEligibleCases,
-    reason: "Pass --model with GEMINI_API_KEY to measure model-backed comparison.",
+    reason: "Pass --model with OPENAI_API_KEY to measure model-backed comparison.",
   },
 }, null, 2));

@@ -5,7 +5,7 @@ import { ActionCtx } from "./_generated/services";
 import schema from "./_generated/schema";
 import spec from "./styleMemory.spec";
 import { generateMaintainedStyleBio } from "../src/server/inference/styleBio";
-import { GeminiLive } from "../src/services/GeminiService";
+import { InferenceLive } from "../src/services/InferenceService";
 import { truncateWords } from "../src/lib/inferenceOutputGuards";
 import { searchStyleBioGraphContext } from "./legacy/zep";
 
@@ -21,7 +21,7 @@ const refresh = FunctionImpl.make(schema, spec, "refresh", ({ userId }): Effect.
     const graphFacts = yield* Effect.tryPromise({ try: () => searchStyleBioGraphContext(userId), catch: () => new Error("Style graph unavailable") }).pipe(Effect.timeout("10 seconds"), Effect.catch(() => Effect.succeed([] as string[])));
     const generated = context.counts.closetItemCount + context.counts.fitCheckCount + context.counts.collectionCount === 0
       ? { bio: manualAnchor || currentBio || "I'm building a clearer picture of what I like to wear. As my closet and outfit notes grow, this space will track the colors, shapes, textures, and combinations I return to without guessing ahead of the evidence." }
-      : yield* generateMaintainedStyleBio({ currentBio, manualAnchor, refreshReason: context.refreshReason, closetItems: context.closetItems, recentFits: context.recentFits, collections: context.collections, graphFacts }).pipe(Effect.provide(GeminiLive));
+      : yield* generateMaintainedStyleBio({ currentBio, manualAnchor, refreshReason: context.refreshReason, closetItems: context.closetItems, recentFits: context.recentFits, collections: context.collections, graphFacts }).pipe(Effect.provide(InferenceLive));
     yield* Effect.promise(() => ctx.runMutation(internal.styleMemoryData.save, {
       userId, jobRevision: snapshot.revision, bio: truncateWords(generated.bio, 110), reason: context.refreshReason, contextFingerprint: context.fingerprint, ...context.counts,
       ...(context.profile?.bioRevisionId ? { baseRevisionId: context.profile.bioRevisionId } : {}),

@@ -1,6 +1,6 @@
 import { Effect } from "effect";
-import { SchemaType, type Schema } from "@google/generative-ai";
-import { GeminiService, GEMINI_FLASH_LITE_MODEL } from "../../services/GeminiService";
+import { SchemaType, type JsonSchema as Schema } from "../../services/InferenceService";
+import { InferenceService } from "../../services/InferenceService";
 import { parseJson, withRetries } from "./shared";
 export const generateMaintainedStyleBio = (input: {
   currentBio: string;
@@ -11,7 +11,7 @@ export const generateMaintainedStyleBio = (input: {
   collections: { name: string; description: string | null; memberCount: number }[];
   graphFacts: string[];
 }) => Effect.gen(function* () {
-  const gemini = yield* GeminiService;
+  const inference = yield* InferenceService;
   const schema: Schema = {
     type: SchemaType.OBJECT,
     properties: { bio: { type: SchemaType.STRING } },
@@ -35,7 +35,7 @@ RECENT FITS: ${JSON.stringify(input.recentFits)}
 COLLECTIONS: ${JSON.stringify(input.collections)}
 GRAPH FACTS: ${JSON.stringify(input.graphFacts)}`;
 
-  const result = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+  const result = yield* inference.generateContent({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     generationConfig: { responseMimeType: "application/json", responseSchema: schema },
   });
