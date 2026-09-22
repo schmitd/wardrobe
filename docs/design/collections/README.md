@@ -1,13 +1,13 @@
 # Wardrobe collections and near-term Plan
 
-Review hold: this is the implementation intended for merge after design review. Keep its PR in draft with `do-not-merge` until David explicitly releases the hold. Auto-merge stays disabled.
+Design review was approved for release on September 22 after adding weight to the neutral hanger and simplifying its rounded hook. The PR proceeds through the required merge and deployment checks.
 
 This follows the September 21 design review and [product program #60](https://github.com/schmitd/wardrobe/issues/60). It supersedes the earlier use of “Plans” for moodboards on the web; existing saved collection records are retained.
 
 ## Review the interaction
 
 - Wardrobe begins with compact editable style notes, then a horizontal collection rail. Collection circles compose actual member photos into small ensembles; empty collections use a quiet folder. Collections have immediate Pieces and Inspiration views, an edit control, and an Add from wardrobe picker.
-- The entire shirt-shaped card opens its drawer. Labels, Collections, and My note are distinct; Manage changes membership and Save note persists the personal note. Slim neutral gray hangers have a complete closed outline with an empty center, layered behind the garment photo so pieces overlap naturally. Lightly tinted garment silhouettes and shaped hanging tags retain the approved render's styling. Tags carry a collection affordance and an actual note indicator; the caption names the piece.
+- The entire shirt-shaped card opens its drawer. Labels, Collections, and My note are distinct; Manage changes membership and Save note persists the personal note. Neutral gray hangers have substantial rounded strokes, a simple curved hook, and a complete closed outline with an empty center, layered behind the garment photo so pieces overlap naturally. Lightly tinted garment silhouettes and shaped hanging tags retain the approved render's styling. Tags carry a collection affordance and an actual note indicator; the caption names the piece.
 - Fits opens with Plan / Diary. Plan shows today plus six days, a description/dictation entry, nearby calendar context, and one selected outfit. The global Add action serves capture; duplicate upload cards are removed.
 - Relevant collections are recalled automatically when generating a reviewed day or week. Already planned/worn outfits remain protected. Past planned outfits can still be corrected from Diary.
 
@@ -17,7 +17,7 @@ This follows the September 21 design review and [product program #60](https://gi
 
 [Original approved render](approved-render.png) · [Desktop Wardrobe](wardrobe-desktop.png)
 
-The screenshots include the September 22 refinement: thin neutral hangers with an open center replace the original render's filled wooden shoulders, following David's real hanger reference.
+The screenshots include the September 22 refinement: neutral hangers with an open center replace the original render's filled wooden shoulders, following David's real hanger reference. The final strokes have more weight and the hook has a simpler rounded curve.
 
 Screenshots and the standalone gallery use synthetic garment illustrations, account data, and calendar events. The gallery renders the real components and stylesheet; external auth, storage, provider calls, and persistence boundaries are simulated. The application uses authenticated Convex functions, not gallery state.
 

@@ -123,7 +123,7 @@ export default function RackItemCard({
           >
             <path
               className="rack-piece-hook"
-              d="M46 12C42 5 49 0 54 4C61 10 53 16 50 20V28"
+              d="M43 11A7 7 0 0 1 57 11C57 17 50 17 50 23V28"
             />
             <path
               className="rack-piece-frame"
