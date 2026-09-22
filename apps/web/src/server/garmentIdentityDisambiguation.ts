@@ -1,7 +1,7 @@
-import { SchemaType, type Schema } from "@google/generative-ai";
+import { SchemaType, type JsonSchema as Schema } from "@/services/InferenceService";
 import { Effect } from "effect";
 
-import { GEMINI_FLASH_LITE_MODEL, GeminiService } from "@/services/GeminiService";
+import { INFERENCE_MODEL, InferenceService } from "@/services/InferenceService";
 import { parseJson } from "@/server/inference/shared";
 import type { DirectGarmentComparison } from "@/server/garmentIdentity";
 
@@ -18,7 +18,7 @@ export type DirectComparisonCandidate = {
 };
 
 export type DirectComparisonResult = DirectGarmentComparison & {
-  model: typeof GEMINI_FLASH_LITE_MODEL;
+  model: typeof INFERENCE_MODEL;
   inputTokens: number | null;
   outputTokens: number | null;
 };
@@ -37,7 +37,7 @@ export const compareGarmentCrops = (input: {
   query: GarmentCropImage;
   candidates: DirectComparisonCandidate[];
 }) => Effect.gen(function* () {
-  const gemini = yield* GeminiService;
+  const inference = yield* InferenceService;
   const candidates = input.candidates.slice(0, 3);
   if (!candidates.length) return yield* Effect.fail(new Error("Direct comparison needs at least one candidate"));
 
@@ -58,7 +58,7 @@ Be conservative. Use -1 when the evidence cannot distinguish similar items.`;
       { inlineData: candidate.image },
     ]),
   ];
-  const generated = yield* gemini.generateContent(GEMINI_FLASH_LITE_MODEL, {
+  const generated = yield* inference.generateContent({
     contents: [{ role: "user", parts }],
     generationConfig: {
       responseMimeType: "application/json",
@@ -74,7 +74,7 @@ Be conservative. Use -1 when the evidence cannot distinguish similar items.`;
       ? Math.max(0, Math.min(1, parsed.confidence))
       : 0,
     rationale: typeof parsed.rationale === "string" ? parsed.rationale.trim().slice(0, 180) : "",
-    model: GEMINI_FLASH_LITE_MODEL,
+    model: INFERENCE_MODEL,
     inputTokens: usage?.promptTokenCount ?? null,
     outputTokens: usage?.candidatesTokenCount ?? null,
   } satisfies DirectComparisonResult;

@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import { resolve } from "node:path";
 import sharp from "sharp";
 import { analyzeFitPhoto } from "../src/server/inference/fitPhotoAnalysis";
-import { GeminiLive, GeminiService } from "../src/services/GeminiService";
+import { InferenceLive, InferenceService } from "../src/services/InferenceService";
 import { cropGarmentRegion } from "../src/server/garmentIdentity";
 import { preparePrivateCaptureOutput } from "./private-capture-output";
 
@@ -37,16 +37,16 @@ if (variant === "distant") {
 if (variant) await Bun.write(`${output}/input.private.jpg`, bytes);
 const result = await Effect.runPromise(
   Effect.gen(function* () {
-    const live = yield* GeminiService;
+    const live = yield* InferenceService;
     let call = 0;
     return yield* analyzeFitPhoto(
       bytes.toString("base64"),
       "daily_fit_check",
     ).pipe(
-      Effect.provideService(GeminiService, {
+      Effect.provideService(InferenceService, {
         ...live,
-        generateContent: (model, request) =>
-          live.generateContent(model, request).pipe(
+        generateContent: (request) =>
+          live.generateContent(request).pipe(
             Effect.tap((response) =>
               Effect.promise(async () => {
                 // Contains image-derived private content; stays in ignored output only.
@@ -59,7 +59,7 @@ const result = await Effect.runPromise(
           ),
       }),
     );
-  }).pipe(Effect.provide(GeminiLive)),
+  }).pipe(Effect.provide(InferenceLive)),
 );
 for (const [i, item] of result.items.entries()) {
   await Bun.write(

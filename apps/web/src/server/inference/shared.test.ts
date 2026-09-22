@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { Effect, Result } from "effect";
-import { GeminiError, GeminiLive, GeminiService } from "../../services/GeminiService";
+import { InferenceError, InferenceLive, InferenceService } from "../../services/InferenceService";
 import { parseJson, withRetries } from "./shared";
 
 test("model response schemas reject malformed provider success payloads", async () => {
@@ -12,23 +12,26 @@ test("model response schemas reject malformed provider success payloads", async 
 
 test("nontransient provider failures are not retried", async () => {
   let calls = 0;
-  await Effect.runPromise(Effect.suspend(() => { calls++; return Effect.fail(new GeminiError(Object.assign(new Error("denied"), { status: 403 }))); }).pipe(withRetries, Effect.result));
+  await Effect.runPromise(Effect.suspend(() => { calls++; return Effect.fail(new InferenceError(Object.assign(new Error("denied"), { status: 403 }))); }).pipe(withRetries, Effect.result));
   expect(calls).toBe(1);
 });
 
-test("interrupting Gemini actually aborts the SDK fetch", async () => {
+test("interrupting Luna actually aborts its HTTP fetch", async () => {
   const originalFetch = globalThis.fetch;
-  const originalKey = process.env.GEMINI_API_KEY;
+  const originalKey = process.env.OPENAI_API_KEY;
+  const originalGoogleKey = process.env.GEMINI_API_KEY;
   process.env.GEMINI_API_KEY = "local-test-only";
+  process.env.OPENAI_API_KEY = "local-test-only";
   let aborted = false;
   globalThis.fetch = ((_input: unknown, init?: RequestInit) => new Promise((_resolve, reject) => {
     init?.signal?.addEventListener("abort", () => { aborted = true; reject(new DOMException("Aborted", "AbortError")); }, { once: true });
   })) as typeof fetch;
   try {
-    await Effect.runPromise(GeminiService.pipe(Effect.flatMap(service => service.generateContent("gemini-2.5-flash", "test")), Effect.provide(GeminiLive), Effect.timeout("20 millis"), Effect.result));
+    await Effect.runPromise(InferenceService.pipe(Effect.flatMap(service => service.generateContent("test")), Effect.provide(InferenceLive), Effect.timeout("20 millis"), Effect.result));
     expect(aborted).toBe(true);
   } finally {
     globalThis.fetch = originalFetch;
-    if (originalKey === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = originalKey;
+    if (originalGoogleKey === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = originalGoogleKey;
+    if (originalKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalKey;
   }
 });

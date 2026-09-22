@@ -21,7 +21,7 @@ export type StyleFitResponse = {
   model: string;
 };
 
-export const recommendedGoogleModel = "gemini-2.5-flash";
+export const recommendedInferenceModel = "gpt-6-luna";
 export * from "./planning";
 export * from "./planning-week";
 export * from "./uploads";

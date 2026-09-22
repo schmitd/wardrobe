@@ -32,7 +32,8 @@ NEXT_PUBLIC_CONVEX_URL=<development Convex URL>
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<development public key>
 CLERK_SECRET_KEY=<development secret key>
 CLERK_JWT_TEMPLATE=convex
-GEMINI_API_KEY=<server-only key>
+OPENAI_API_KEY=<server-only generation and transcription key>
+GEMINI_API_KEY=<server-only direct image and text embedding key>
 ZEP_KEY=<optional graph integration key>
 ARCJET_KEY=<protection key>
 AXIOM_TOKEN=<server-only telemetry token>
@@ -41,7 +42,7 @@ NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN=<public project token>
 NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
 ```
 
-The Clerk JWT template must set `aud` to `convex`. Backend authentication configuration is in `apps/web/convex/auth.config.ts`; use matching deployments and never copy production credentials into fixtures. **Convex also needs `GEMINI_API_KEY` for scheduled style-memory generation** and `ZEP_KEY` if graph enrichment is enabled. Vercel variables do not configure Convex automatically.
+The Clerk JWT template must set `aud` to `convex`. Backend authentication configuration is in `apps/web/convex/auth.config.ts`; use matching deployments and never copy production credentials into fixtures. **Convex also needs `OPENAI_API_KEY` for scheduled style-memory generation and `GEMINI_API_KEY` for the inference layer’s embedding capability** and `ZEP_KEY` if graph enrichment is enabled. Vercel variables do not configure Convex automatically.
 
 ```sh
 bun dev
