@@ -1,19 +1,19 @@
 # Fit reminders and image sharing
 
-Proposed for review, 2026-09-22. Documentation and imagegen concepts only. No provider credentials, notification sends, native dependency changes, public photo hosting, deployment or user-data migration are part of this PR.
+Design direction reviewed, 2026-09-22. David accepted the two-per-day reminder cap and highlighted mockups B and C as major improvements. Use C as the leading reference for reminders and sharing, with the proposed three-hour spacing retained as the working cadence. This PR remains draft. No provider credentials, notification sends, native dependency changes, public photo hosting, deployment or user-data migration are part of this design commit.
 
 Tracking: [notification foundation #107](https://github.com/schmitd/wardrobe/issues/107), [share fit #108](https://github.com/schmitd/wardrobe/issues/108). Notification eligibility depends on [fit evidence #105](https://github.com/schmitd/wardrobe/issues/105) and the authoritative model discussed in [ontology #106](https://github.com/schmitd/wardrobe/issues/106), but never on a Zep query at send time. Sharing can be implemented independently after review.
 
 ![Proposed midday reminder, settings, native image sharing, and web fallback](01-reminders-and-sharing.png)
 
-The image was made with built-in imagegen using [this prompt](imagegen-prompts.md). People, garments and system share suggestions are synthetic. Native share targets and browser capabilities vary; the render is illustrative, not a device test. The address shown by imagegen is illustrative and does not designate a new deployment. Settings are proposed defaults, not approved values.
+The image was made with built-in imagegen using [this prompt](imagegen-prompts.md). People, garments and system share suggestions are synthetic. Native share targets and browser capabilities vary; the render is illustrative, not a device test. The address shown by imagegen is illustrative and does not designate a new deployment. The two-per-day cap is accepted; the remaining settings are working defaults/options for implementation review.
 
 ## Discussion direction
 
 - Timed accepted plan: invite a fit photo when the event starts; cancel the reminder when the corresponding capture or wear has been recorded.
 - No accepted plan that local day: one reminder at noon if no fit/wear has been recorded. A saved partial daily fit counts as having answered the capture prompt; unresolved pieces remain an in-app question.
 - Past unconfirmed plan: leave a quiet **Wore it** affordance in Diary. No repeated push demanding an answer.
-- Proposed cadence for multiple events: at most two reminders per local day, at least three hours apart, quiet hours 9 PM–9 AM. David's cadence question is still open; no non-response is treated as approval.
+- Accepted cap for multiple events: at most two reminders per local day. Retain the proposed minimum three-hour spacing; quiet hours 9 PM–9 AM remain a working default. This records David’s explicit response.
 - Share fit: hand the image to the operating system. No contact permission, social destination inside Wardrobe or public link.
 
 Read the [notification architecture](notification-architecture.md) for conditions, time rules, delivery semantics and rollout gates. Read [image sharing](share-fit.md) for platform adapters and failure states.
