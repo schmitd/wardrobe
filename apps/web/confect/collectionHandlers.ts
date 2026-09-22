@@ -161,6 +161,29 @@ export const itemDetails = FunctionImpl.make(
       };
     }),
 );
+export const itemCollectionMembership = FunctionImpl.make(
+  schema,
+  spec,
+  "itemCollectionMembership",
+  ({ itemId, wardrobeId }) =>
+    Effect.gen(function* () {
+      const ctx = yield* QueryCtx;
+      const { userId } = yield* CurrentUser;
+      const [item, collection] = yield* Effect.promise(() =>
+        Promise.all([ctx.db.get(itemId), ctx.db.get(wardrobeId)]),
+      );
+      if (item?.userId !== userId || collection?.userId !== userId) return false;
+      const membership = yield* Effect.promise(() =>
+        ctx.db
+          .query("wardrobeMemberships")
+          .withIndex("by_wardrobe_item", (q) =>
+            q.eq("wardrobeId", wardrobeId).eq("itemId", itemId),
+          )
+          .first(),
+      );
+      return membership?.userId === userId;
+    }),
+);
 export const pageInspiration = FunctionImpl.make(
   schema,
   spec,

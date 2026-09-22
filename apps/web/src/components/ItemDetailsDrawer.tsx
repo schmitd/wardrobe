@@ -16,6 +16,51 @@ import {
 import { createTraceContext } from "@/lib/trace";
 import posthog from "posthog-js";
 
+function CollectionChoice({
+  collection,
+  itemId,
+  busy,
+  run,
+}: {
+  collection: { _id: Id<"wardrobes">; name: string };
+  itemId: Id<"wardrobeItems">;
+  busy: boolean;
+  run: (work: () => Promise<unknown>, success: string) => Promise<void>;
+}) {
+  const add = useMutation(api.wardrobes.addItemToWardrobe);
+  const remove = useMutation(api.wardrobes.removeItemFromWardrobe);
+  const checked = useQuery(api.wardrobe.itemCollectionMembership, {
+    itemId,
+    wardrobeId: collection._id,
+  });
+  return (
+    <label className="flex min-h-11 items-center gap-3 px-2" data-private>
+      <input
+        type="checkbox"
+        disabled={busy || checked === undefined}
+        checked={checked ?? false}
+        onChange={() =>
+          void run(async () => {
+            await (checked
+              ? remove({ wardrobeId: collection._id, itemId })
+              : add({
+                  wardrobeId: collection._id,
+                  itemId,
+                  membershipKind: "owned",
+                  ...createTraceContext(),
+                }));
+            posthog.capture("wardrobe_collection_changed", {
+              operation: checked ? "piece_removed" : "piece_added",
+              surface: "wardrobe",
+            });
+          }, "Collections updated.")
+        }
+      />
+      {collection.name}
+    </label>
+  );
+}
+
 export default function ItemDetailsDrawer({
   item,
   onClose,
@@ -31,8 +76,6 @@ export default function ItemDetailsDrawer({
     { initialNumItems: 30 },
   );
   const saveNote = useMutation(api.wardrobe.saveNote);
-  const add = useMutation(api.wardrobes.addItemToWardrobe);
-  const remove = useMutation(api.wardrobes.removeItemFromWardrobe);
   const [draft, setDraft] = useState<string | null>(null);
   const [manage, setManage] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -134,40 +177,14 @@ export default function ItemDetailsDrawer({
           {manage && (
             <div className="mt-3 max-h-48 space-y-1 overflow-y-auto rounded-lg border p-2">
               {choices.results.map((collection) => {
-                const checked =
-                  details?.collections.some((c) => c.id === collection._id) ??
-                  false;
                 return (
-                  <label
+                  <CollectionChoice
                     key={collection._id}
-                    className="flex min-h-11 items-center gap-3 px-2"
-                    data-private
-                  >
-                    <input
-                      type="checkbox"
-                      disabled={busy || !details}
-                      checked={checked}
-                      onChange={() =>
-                        void run(async () => {
-                          await (checked
-                            ? remove({ wardrobeId: collection._id, itemId })
-                            : add({
-                                wardrobeId: collection._id,
-                                itemId,
-                                membershipKind: "owned",
-                                ...createTraceContext(),
-                              }));
-                          posthog.capture("wardrobe_collection_changed", {
-                            operation: checked
-                              ? "piece_removed"
-                              : "piece_added",
-                            surface: "wardrobe",
-                          });
-                        }, "Collections updated.")
-                      }
-                    />
-                    {collection.name}
-                  </label>
+                    collection={collection}
+                    itemId={itemId}
+                    busy={busy}
+                    run={run}
+                  />
                 );
               })}
               {!choices.results.length && (

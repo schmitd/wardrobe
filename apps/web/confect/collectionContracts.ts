@@ -116,6 +116,14 @@ export const itemDetailsSpec = FunctionSpec.publicQuery({
       }),
     ),
 }).middleware(RequireUser);
+export const itemCollectionMembershipSpec = FunctionSpec.publicQuery({
+  name: "itemCollectionMembership",
+  args: () => ({
+    itemId: Id("wardrobeItems"),
+    wardrobeId: Id("wardrobes"),
+  }),
+  returns: () => Schema.Boolean,
+}).middleware(RequireUser);
 export const saveNoteSpec = FunctionSpec.publicMutation({
   name: "saveNote",
   args: () => ({ itemId: Id("wardrobeItems"), note: Schema.String }),

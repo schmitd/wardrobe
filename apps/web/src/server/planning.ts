@@ -17,6 +17,7 @@ import {
 import { getConvexAuth } from "@/server/auth";
 import { runInference } from "@/lib/run-effect";
 import { GeminiService } from "@/services/GeminiService";
+import { projectPlanningItems } from "./planningProjection";
 
 export class PlanningError extends RequestFailure {
   constructor(
@@ -419,7 +420,7 @@ export async function executePlanning(body: PlanningOperation) {
   }
   if (body.operation === "planning_load")
     return {
-      items: data.items,
+      items: projectPlanningItems(data.items),
       inventoryTruncated: data.inventoryTruncated,
       plans: data.plans.map((p) => ({
         id: p.id,

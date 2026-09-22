@@ -105,6 +105,36 @@ test("item notes require the owner, persist, enforce bounds, and never return fo
     (await alice.query(api.wardrobe.itemDetails, { itemId: item }))?.note,
   ).toBe("");
 });
+test("membership checks remain accurate beyond the item details summary", async () => {
+  const { t, alice, bob, item } = await fixture();
+  const collections = await t.run(async (ctx) => {
+    const ids = [];
+    for (let i = 0; i < 101; i++) {
+      const wardrobeId = await ctx.db.insert("wardrobes", {
+        userId: "alice",
+        name: `Collection ${i}`,
+        kind: "locus",
+        status: "active",
+        createdAt: i + 2,
+        updatedAt: i + 2,
+      });
+      await ctx.db.insert("wardrobeMemberships", {
+        userId: "alice",
+        wardrobeId,
+        itemId: item,
+        membershipKind: "owned",
+        createdAt: i + 2,
+        updatedAt: i + 2,
+      });
+      ids.push(wardrobeId);
+    }
+    return ids;
+  });
+  const args = { itemId: item, wardrobeId: collections[100]! };
+  expect((await alice.query(api.wardrobe.itemDetails, { itemId: item }))?.truncated).toBe(true);
+  expect(await alice.query(api.wardrobe.itemCollectionMembership, args)).toBe(true);
+  expect(await bob.query(api.wardrobe.itemCollectionMembership, args)).toBe(false);
+});
 test("collection pages enforce every ownership boundary and project no embeddings", async () => {
   const { alice, bob, item, work } = await fixture();
   const args = {

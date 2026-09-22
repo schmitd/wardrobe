@@ -12,6 +12,7 @@ export const getWardrobeItem = registeredFunctions.getWardrobeItem;
 export const getWardrobeItemInternal = registeredFunctions.getWardrobeItemInternal;
 export const getWardrobeItemWithUrl = registeredFunctions.getWardrobeItemWithUrl;
 export const getWardrobeItemsDisplayByIds = registeredFunctions.getWardrobeItemsDisplayByIds;
+export const itemCollectionMembership = registeredFunctions.itemCollectionMembership;
 export const itemDetails = registeredFunctions.itemDetails;
 export const listItemsForSimilarity = registeredFunctions.listItemsForSimilarity;
 export const listItemsMissingVisualEmbedding = registeredFunctions.listItemsMissingVisualEmbedding;
