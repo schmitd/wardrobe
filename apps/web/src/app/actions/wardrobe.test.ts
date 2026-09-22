@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, mock } from "bun:test";
-import { Result } from "effect";
+import { Effect, Layer, ManagedRuntime, Result } from "effect";
+import { InferenceError } from "@/services/InferenceService";
 
 const fetchMutationMock = mock();
 const fetchQueryMock = mock();
@@ -591,6 +592,16 @@ describe("wardrobe server actions", () => {
       message:
         "This photo could not be analyzed. Try another well-lit photo where your full outfit is visible.",
     });
+  });
+
+  it("preserves a Luna refusal through the Effect 4 runtime and guest action boundary", async () => {
+    allowArcjet();
+    const runtime = ManagedRuntime.make(Layer.empty);
+    runServerActionMock.mockImplementationOnce(() => runtime.runPromise(Effect.fail(new InferenceError("Image or request could not be analyzed", "content_blocked"))));
+    try {
+      const result = await actions.analyzeGuestFitCheckAction({ photo: { fileName: "outfit.jpg", mimeType: "image/jpeg", base64: "data:image/jpeg;base64,QUJDRA==" } });
+      expect(result).toEqual({ kind: "error", message: "This photo could not be analyzed. Try another well-lit photo where your full outfit is visible." });
+    } finally { await runtime.dispose(); }
   });
 
   it("completes all guest pieces and the first fit behind one onboarding limit check", async () => {

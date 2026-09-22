@@ -84,6 +84,11 @@ test("Google embedding transport errors keep their existing retry behavior", asy
   expect(Result.isFailure(result) && result.failure.retryable).toBe(true);
 });
 
+test("provider deadlines are retryable while caller cancellation is not", () => {
+  expect(new InferenceError(new DOMException("Provider deadline", "TimeoutError")).retryable).toBe(true);
+  expect(new InferenceError(new DOMException("Caller cancelled", "AbortError")).retryable).toBe(false);
+});
+
 test("audio remains in memory and uses the transcription endpoint", async () => {
   process.env.OPENAI_API_KEY = "local-test-only";
   let called = false;
@@ -104,7 +109,7 @@ test("Effect interruption aborts a real HTTP request", async () => {
   // UI tests install Happy DOM globally. Isolate native fetch/AbortSignal so this
   // checks real transport cancellation rather than a synthetic DOM implementation.
   const code = `
-    import { Effect, Layer } from "effect";
+    import { Effect, Layer, Result } from "effect";
     import { GeminiService } from ${JSON.stringify(resolve(import.meta.dir, "GeminiService.ts"))};
     import { InferenceLayer, InferenceService } from ${JSON.stringify(resolve(import.meta.dir, "InferenceService.ts"))};
     const server = Bun.serve({ port: 0, fetch: () => new Promise(() => {}) });
@@ -125,6 +130,13 @@ test("Effect interruption aborts a real HTTP request", async () => {
       ));
       await Promise.race([transportSettled, new Promise((_, reject) => setTimeout(() => reject(new Error("Transport did not settle")), 1000))]);
       if (!aborted) throw new Error("Native request was not aborted");
+      const timeout = AbortSignal.timeout.bind(AbortSignal);
+      AbortSignal.timeout = () => timeout(20);
+      const deadline = await Effect.runPromise(InferenceService.pipe(
+        Effect.flatMap(s => s.generateContent("deadline")), Effect.provide(layer),
+        Effect.timeout("1 second"), Effect.result
+      ));
+      if (!Result.isFailure(deadline) || !deadline.failure.retryable) throw new Error("Native provider timeout was not retryable");
     } finally { server.stop(true); }
   `;
   const process = Bun.spawn(["bun", "--eval", code], { env: { ...Bun.env, OPENAI_API_KEY: "local-test-only" }, stdout: "pipe", stderr: "pipe" });

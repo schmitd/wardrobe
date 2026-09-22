@@ -11,7 +11,7 @@ export class InferenceError extends Error {
   constructor(error: unknown, code = "provider_failed") {
     super(error instanceof Error ? error.message : String(error));
     this.status = typeof error === "object" && error !== null && "status" in error && typeof error.status === "number" ? error.status : undefined;
-    this.retryable = this.status === 429 || (this.status !== undefined && this.status >= 500) || error instanceof TypeError || (error instanceof GeminiError && error.retryable);
+    this.retryable = this.status === 429 || (this.status !== undefined && this.status >= 500) || error instanceof TypeError || (error instanceof Error && error.name === "TimeoutError") || (error instanceof GeminiError && error.retryable);
     this.code = code;
   }
 }
