@@ -73,6 +73,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
       case "wardrobe.pageWardrobeItems": return Response.json(c.items);
       case "wardrobe.pagePieces": return Response.json(c.items.filter(i => c.memberships.some(m => m.wardrobeId === args.wardrobeId && m.itemId === i.id)));
       case "wardrobe.itemDetails": return Response.json({ note: c.items.find(i => i.id === args.itemId)?.note ?? "", collections: c.collections.filter(collection => c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === collection._id)).map(collection => ({ id: collection._id, name: collection.name })), truncated: false });
+      case "wardrobe.itemCollectionMembership": return Response.json(c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === args.wardrobeId));
       case "profile.getProfile": return Response.json({ bio: c.bio });
       case "planning.load": return Response.json(state.data);
       case "wardrobe.pageInspiration": case "candidates.listInspirationByWardrobe": return Response.json(c.inspirations.filter(r => r.wardrobeId === args.wardrobeId));
