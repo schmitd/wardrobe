@@ -51,6 +51,19 @@ test("generated preview changes display only; restoring revokes the derivative a
   expect(await t.run(async ctx => (await ctx.storage.get(source.storageId)) !== null)).not.toBeNull();
 });
 
+test("deleting an item revokes its generated preview blob and ownership record", async () => {
+  const { t, itemId, alice } = await fixture();
+  await alice.mutation(api.garmentPreviewData.request, { itemId });
+  const source = (await t.mutation(internal.garmentPreviewData.claim, { itemId, revision: 1 }))!;
+  const preview = await t.run(ctx => ctx.storage.store(new Blob(["preview"])));
+  expect(await t.mutation(internal.garmentPreviewData.commit, { itemId, revision: 1, userId: "alice", sourceStorageId: source.storageId, storageId: preview })).toBe(true);
+
+  await alice.mutation(api.wardrobe.deleteWardrobeItem, { itemId, reason: "Duplicate" });
+
+  expect(await t.run(ctx => ctx.storage.get(preview))).toBeNull();
+  expect(await t.run(ctx => ctx.db.query("storageObjects").withIndex("by_storage", q => q.eq("storageId", preview)).unique())).toBeNull();
+});
+
 test("restore invalidates an in-flight result and stale failure cannot overwrite a new request", async () => {
   const { t, itemId, alice } = await fixture();
   await alice.mutation(api.garmentPreviewData.request, { itemId });

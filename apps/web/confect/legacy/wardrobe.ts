@@ -3,7 +3,7 @@ import { scheduleStyleBioRefresh } from "../styleBioQueue";
 import { Effect } from "effect";
 import { issueUploadTicket } from "../uploadTicket";
 import type { QueryCtx } from "../../convex/_generated/server";
-import { ownedStorageUrl, requireOwnedStorage } from "../storageAccess";
+import { deleteGeneratedPreview, ownedStorageUrl, requireOwnedStorage } from "../storageAccess";
 import { v } from "convex/values";
 import { paginationOptsValidator, makeFunctionReference } from "convex/server";
 import { action, internalQuery, mutation, query } from "../../convex/_generated/server";
@@ -178,6 +178,9 @@ export const deleteWardrobeItem = mutation({
       traceparent: argTraceparent ?? item.traceparent,
     });
 
+    if (item.previewStorageId) {
+      await Effect.runPromise(deleteGeneratedPreview(ctx, userId, item.previewStorageId));
+    }
     await ctx.db.delete(itemId);
     await scheduleStyleBioRefresh(ctx, userId);
     const description = item.description ?? item.category ?? "Unknown item";
