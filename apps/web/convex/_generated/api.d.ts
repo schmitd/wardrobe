@@ -12,6 +12,8 @@ import type * as account from "../account.js";
 import type * as candidates from "../candidates.js";
 import type * as fitChecks from "../fitChecks.js";
 import type * as garmentIdentityQueries from "../garmentIdentityQueries.js";
+import type * as garmentPreview from "../garmentPreview.js";
+import type * as garmentPreviewData from "../garmentPreviewData.js";
 import type * as http from "../http.js";
 import type * as mobile from "../mobile.js";
 import type * as planning from "../planning.js";
@@ -36,6 +38,8 @@ declare const fullApi: ApiFromModules<{
   candidates: typeof candidates;
   fitChecks: typeof fitChecks;
   garmentIdentityQueries: typeof garmentIdentityQueries;
+  garmentPreview: typeof garmentPreview;
+  garmentPreviewData: typeof garmentPreviewData;
   http: typeof http;
   mobile: typeof mobile;
   planning: typeof planning;

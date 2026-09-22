@@ -1,6 +1,6 @@
+import { wardrobeDisplayUrl } from "../previewQueue";
 import type { MutationCtx } from "../../convex/_generated/server";
 import { scheduleStyleBioRefresh } from "../styleBioQueue";
-import { ownedStorageUrl } from "../storageAccess";
 import { v } from "convex/values";
 import { internal } from "../../convex/_generated/api";
 import { mutation, query } from "../../convex/_generated/server";
@@ -111,7 +111,7 @@ export const getWardrobeDetail = query({
         if (!membership.itemId) return null;
         const item = await ctx.db.get(membership.itemId);
         if (!item || item.userId !== userId) return null;
-        const imageUrl = await ownedStorageUrl(ctx, userId, item.storageId);
+        const imageUrl = await wardrobeDisplayUrl(ctx, userId, item);
         if (!imageUrl) return null;
         return {
           ...membership,

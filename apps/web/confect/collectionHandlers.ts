@@ -1,3 +1,4 @@
+import { wardrobeDisplayUrl } from "./previewQueue";
 import { FunctionImpl } from "@confect/server";
 import { Effect } from "effect";
 import schema from "./_generated/schema";
@@ -52,7 +53,7 @@ export const pageCollections = FunctionImpl.make(
             const piece = yield* Effect.promise(() => ctx.db.get(id));
             if (!piece || piece.userId !== userId || !piece.storageId) continue;
             const imageUrl = yield* Effect.promise(() =>
-              ownedStorageUrl(ctx, userId, piece.storageId!),
+              "analysisStatus" in piece ? wardrobeDisplayUrl(ctx, userId, piece) : ownedStorageUrl(ctx, userId, piece.storageId!),
             );
             if (!imageUrl) continue;
             seen.add(id);
@@ -103,7 +104,7 @@ export const pagePieces = FunctionImpl.make(
           const item = yield* Effect.promise(() => ctx.db.get(m.itemId!));
           if (!item || item.userId !== userId) return null;
           const imageUrl = yield* Effect.promise(() =>
-            ownedStorageUrl(ctx, userId, item.storageId),
+            wardrobeDisplayUrl(ctx, userId, item),
           );
           if (!imageUrl) return null;
           return {

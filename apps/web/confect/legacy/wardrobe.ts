@@ -1,3 +1,4 @@
+import { queuePreview, wardrobeDisplayUrl } from "../previewQueue";
 import { scheduleStyleBioRefresh } from "../styleBioQueue";
 import { Effect } from "effect";
 import { issueUploadTicket } from "../uploadTicket";
@@ -273,7 +274,7 @@ export const getWardrobeItemsDisplayByIds = query({
           return null;
         }
 
-        const imageUrl = await ownedStorageUrl(ctx, userId, item.storageId);
+        const imageUrl = await wardrobeDisplayUrl(ctx, userId, item);
         if (!imageUrl) {
           return null;
         }
@@ -592,6 +593,7 @@ export const applyFullAnalysis = mutation({
     }
 
     await scheduleStyleBioRefresh(ctx, userId);
+    await queuePreview(ctx, itemId);
     return { skipped: false as const };
   },
 });
@@ -625,7 +627,7 @@ export async function projectWardrobeItems(ctx: QueryCtx, userId: string, items:
     const withUrls = await Promise.all(
       items.map(async (item) => ({
         id: item._id,
-        imageUrl: await ownedStorageUrl(ctx, userId, item.storageId),
+        imageUrl: await wardrobeDisplayUrl(ctx, userId, item),
         category: item.category ?? null,
         description: item.description ?? null,
         styleTags: item.styleTags ?? null,

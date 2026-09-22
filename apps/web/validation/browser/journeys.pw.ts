@@ -2,6 +2,19 @@ import { test, expect } from "playwright/test";
 
 const photo = { name: "synthetic.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==", "base64") };
 
+test("catalog preview can be requested and restored from the item drawer on narrow screens", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/?scenario=wardrobe");
+  await page.getByRole("button", { name: "Open Overshirt details", exact: true }).click();
+  await page.getByRole("button", { name: "Create catalog preview", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Use original photo", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Use original photo", exact: true }).click();
+  await expect(page.getByText("Original photo restored.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create catalog preview", exact: true })).toBeVisible();
+  const state = await page.request.get("/__fixture/state").then(r => r.json());
+  expect(state.calls.filter((call: { input: { name: string } }) => call.input.name?.startsWith("garmentPreviewData.")).map((call: { input: { name: string } }) => call.input.name)).toEqual(["garmentPreviewData.request", "garmentPreviewData.restore"]);
+});
+
 test("planner: adjust yesterday's outfit from history and preserve saved-but-stale feedback", async ({ page }) => {
   await page.goto("/?scenario=history");
   await page.getByText("Swap a piece", { exact: true }).click();

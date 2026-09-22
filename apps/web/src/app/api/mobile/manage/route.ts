@@ -2,6 +2,10 @@ import { publicServerFailure, RequestFailure } from "@/server/errors";
 import { limitedJson } from "@/server/limitedJson";
 import { Effect, Schema } from "effect";
 import { observeMobileRequest } from "@/server/mobileTelemetry";
+import { fetchMutation } from "convex/nextjs";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
+import { getConvexAuth } from "@/server/auth";
 
 import {
   addCollectionItemAction,
@@ -18,7 +22,7 @@ import {
 export const runtime = "nodejs";
 
 const ManageBody = Schema.Struct({
-  operation: Schema.Literals(["create_collection", "add_collection_item", "remove_collection_item", "save_inspiration", "update_bio", "delete_item", "analyze_selfie", "resolve_observation", "promote_observation"]),
+  operation: Schema.Literals(["create_collection", "add_collection_item", "remove_collection_item", "save_inspiration", "update_bio", "delete_item", "analyze_selfie", "resolve_observation", "promote_observation", "request_preview", "restore_preview"]),
   wardrobeId: Schema.optionalKey(Schema.String), itemId: Schema.optionalKey(Schema.String), observationId: Schema.optionalKey(Schema.String), storageId: Schema.optionalKey(Schema.String), name: Schema.optionalKey(Schema.String), description: Schema.optionalKey(Schema.String), bio: Schema.optionalKey(Schema.String), reason: Schema.optionalKey(Schema.String), traceId: Schema.optionalKey(Schema.String), traceparent: Schema.optionalKey(Schema.String),
 });
 type ManageBody = typeof ManageBody.Type;
@@ -31,6 +35,18 @@ const required = (value: string | undefined, label: string) => {
 const execute = async (body: ManageBody): Promise<unknown> => {
   const trace = { traceId: body.traceId, traceparent: body.traceparent };
   switch (body.operation) {
+    case "request_preview":
+    case "restore_preview": {
+      const { token } = await getConvexAuth();
+      const id = required(body.itemId, "item");
+      if (!/^[a-z0-9]{20,64}$/.test(id)) throw new RequestFailure({ status: 400, message: "Invalid piece." });
+      const args = { itemId: id as Id<"wardrobeItems"> };
+      if (body.operation === "restore_preview") {
+        await fetchMutation(api.garmentPreviewData.restore, args, { token });
+        return { success: true };
+      }
+      return { success: await fetchMutation(api.garmentPreviewData.request, args, { token }) };
+    }
     case "create_collection":
       return await createCollectionAction({ name: required(body.name, "name"), ...(body.description ? { description: body.description } : {}), ...trace });
     case "add_collection_item":

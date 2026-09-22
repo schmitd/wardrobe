@@ -12,6 +12,8 @@ const operations = new Set([
   "analyze_selfie",
   "resolve_observation",
   "promote_observation",
+  "request_preview",
+  "restore_preview",
 ]);
 
 for (const operation of [

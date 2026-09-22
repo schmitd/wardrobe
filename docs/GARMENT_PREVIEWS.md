@@ -1,0 +1,18 @@
+# Generative catalog previews
+
+The original photo remains authoritative for analysis, embeddings and identity matching. A separately owned generated PNG changes only display projections in the closet, collections and native item views. Web and native item details offer generation for existing items and restore-to-original controls, with disclosure that hidden fabric is reconstructed.
+
+After enabling the feature, successful single-item analysis and promotion of a localized fit observation enqueue one durable job in the committing mutation. Existing closets are not automatically backfilled. Legacy full-fit references are not mass-generated. Duplicate requests coalesce; there are no automatic paid retries. Errors, unsupported photos and interrupted jobs retain the original image. Inputs below 160 pixels on either dimension are skipped. Manual retry is available.
+
+A revision and source-storage guard prevent stale work replacing a restored, deleted or changed item. Account tombstones are checked at claim and commit. The action registers generated provenance transactionally with publication. Rejected new blobs are discarded through shared storage authority; acknowledged or unacknowledged successful publication cannot be deleted by that cleanup. Restore deletes only the caller's owned generated derivative. Account cleanup includes generated storage through the existing ownership table. A hard process kill between storing a blob and its first mutation can still leave an unregistered orphan, as with other action-side storage writes; this does not grant access to another user.
+
+## Rollout
+
+1. Configure the **Convex deployment**, not a client bundle, with server-only `OPENAI_API_KEY` and `GARMENT_PREVIEWS_ENABLED=true`. The locally created restricted Wardrobe key has Images Request and Responses Write permissions plus List models Read. Do not put it in Git or `NEXT_PUBLIC_*` / `EXPO_PUBLIC_*` variables.
+2. Deploy the generated Confect/Convex adapters and web changes; distribute a new native build for native controls. Keep the switch off until that release is ready. No production environment or data was changed during evaluation.
+3. On an owned clear garment, verify request → ready, transparency on the rack's colored surface, original inference evidence unchanged, restore, then one new-item automatic job. Verify `garment_preview.finished` in Axiom. Private image content, prompts and provider errors are excluded from telemetry. Web emits bounded `wardrobe_preview_changed`; native uses its existing correlated operation events with `request_preview` and `restore_preview`.
+4. Review patterned clothing, logos and more accessories before expanding usage. Inspect spend and failures. Set the switch false to stop new/queued generation; an already-running request may finish. Existing previews and restore controls remain usable.
+
+The model is `gpt-image-2.5-sunburst`, medium quality, transparent 1024×1024 PNG. Effect cancellation reaches fetch; the provider operation is limited to 150 seconds and the durable watchdog releases stuck state at three minutes. Sharp is declared at the root as well as the web workspace because Convex resolves external Node dependencies from the root manifest.
+
+Validation includes real paid model calls, Convex ownership/race tests, provider alpha/cancellation tests, a narrow-screen browser fixture using the real item drawer, TypeScript/lint, web production build, and iOS/Android Metro exports. Fixture browser checks do not prove live authentication, provider delivery from deployed Convex, production telemetry ingestion or physical-device rendering; those remain rollout checks.

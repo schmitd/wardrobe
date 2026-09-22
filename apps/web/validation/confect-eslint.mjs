@@ -5,13 +5,13 @@ const rule = (description, create) => ({ meta: { type: "problem", docs: { descri
 
 const plugin = {
   rules: {
-    "storage-authority": rule("Use the shared storage authority; only storageAccess issues URLs and account/upload cleanup deletes blobs.", context => ({
+    "storage-authority": rule("Use the shared storage authority; only storageAccess issues URLs or deletes previews; account/upload cleanup owns other deletion.", context => ({
       CallExpression(node) {
         const callee = node.callee;
         if (!member(callee?.object, "storage")) return;
         const file = context.filename.replaceAll("\\", "/");
         if ((member(callee, "getUrl") && !file.endsWith("/confect/storageAccess.ts")) ||
-            (member(callee, "delete") && !["/confect/account.impl.ts", "/confect/uploadHttp.ts"].some(path => file.endsWith(path))))
+            (member(callee, "delete") && !["/confect/storageAccess.ts", "/confect/account.impl.ts", "/confect/uploadHttp.ts"].some(path => file.endsWith(path))))
           context.report({ node, messageId: "boundary" });
       },
     })),

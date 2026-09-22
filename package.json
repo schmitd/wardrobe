@@ -17,7 +17,7 @@
     "backend:watch": "bun run --bun confect dev",
     "observability:smoke": "bun run apps/web/scripts/observability-smoke.ts",
     "web-build": "turbo build --filter=@wardrobe/web",
-    "vercel-build": "bun run --bun confect codegen && bun run --cwd apps/web convex deploy --cmd \"cd ../.. && bun run web-build\"",
+    "vercel-build": "bun run --bun confect codegen && bun run --bun convex deploy --cmd \"bun run web-build\"",
     "validate": "bun run scripts/validate.ts",
     "debug": "bun run scripts/debug.ts",
     "probe:browser": "bun run --cwd apps/web scripts/probe-browser.ts",
@@ -29,6 +29,7 @@
   "devDependencies": {
     "@confect/cli": "10.0.0-next.22",
     "convex": "1.46.0",
+    "sharp": "0.35.3",
     "turbo": "^2.8.0",
     "typescript": "~6.0.3"
   },
