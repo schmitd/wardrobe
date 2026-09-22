@@ -4,13 +4,14 @@ import { mutation, query, internalMutation } from "../../convex/_generated/serve
 import { internal } from "../../convex/_generated/api";
 import { getAuthenticatedUserId } from "./authIdentity";
 import { outfitFields, outfitStatus } from "./planningValidators";
-import { shiftDay } from "@wardrobe/shared";
+import { shiftDay, recallCollections } from "@wardrobe/shared";
 
 const item = v.object({
   id: v.id("wardrobeItems"),
   category: v.string(),
   description: v.string(),
   imageUrl: v.union(v.string(), v.null()),
+  note: v.string(),
 });
 const suggestion = v.object({
   ...outfitFields,
@@ -18,7 +19,7 @@ const suggestion = v.object({
   _creationTime: v.number(),
 });
 export const load = query({
-  args: { week: v.optional(v.string()), planId: v.optional(v.id("wardrobes")) },
+  args: { week: v.optional(v.string()), planId: v.optional(v.id("wardrobes")), context: v.optional(v.string()) },
   returns: v.object({
     items: v.array(item),
     plans: v.array(
@@ -37,7 +38,7 @@ export const load = query({
     calendarRevision: v.number(),
     inventoryTruncated: v.boolean(),
   }),
-  handler: async (ctx, { week, planId }) => {
+  handler: async (ctx, { week, planId, context }) => {
     const userId = await getAuthenticatedUserId(ctx);
     if (!userId) throw new ConvexError({ _tag: "NotAuthenticated", message: "Sign in to plan an outfit." });
     if (week && (!/^\d{4}-\d{2}-\d{2}$/.test(week) || !Number.isFinite(Date.parse(`${week}T12:00:00Z`)))) throw new ConvexError({ _tag: "PlanningInput", message: "Choose a valid week." });
@@ -74,9 +75,11 @@ export const load = query({
           .withIndex("by_user", (q) => q.eq("userId", userId))
           .unique(),
       ]);
-    const selectedMemberships = planId && plans.some(plan => plan._id === planId)
-      ? await ctx.db.query("wardrobeMemberships").withIndex("by_wardrobe", q => q.eq("wardrobeId", planId)).take(100)
-      : [];
+    const recalled = recallCollections(plans.map(p => ({ ...p, id: p._id })), context ?? "");
+    const selectedIds = new Set([...(planId && plans.some(p => p._id === planId) ? [planId] : []), ...recalled.map(p => p._id)]);
+    const selectedMemberships = (await Promise.all([...selectedIds].map(id =>
+      ctx.db.query("wardrobeMemberships").withIndex("by_wardrobe", q => q.eq("wardrobeId", id)).take(100)
+    ))).flat().filter(m => m.userId === userId);
     const referenced = new Set([
       ...suggestions.flatMap(s => s.itemIds),
       ...selectedMemberships.flatMap(m => m.userId === userId && m.itemId ? [m.itemId] : []),
@@ -92,6 +95,7 @@ export const load = query({
           id: i._id,
           category: i.category ?? "Piece",
           description: i.description ?? "Un-described piece",
+          note: (i.note ?? "").slice(0, 500),
           imageUrl: await ownedStorageUrl(ctx, userId, i.storageId),
         })),
       ),
@@ -99,7 +103,7 @@ export const load = query({
           id: p._id,
           name: p.name,
           description: p.description ?? "",
-          itemIds: p._id === planId ? selectedMemberships.flatMap(m => m.userId === userId && m.itemId ? [m.itemId] : []) : [],
+          itemIds: selectedMemberships.flatMap(m => m.wardrobeId === p._id && m.itemId && inventory.get(m.itemId)?.userId === userId ? [m.itemId] : []),
         })),
       history: history.map((h) =>
         (h.transcription ?? h.description ?? "").slice(0, 1200),

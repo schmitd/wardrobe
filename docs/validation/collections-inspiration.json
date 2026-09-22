@@ -1,0 +1,36 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "steps": [
+    {
+      "action": "goto",
+      "path": "/?scenario=wardrobe"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Saved ideas"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "inspiration"
+    },
+    {
+      "action": "upload",
+      "role": "button",
+      "name": "Add inspiration"
+    },
+    {
+      "action": "text",
+      "role": "status",
+      "name": "",
+      "value": "Added to Saved ideas."
+    },
+    {
+      "action": "screenshot"
+    }
+  ]
+}

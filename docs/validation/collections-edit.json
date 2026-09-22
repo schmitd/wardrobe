@@ -1,0 +1,50 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "steps": [
+    {
+      "action": "goto",
+      "path": "/?scenario=wardrobe"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Work edit"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Edit collection"
+    },
+    {
+      "action": "fill",
+      "label": "Collection name",
+      "value": "Office layers"
+    },
+    {
+      "action": "fill",
+      "label": "What belongs here?",
+      "value": "Comfortable tailoring for client meetings"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save collection"
+    },
+    {
+      "action": "visible",
+      "role": "heading",
+      "name": "Office layers"
+    },
+    {
+      "action": "visible",
+      "role": "button",
+      "name": "Office layers"
+    },
+    {
+      "action": "screenshot"
+    }
+  ]
+}

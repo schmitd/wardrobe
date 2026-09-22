@@ -1,0 +1,152 @@
+{
+  "viewport": {
+    "width": 390,
+    "height": 844
+  },
+  "steps": [
+    {
+      "action": "goto",
+      "path": "/?scenario=wardrobe"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open Overshirt details"
+    },
+    {
+      "action": "visible",
+      "role": "region",
+      "name": "Item labels"
+    },
+    {
+      "action": "fill",
+      "label": "My note",
+      "value": "Roll sleeves once for meetings."
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Save note"
+    },
+    {
+      "action": "text",
+      "role": "status",
+      "name": "",
+      "value": "Note saved."
+    },
+    {
+      "action": "press",
+      "label": "My note",
+      "value": "Escape"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Work edit"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add from wardrobe"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add Jacket to collection"
+    },
+    {
+      "action": "visible",
+      "role": "button",
+      "name": "Open Jacket details"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "inspiration"
+    },
+    {
+      "action": "visible",
+      "role": "button",
+      "name": "Add inspiration"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "pieces"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Open Jacket details"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Manage"
+    },
+    {
+      "action": "click",
+      "role": "checkbox",
+      "name": "Work edit"
+    },
+    {
+      "action": "text",
+      "role": "status",
+      "name": "",
+      "value": "Collections updated."
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Close"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "All pieces"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "New collection"
+    },
+    {
+      "action": "fill",
+      "label": "Collection name",
+      "value": "Travel light"
+    },
+    {
+      "action": "fill",
+      "label": "What belongs here?",
+      "value": "Comfortable layers for a flight"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Create collection"
+    },
+    {
+      "action": "visible",
+      "role": "heading",
+      "name": "Travel light"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add from wardrobe"
+    },
+    {
+      "action": "click",
+      "role": "button",
+      "name": "Add Loafers to collection"
+    },
+    {
+      "action": "visible",
+      "role": "button",
+      "name": "Open Loafers details"
+    },
+    {
+      "action": "screenshot"
+    }
+  ]
+}

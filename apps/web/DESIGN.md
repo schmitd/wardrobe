@@ -54,15 +54,15 @@ If the guest demo hits its free limit, interrupt the flow with a clear blocking 
 
 The bottom rack action stack should float above content like app controls, but should not obscure the rack. It should feel like a tool dock, not a marketing CTA cluster.
 
-The rack action stack contains `Add piece`, `Fit check`, and `Try on`. Use the citron action surface only for the primary add action; the two fit actions are quieter white controls. Do not use a generic “Check fit” label.
+The central Add control opens the existing capture menu. Keep capture in that one global entry point.
 
 ## Navigation And Hierarchy
 
 Signed-in navigation is deliberately limited to **Wardrobe** and **Fits**, with **Add** as a prominent global action. On mobile, keep Add centered between those two destinations. On wider screens, keep the same order and hierarchy. Account, privacy, and sign-out live behind the header account affordance; do not restore Profile, Plans, or settings as peer tabs.
 
-Style notes are a compact, secondary surface inside Wardrobe. Use one editable note for fit, color, comfort, body, and lifestyle context. Do not render complexion, hair color, season, or body type as separate profile cards, scores, or navigation.
+Style notes lead Wardrobe as two quiet lines of text with an edit affordance, without an enclosing panel. The collection rail follows immediately. Use one editable note for fit, color, comfort, body, and lifestyle context. Do not render complexion, hair color, season, or body type as separate profile cards, scores, or navigation.
 
-## Fits And Plans
+## Collections And Fits
 
 The Fits page is a visual diary. Its calendar uses the user’s own outfit photos as the primary activity signal and leaves unrecorded days quiet. Avoid numerical streak counters, longest-streak language, progress badges, or other gamified score surfaces.
 
@@ -70,9 +70,13 @@ Fit check, Try on, and inspiration use one direct photo button. It opens the dev
 
 Try-on feedback should read like a considered styling note, not a shopping scorecard. Lead with the verdict and explanation, ground it in a few owned closet anchors, and make the ownership boundary explicit. Compatibility colors are semantic: green for strong fit, pink only for a genuinely difficult fit, and neutral mauve/ink for mixed results.
 
-Plans are named, user-described loci inside Fits. Do not expose preset plan kinds. A plan member may be `Owned`, `Trying`, or `Inspiration`, and the user must be able to add, reclassify, and remove members directly. Keep membership controls compact and readable beside the photo rather than treating relationship labels as decorative badges.
+Collections are named, user-described groups within Wardrobe. Use a condensed horizontal rail with an All pieces entry. Each circle composes up to three actual member images into an ensemble, with contained photos and a clear selected ring. The selected collection exposes Pieces and Inspiration side by side as immediate view controls; neither belongs below a long list of the other. Add existing owned pieces through a compact picker.
 
-Show saved inspiration in its own visual lane inside the selected Plan. Label it `Inspiration · not owned`; do not offer owned-item relationship controls on candidate references. A photo is the input: avoid asking the user to write a label or explain what it means before saving it.
+The full shirt-shaped card opens a bottom drawer on phones and a side drawer on larger screens. Preserve photo-derived accents and contain the whole garment photo. Use a neutral gray hanger with substantial rounded strokes, a simple rounded hook, curved shoulders, a complete closed outline, and an empty center. Draw the entire hanger behind the garment photo so the item can overlap it; do not fill the hanger or imply wood. Retain the lightly tinted garment silhouette and vertically hanging shaped tag. Tags show a collection affordance and a personal-note indicator; put the category and details arrow in the caption. In the drawer, show attribute Labels, Collections with Manage, and My note with an explicit Save action.
+
+Fits starts with a Plan / Diary switch. Plan uses a seven-day strip and one selected outfit, with a short dictation prompt and calendar context nearby. Put Use this fit beside the outfit and keep swapping and explanations available as compact disclosures. No manual collection selector or duplicate capture cards. Past planned outfits can be corrected from Diary.
+
+The approved design permits rounded rails, day selectors, and drawer corners where the approved mock uses them; keep the distinctive garment shapes and physical tags as the visual focus.
 
 ## Accessibility
 
