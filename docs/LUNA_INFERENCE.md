@@ -38,7 +38,7 @@ bun --env-file=/path/to/private/env scripts/check-fit-localization.ts /path/to/p
 
 ## Rollout
 
-Configure the existing `OPENAI_API_KEY` in both the web host and Convex before deploying. Keep `GEMINI_API_KEY` in both environments. Scheduled style-memory actions execute in Convex; setting the web host's environment alone is insufficient. The OpenAI project must permit Responses and audio transcription. Local paid checks verified these endpoints with the project key; no production environment change or deployment is part of this PR.
+Configure the existing `OPENAI_API_KEY` in both the web host and Convex before deploying. Keep `GEMINI_API_KEY` in both environments. Scheduled style-memory actions execute in Convex; setting the web host's environment alone is insufficient. The OpenAI project must permit Responses and audio transcription. Local paid checks verified these endpoints with the project key. During PR preparation, the existing key was configured as a secret in Vercel production/preview, the Wardrobe production Convex deployment, and Convex preview defaults/current PR deployment. Preview Convex deployments also received the existing Google embedding key; the production Google key was left unchanged. This prepares rollout without deploying production code.
 
 After deployment, verify signed-in capture, direct existing-item matching, planning, transcription, scheduled style-memory generation, and safe Axiom span ingestion. Monitor accepted crop counts, latency, errors, and token/cache usage. Existing stored vectors remain valid when reverting this generation migration.
 
