@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { GarmentObservationReview } from "@/garment-observation-review";
+import { WearDiary, FitWearEvidence } from "@/wear-diary";
 import { ErrorPanel, Loading, Page, Panel } from "@/screen";
 import { colors } from "@/theme";
 import { useWardrobe } from "@/use-wardrobe";
@@ -19,6 +20,11 @@ import {
 } from "@/planner-ui";
 import { usePlanner } from "@/planner-context";
 import { PostHogMaskView } from "posthog-react-native";
+
+function PhotoNotes({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+  return <View><Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)} style={{ minHeight: 44, justifyContent: "center" }}><Text style={{ color: colors.plum, fontWeight: "600" }}>{open ? "Hide photo notes" : "Photo notes"}</Text></Pressable>{open && <Text selectable style={{ color: colors.ink, lineHeight: 20 }}>{text}</Text>}</View>;
+}
 
 type FitsView = "diary" | "plans";
 
@@ -100,14 +106,15 @@ export default function Fits() {
   const query = useWardrobe();
   const planner = usePlanner();
   const worn = (planner.data?.suggestions ?? [])
-    .filter((s) => s.status === "worn")
+    .filter((s) => s.status === "worn" && !s.wearOccurrenceId)
     .sort((a, b) => b.date.localeCompare(a.date));
   const daily = (query.data?.fitChecks ?? []).filter(
     (fit) => fit.type === "daily_fit_check",
   );
   const byDay = new Map<string, (typeof daily)[number]>();
   for (const fit of daily) {
-    const key = keyFor(fit.createdAt);
+    if (fit.wearOccurrenceId && !fit.localDate) continue;
+    const key = fit.localDate ?? keyFor(fit.createdAt);
     if (!byDay.has(key)) byDay.set(key, fit);
   }
   const days = Array.from({ length: 84 }, (_, index) => {
@@ -168,6 +175,7 @@ export default function Fits() {
 
       {!query.isLoading && !query.error && view === "diary" ? (
         <>
+          <WearDiary />
           {worn.length && planner.data ? (
             <PlannerGroup>
               <Text
@@ -178,7 +186,7 @@ export default function Fits() {
                   fontWeight: "600",
                 }}
               >
-                Outfits you wore
+                Previously confirmed outfits
               </Text>
               <PostHogMaskView>
                 {worn.map((s) => (
@@ -307,10 +315,10 @@ export default function Fits() {
                     source={fit.imageUrl}
                     style={{
                       width: "100%",
-                      aspectRatio: 1.15,
+                      aspectRatio: 0.75,
                       backgroundColor: colors.wash,
                     }}
-                    contentFit="cover"
+                    contentFit="contain"
                   />
                 ) : null}
                 <View style={{ padding: 14, gap: 8 }}>
@@ -323,17 +331,10 @@ export default function Fits() {
                       textTransform: "uppercase",
                     }}
                   >
-                    {fit.type === "try_on" ? "Try on" : "Fit check"} ·{" "}
+                    {fit.type === "try_on" ? "Try on" : "Fit check"} · Saved{" "}
                     {new Date(fit.createdAt).toLocaleDateString()}
                   </Text>
-                  <Text
-                    selectable
-                    style={{ color: colors.ink, lineHeight: 20 }}
-                  >
-                    {fit.transcription ??
-                      fit.description ??
-                      "This fit is still being read."}
-                  </Text>
+                  <PhotoNotes text={fit.transcription ?? fit.description ?? "This fit is still being read."} />
                   {fit.items.length > 0 ? (
                     <Text
                       selectable
@@ -344,7 +345,7 @@ export default function Fits() {
                     </Text>
                   ) : null}
                   {fit.type === "daily_fit_check" ? (
-                    <GarmentObservationReview observations={fit.observations} />
+                    <><FitWearEvidence fitId={fit.id} /><GarmentObservationReview observations={fit.observations} /></>
                   ) : null}
                 </View>
               </View>

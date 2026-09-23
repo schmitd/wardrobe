@@ -20,7 +20,7 @@ export async function planningRequest<T>(body: PlanningOperation): Promise<T> {
   const response = await fetch("/api/planning", {
     method: "POST",
     headers,
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, ...("id" in body ? { timezone: Intl.DateTimeFormat().resolvedOptions().timeZone } : {}) }),
   });
   const result = await response.json();
   // Deliberate bounded dimensions only, no date, IDs, text, calendar names or errors.

@@ -2,7 +2,7 @@ import postcss from "postcss";
 import tailwind from "@tailwindcss/postcss";
 import { collectionFixture, pieceSvg } from "./collection-fixture";
 import { resolve } from "node:path";
-import { shiftDay, sevenDays, type PlanningData } from "@wardrobe/shared";
+import { shiftDay, sevenDays, type PlanningData, type WearOutfit } from "@wardrobe/shared";
 import { boundedInteger } from "../property-options";
 
 const port = boundedInteger(process.env.PROBE_PORT, 4173, 1024, 65535);
@@ -23,13 +23,13 @@ const build = await Bun.build({
 });
 if (!build.success) throw new AggregateError(build.logs, "Gallery build failed");
 const bundle = build.outputs[0]!;
-type State = { catalog: ReturnType<typeof collectionFixture>; data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean };
+type State = { wears: WearOutfit[]; catalog: ReturnType<typeof collectionFixture>; data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean };
 const states = new Map<string, State>();
 function fixture(url: URL): State {
   // Match the Playwright/probe browser even when the runner's local date is UTC.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   return {
-    catalog: collectionFixture(),
+    wears: [], catalog: collectionFixture(),
     data: { items: ["Shirt", "Trousers", "Coat"].map((category, i) => ({ id: `piece-${i}`, category, description: `Synthetic ${category.toLowerCase()}`, imageUrl: null })), plans: [], calendarEnabled: true, calendarIds: ["synthetic-calendar"], suggestions: [{ id: "outfit", date: url.searchParams.get("scenario") === "history" ? shiftDay(today, -1) : today, title: "Easy structure for your day", rationale: "Relaxed tailoring draws on Work edit; the cotton layers work together for your client meeting.", itemIds: ["piece-0", "piece-1"], missing: [], context: ["Collection: Work edit", "Style profile"], status: "planned", calendarDerived: false }] },
     calls: [], stale: url.searchParams.get("case") === "stale", latency: boundedInteger(url.searchParams.get("latency") ?? undefined, 0, 0, 5000), scope: url.searchParams.get("scope") === "single_piece" ? "single_piece" : "full_fit", wrote: false,
   };
@@ -53,6 +53,11 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
       next.data.suggestions[0]!.status = "suggested";
       next.data.suggestions[0]!.itemIds = next.catalog.items.map(i => i.id);
     }
+    if (url.searchParams.get("case") === "wear") {
+      const plan = next.data.suggestions[0]!;
+      plan.status = "planned"; plan.planRevision = 1; plan.date = shiftDay(plan.date, -1);
+      next.wears.push({ id: "wear-photo", revision: 1, localDate: plan.date, itemIds: [plan.itemIds[0]!], pieces: next.data.items.slice(0, 1), photos: [{ id: "fit-photo", imageUrl: "/__fixture/piece-0.svg" }], unresolvedCount: 1, coverage: "partial", outcome: "unconfirmed", canUndoManual: false, recordedAt: Date.now() });
+    }
     states.set(session, next);
     return new Response(html, { headers: { "Content-Type": "text/html", "Set-Cookie": `probe_session=${session}; Path=/; HttpOnly; SameSite=Strict` } });
   }
@@ -75,7 +80,10 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
       case "wardrobe.itemDetails": return Response.json({ note: c.items.find(i => i.id === args.itemId)?.note ?? "", collections: c.collections.filter(collection => c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === collection._id)).map(collection => ({ id: collection._id, name: collection.name })), truncated: false });
       case "wardrobe.itemCollectionMembership": return Response.json(c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === args.wardrobeId));
       case "profile.getProfile": return Response.json({ bio: c.bio });
-      case "planning.load": return Response.json(state.data);
+      case "planning.load": return Response.json({ ...state.data, suggestions: state.data.suggestions.map(plan => ({ ...plan, _id: plan.id, createdAt: Date.now() })) });
+      case "wear.pendingPlans": return Response.json(state.data.suggestions.filter(plan => plan.status === "planned").map(plan => ({ ...plan, revision: plan.planRevision ?? 0, pieces: state.data.items.filter(item => plan.itemIds.includes(item.id)) })));
+      case "wear.list": return Response.json(state.wears);
+      case "fitChecks.pageFitChecks": return Response.json(state.wears.flatMap(wear => wear.photos.map(photo => ({ _id: photo.id, type: "daily_fit_check", imageUrl: photo.imageUrl, localDate: wear.localDate, wearOccurrenceId: wear.id, createdAt: wear.recordedAt, observations: [], description: "Synthetic photo notes should stay collapsed." }))));
       case "wardrobe.pageInspiration": case "candidates.listInspirationByWardrobe": return Response.json(c.inspirations.filter(r => r.wardrobeId === args.wardrobeId));
       default: return Response.json([]);
     }
@@ -104,7 +112,21 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
     case "planning_interpret": return Response.json({ days: sevenDays(String(input.week)).map(date => ({ date, description: "予定".repeat(600) })), clarification: "" });
     case "planning_generate_week": state.wrote = true; return Response.json({ updated: 7, kept: 0 });
     case "planning_edit": state.data.suggestions[0]!.itemIds = input.itemIds as string[]; state.wrote = true; return Response.json({ ok: true });
-    case "planning_worn": state.data.suggestions[0]!.status = "worn"; state.wrote = true; return Response.json({ ok: true });
+    case "planning_worn": {
+      const plan = state.data.suggestions[0]!; plan.status = "worn"; state.wrote = true;
+      const itemIds = input.itemIds as string[] ?? plan.itemIds;
+      if (!state.wears.some(wear => wear.planId === plan.id)) state.wears.push({ id: "wear-manual", planId: plan.id, revision: 1, localDate: plan.date, itemIds, pieces: state.data.items.filter(item => itemIds.includes(item.id)), photos: [], unresolvedCount: 0, coverage: "supported", outcome: "worn_differently", canUndoManual: true, recordedAt: Date.now() });
+      plan.wearOccurrenceId = "wear-manual";
+      return Response.json({ ok: true });
+    }
+    case "planning_not_worn": case "planning_clear_response": state.data.suggestions[0]!.notWornAt = operation === "planning_not_worn" ? Date.now() : undefined; return Response.json({ ok: true });
+    case "wear_update": {
+      const wear = state.wears.find(row => row.id === input.id)!;
+      if (input.action === "correct") { wear.itemIds = input.itemIds as string[]; wear.pieces = state.data.items.filter(item => wear.itemIds.includes(item.id)); wear.canUndoManual = true; wear.unresolvedCount = 0; }
+      if (input.action === "set_date") wear.localDate = String(input.localDate);
+      if (input.action === "undo_manual" && wear.photos.length === 0) { state.wears = state.wears.filter(row => row.id !== wear.id); state.data.suggestions[0]!.status = "planned"; }
+      wear.revision++; return Response.json({ ok: true });
+    }
     case "upload-url": return Response.json(`http://127.0.0.1:${port}/__fixture/upload`);
     case "route": return Response.json({ scope: state.scope, confidence: .95, needsReview: false, rationale: "Synthetic route" });
     case "daily-fit": return Response.json({ id: "synthetic-fit" });

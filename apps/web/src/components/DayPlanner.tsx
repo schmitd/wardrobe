@@ -201,7 +201,8 @@ function WeekPlanner({ userId, historyDate }: { userId: string; historyDate?: st
     }
   };
   const update = async (operation: PlanningOperation) => {
-    if (await run(operation)) {
+    const current = "id" in operation ? data?.suggestions.find(row => row.id === operation.id) : undefined;
+    if (await run({ ...operation, ...(current ? { expectedRevision: current.planRevision ?? 0 } : {}) })) {
       setSwap(null);
       setReason("");
       setMessage("Outfit updated.");
@@ -356,12 +357,12 @@ function WeekPlanner({ userId, historyDate }: { userId: string; historyDate?: st
               ) : outfit.status === "planned" ? (
                 <Button
                   className="rack-primary-action"
-                  disabled={busy}
+                  disabled={busy || outfit.date > localDate()}
                   onClick={() =>
-                    void update({ operation: "planning_worn", id: outfit.id })
+                    void update({ operation: "planning_worn", id: outfit.id, expectedRevision: outfit.planRevision ?? 0 })
                   }
                 >
-                  I wore this
+                  Wore it
                 </Button>
               ) : (
                 <p>Recorded as worn.</p>
@@ -395,36 +396,22 @@ function WeekPlanner({ userId, historyDate }: { userId: string; historyDate?: st
                   })}
                 </ul>
                 {outfit.status !== "worn" && outfit.itemIds.length < 12 && <Button variant="outline" disabled={busy} onClick={() => setSwap("add")}>Add a piece</Button>}
-                {outfit.status === "planned" && <p className="text-sm text-[#685e70]">Adjust the pieces to match what you actually wore before confirming.</p>}
+                {outfit.status === "planned" && <p className="text-sm text-[#685e70]">Changes here update your plan. Record a different actual outfit in Diary.</p>}
                 {swap && (
-                  <label className="block space-y-2">
-                    {swap === "add" ? "Add an owned piece" : "Replace with an owned piece"}
-                    <select
-                      data-private
-                      className={input}
-                      value=""
-                      disabled={busy}
-                      onChange={(e) => {
-                        if (e.target.value)
-                          void update({
-                            operation: "planning_edit",
-                            id: outfit.id,
-                            itemIds: swap === "add" ? [...outfit.itemIds, e.target.value] : outfit.itemIds.map((id) =>
-                              id === swap ? e.target.value : id,
-                            ),
-                          });
-                      }}
-                    >
-                      <option value="">Choose a replacement…</option>
-                      {data?.items
-                        .filter((i) => !outfit.itemIds.includes(i.id))
-                        .map((i) => (
-                          <option key={i.id} value={i.id}>
-                            {i.category}: {i.description}
-                          </option>
-                        ))}
-                    </select>
-                  </label>
+                  <div className="space-y-2">
+                    <p className="font-semibold">{swap === "add" ? "Add an owned piece" : "Choose a replacement"}</p>
+                    <div data-private className="grid max-h-80 grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4">
+                      {data?.items.filter(item => !outfit.itemIds.includes(item.id)).map(item => (
+                        <button key={item.id} type="button" disabled={busy} className="rounded-xl border bg-[#faf7fb] p-2 hover:border-[#735079] focus-visible:outline-2 focus-visible:outline-[#735079]" onClick={() => void update({
+                          operation: "planning_edit", id: outfit.id,
+                          itemIds: swap === "add" ? [...outfit.itemIds, item.id] : outfit.itemIds.map(id => id === swap ? item.id : id),
+                        })}>
+                          {item.imageUrl ? <Image src={item.imageUrl} alt={item.description || item.category} width={100} height={116} unoptimized className="h-28 w-full object-contain" /> : <div className="h-28 content-center text-sm">No photo</div>}
+                          <span className="text-sm font-semibold">{item.category}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 )}
                 </details>
               </>

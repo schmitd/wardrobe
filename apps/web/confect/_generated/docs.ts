@@ -7,6 +7,7 @@ export type FitCheckItemsDoc = Document.Document<typeof schemaDefinition, "fitCh
 export type FitChecksDoc = Document.Document<typeof schemaDefinition, "fitChecks">;
 export type GarmentObservationsDoc = Document.Document<typeof schemaDefinition, "garmentObservations">;
 export type OutfitSuggestionsDoc = Document.Document<typeof schemaDefinition, "outfitSuggestions">;
+export type PlanRevisionsDoc = Document.Document<typeof schemaDefinition, "planRevisions">;
 export type PlanningSettingsDoc = Document.Document<typeof schemaDefinition, "planningSettings">;
 export type ProfileBioRevisionsDoc = Document.Document<typeof schemaDefinition, "profileBioRevisions">;
 export type ProfilesDoc = Document.Document<typeof schemaDefinition, "profiles">;
@@ -18,6 +19,12 @@ export type UploadsDoc = Document.Document<typeof schemaDefinition, "uploads">;
 export type WardrobeItemsDoc = Document.Document<typeof schemaDefinition, "wardrobeItems">;
 export type WardrobeMembershipsDoc = Document.Document<typeof schemaDefinition, "wardrobeMemberships">;
 export type WardrobesDoc = Document.Document<typeof schemaDefinition, "wardrobes">;
+export type WearEvidenceDoc = Document.Document<typeof schemaDefinition, "wearEvidence">;
+export type WearGraphLocksDoc = Document.Document<typeof schemaDefinition, "wearGraphLocks">;
+export type WearGraphNodesDoc = Document.Document<typeof schemaDefinition, "wearGraphNodes">;
+export type WearOccurrencesDoc = Document.Document<typeof schemaDefinition, "wearOccurrences">;
+export type WearProjectionOutboxDoc = Document.Document<typeof schemaDefinition, "wearProjectionOutbox">;
+export type WearRevisionsDoc = Document.Document<typeof schemaDefinition, "wearRevisions">;
 
 export interface Docs {
   candidateItems: CandidateItemsDoc;
@@ -26,6 +33,7 @@ export interface Docs {
   fitChecks: FitChecksDoc;
   garmentObservations: GarmentObservationsDoc;
   outfitSuggestions: OutfitSuggestionsDoc;
+  planRevisions: PlanRevisionsDoc;
   planningSettings: PlanningSettingsDoc;
   profileBioRevisions: ProfileBioRevisionsDoc;
   profiles: ProfilesDoc;
@@ -37,4 +45,10 @@ export interface Docs {
   wardrobeItems: WardrobeItemsDoc;
   wardrobeMemberships: WardrobeMembershipsDoc;
   wardrobes: WardrobesDoc;
+  wearEvidence: WearEvidenceDoc;
+  wearGraphLocks: WearGraphLocksDoc;
+  wearGraphNodes: WearGraphNodesDoc;
+  wearOccurrences: WearOccurrencesDoc;
+  wearProjectionOutbox: WearProjectionOutboxDoc;
+  wearRevisions: WearRevisionsDoc;
 }

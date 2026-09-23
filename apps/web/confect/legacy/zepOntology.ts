@@ -179,3 +179,28 @@ export const wardrobeEdgeTypes = {
     ],
   },
 } satisfies Record<string, EdgeType>;
+
+// Version 2 is registered only when the reviewed live-projection gate is enabled.
+const occurrenceFields = { source_ref: entityFields.text("Stable application occurrence ID."), occurrence_kind: entityFields.text("Accepted plan intent or observed actual wear; never interchangeable.") };
+export const wearEntityTypes = {
+  PlanOccurrence: { description: "One explicitly accepted outfit intention. Never proof of actual wear.", fields: occurrenceFields },
+  WearOccurrence: { description: "One actual outfit supported by a daily fit photo or explicit user affirmation.", fields: occurrenceFields },
+} satisfies Record<string, EntityType>;
+const provenanceFields = {
+  ontology_version: entityFields.integer("Wear ontology version, always 2."),
+  aggregate_id: entityFields.text("Stable authoritative occurrence ID."),
+  aggregate_revision: entityFields.integer("Current authoritative occurrence revision."),
+  source_ref: entityFields.text("Stable application source reference."),
+  occurrence_date: entityFields.text("Actual local wear date, or intended plan date. Null when unknown."),
+  occurrence_timezone: entityFields.text("IANA timezone. Null when unknown."),
+  time_precision: entityFields.text("date or unknown. Never infer an instant from a date."),
+  recorded_at: entityFields.text("When this revision was recorded; separate from wear time."),
+  evidence_refs: entityFields.text("Active authoritative evidence IDs, separated by commas."),
+  item_id: entityFields.text("Stable owned item ID for membership assertions."),
+};
+export const wearEdgeTypes = {
+  PLANS_TO_WEAR: { description: "Accepted outfit intention only; never observed wear.", fields: provenanceFields, sourceTargets: [{ source: "PlanOccurrence", target: "WardrobeItem" }] },
+  WORE_ITEM: { description: "Specific garment supported by current authoritative actual-wear evidence.", fields: provenanceFields, sourceTargets: [{ source: "WearOccurrence", target: "WardrobeItem" }] },
+  REALIZES_PLAN: { description: "Actual wear associated with a specific plan revision; may remain partial.", fields: provenanceFields, sourceTargets: [{ source: "WearOccurrence", target: "PlanOccurrence" }] },
+  TRIED_IN: { description: "Try-on evaluation only; never actual-wear evidence.", fields: { source_ref: entityFields.text("Original try-on source ID."), event_time: entityFields.text("Source try-on time, not identity-resolution time.") }, sourceTargets: [{ source: "WardrobeItem", target: "WearContext" }, { source: "CandidateItem", target: "WearContext" }] },
+} satisfies Record<string, EdgeType>;

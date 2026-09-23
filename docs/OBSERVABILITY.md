@@ -45,6 +45,7 @@ Native TestFlight instrumentation and release checks are documented in [TESTFLIG
 | `inspiration_saved` | `has_photo`, `collection_type` | Are users returning to product discovery? |
 | `unified_capture_completed` | bounded `intent`, `scope` | Which capture flows complete? |
 | `planning_operation_finished` | bounded `operation`, `outcome`, `duration_ms`, `source`, `analytics_schema` | Where do planning requests fail or slow down? |
+| `wear_list` / `wear_update` (operation values) | Same request envelopes as planning on web/native; no outfit IDs, garment descriptions, dates or photo data | Read and correction reliability for the outfit Diary |
 | `wardrobe_item_note_saved` | `character_count`, bounded `surface` | Are users keeping practical context on individual pieces? |
 | `wardrobe_collection_changed` | `operation` (`created`, `updated`, `piece_added`, `piece_removed`), `surface` (`wardrobe`) | Are collections helping users organize existing pieces? |
 | `profile_bio_saved` | `character_count`, bounded `surface` | Are users personalizing recommendations? |

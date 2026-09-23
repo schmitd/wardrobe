@@ -15,6 +15,12 @@ const invoke = (fn: unknown, ctx: unknown, args: unknown) =>
 function fixture(userId = "alice") {
   const tables: Record<string, Row[]> = {
     deletedAccounts: [],
+    planRevisions: [],
+    wearOccurrences: [],
+    wearEvidence: [],
+    wearRevisions: [],
+    wearProjectionOutbox: [],
+    styleBioJobs: [],
     wardrobeItems: [
       { _id: "shirt", userId: "alice" },
       { _id: "coat", userId: "alice" },
@@ -27,6 +33,7 @@ function fixture(userId = "alice") {
         itemIds: ["shirt"],
         status: "suggested",
         calendarDerived: false,
+        date: "2026-09-01", title: "Monday", context: [],
       },
       {
         _id: "calendar-outfit",
@@ -34,6 +41,7 @@ function fixture(userId = "alice") {
         itemIds: ["shirt"],
         status: "planned",
         calendarDerived: true,
+        date: "2026-09-01", title: "Meeting", context: [],
       },
       {
         _id: "foreign-outfit",
@@ -96,6 +104,7 @@ function fixture(userId = "alice") {
     tables,
     ctx: {
       db,
+      scheduler: { runAfter: async () => "scheduled" },
       auth: {
         getUserIdentity: async () => (userId ? { subject: userId } : null),
       },
@@ -120,18 +129,21 @@ describe("planning ownership and lifecycle", () => {
   test("accepts, swaps, and records the actual worn pieces atomically", async () => {
     const f = fixture();
     await expect(
-      invoke(update, f.ctx, { id: "suggestion", status: "worn" }),
+      invoke(update, f.ctx, { id: "suggestion", status: "worn", expectedRevision: 1 }),
     ).rejects.toThrow();
     await invoke(update, f.ctx, { id: "suggestion", status: "planned" });
     await invoke(update, f.ctx, {
       id: "suggestion",
-      status: "worn",
+      status: "worn", expectedRevision: 1,
       itemIds: ["coat"],
+      timezone: "America/New_York",
     });
     expect(await f.ctx.db.get("suggestion")).toMatchObject({
       status: "worn",
-      itemIds: ["coat"],
+      itemIds: ["shirt"],
     });
+    expect(f.tables.wearOccurrences[0]).toMatchObject({ itemIds: ["coat"], outcome: "worn_differently" });
+    expect(f.tables.planRevisions[0]).toMatchObject({ itemIds: ["shirt"], revision: 1 });
     await expect(
       invoke(update, f.ctx, { id: "suggestion", itemIds: ["shirt"] }),
     ).rejects.toThrow();
@@ -151,10 +163,10 @@ describe("planning ownership and lifecycle", () => {
       reason: "Pieces unavailable",
     });
   });
-  test("disconnect removes only this user's calendar-derived outfits", async () => {
+  test("disconnect preserves accepted plans and removes unaccepted calendar suggestions", async () => {
     const f = fixture();
     await invoke(calendar, f.ctx, { enabled: false, calendarIds: [] });
-    expect(await f.ctx.db.get("calendar-outfit")).toBeNull();
+    expect(await f.ctx.db.get("calendar-outfit")).not.toBeNull();
     expect(await f.ctx.db.get("suggestion")).not.toBeNull();
     expect(await f.ctx.db.get("foreign-outfit")).not.toBeNull();
     expect(await f.ctx.db.get("settings")).toMatchObject({
@@ -215,7 +227,7 @@ describe("planning ownership and lifecycle", () => {
       userId: "bob",
     });
   });
-  test("week retention preserves committed outfits and bounds private history", async () => {
+  test("week retention never evicts or caps accepted outfit history", async () => {
     const f = fixture();
     f.tables.outfitSuggestions = Array.from({ length: 100 }, (_, i) => ({
       _id: `history-${i}`,
@@ -255,7 +267,8 @@ describe("planning ownership and lifecycle", () => {
           },
         ],
       }),
-    ).rejects.toThrow("history is full");
+    ).resolves.toMatchObject({ updated: 1 });
+    expect(f.tables.outfitSuggestions.length).toBe(101);
   });
   test("week saves validate ownership, duplicates, and Calendar revision", async () => {
     const row = {

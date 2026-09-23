@@ -1,0 +1,22 @@
+# Draft implementation and verification
+
+Implementation for #105 / #106, September 22, 2026. This draft is based on the approved B/C direction. No user graph migration or release has been performed.
+
+The application now keeps accepted plan revisions, actual wear revisions and separate photo/manual/correction evidence. Every daily-fit entry point uses the same mutation, including subsequent garment identification. A later identification retains the original wear date. Unknown garments never become planned garments by implication. Date-only capture can associate one compatible accepted plan with no existing actual occurrence; ambiguity and an existing manual occurrence require explicit linkage. Timed association belongs to the reminders integration.
+
+Web and native Diary support Wore it, visual actual-piece correction, undo, explicit Didn't wear this / Edit response, photo date correction, plan linkage/unlinking and reversible exclusion of a photo from wear. The original photo remains available when its wear support is excluded. Photo-file deletion is not introduced by this draft; account deletion uses the existing centralized media deletion path. Camera capture carries its timestamp; library capture asks for its wear date. Historical plans remain stored and unconfirmed plans have an indexed cursor API and Load earlier plans on both clients. Older worn rows remain visible as previously recorded; they are not silently converted into proof-backed graph history.
+
+The graph projection adds two occurrence entity types and three relationships: PLANS_TO_WEAR, WORE_ITEM and REALIZES_PLAN. TRIED_IN retains evaluation semantics. The broader diagram in architecture.md describes possible context/root links; those links are not necessary for this projection and are not emitted. No fit-analysis episode can recreate wear assertions through generic extraction. Every wear retrieval path validates the current application revision and reconstructs text from owned item records. Until a reviewed migration classifies old graph facts, legacy semantic facts are excluded from these retrieval paths; manual style notes and current owned wardrobe context remain available. This is a deliberate temporary loss of legacy semantic recall.
+
+The outbox defaults to shadow. Live publication requires WARDROBE_WEAR_ZEP_MODE=live and explicit operator activation of shadow batches. It serializes per user, journals returned node/edge/task IDs, reuses exact owned-item source references, updates retained memberships and expires removed memberships. Missing or ambiguous legacy item identity mappings stop publication for review. An ambiguous provider outcome or crashed action is quarantined and keeps the user projection lock; it is never automatically resubmitted. This requires an operator reconciliation runbook before release. Turning on a flag alone is not a migration strategy.
+
+## Evidence
+
+- Convex integration tests cover untouched Calendar suggestions, ownership, stale revisions, manual retry, partial photo association, later identity resolution, original date, explicit photo/manual merge, correction/undo, photo exclusion, current-fact retrieval, account deletion and old-plan pagination.
+- The web unit suite passed 141 tests before the final pagination addition; the focused evidence/planning suite then passed 21 tests. Final build/type checks are recorded in the PR.
+- The three existing browser journeys passed. A 390px browser probe exercised the real Diary, visual picker, save and undo with synthetic external boundaries. Local artifacts: output/fit-evidence/browser-paginated. Fixtures do not establish real recognition accuracy, authentication, calendar or native-device behavior.
+- scripts/probe-wear-zep.ts passed against a temporary synthetic graph using the configured service credential. It verified typed nodes, returned IDs, revision attributes, retained edge identity, expiration of removed membership and complete retraction. Every temporary graph created by the probe was deleted. The probe exposed and resolved ontology attribute validation and the provider's ten-attribute update limit.
+
+## Release gates
+
+Keep the PR draft. Validate cold-start/native camera and library flows on installed builds; establish timed-plan association and provider delivery in #107; review and run legacy graph mapping/migration with rollback; rehearse uncertain task reconciliation; benchmark whole-outfit matching under #66. Shadow mode never claims Zep delivery. No automatic backfill, deployment, merge or paid-plan change is included.

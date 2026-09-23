@@ -269,41 +269,43 @@ export const internalProfileUpdate = internalMutation({
 });
 
 export async function readStyleBioContext(ctx: QueryCtx, userId: string) {
-    const [profile, items, allFitChecks, collections, memberships] = await Promise.all([
+    const [profile, items, allFitChecks, collections, memberships, wears] = await Promise.all([
       ctx.db.query("profiles").withIndex("by_user", (q) => q.eq("userId", userId)).first(),
       ctx.db.query("wardrobeItems").withIndex("by_user", (q) => q.eq("userId", userId)).order("desc").take(301),
       ctx.db.query("fitChecks").withIndex("by_user", (q) => q.eq("userId", userId)).order("desc").take(51),
       ctx.db.query("wardrobes").withIndex("by_user_updatedAt", (q) => q.eq("userId", userId)).order("desc").take(101),
       ctx.db.query("wardrobeMemberships").withIndex("by_user", (q) => q.eq("userId", userId)).order("desc").take(501),
+      ctx.db.query("wearOccurrences").withIndex("by_user", q => q.eq("userId", userId)).order("desc").take(51),
     ]);
 
     const readyItems = items.filter((item) => item.analysisStatus === "ready");
     const counts = {
       closetItemCount: readyItems.length,
-      fitCheckCount: allFitChecks.length,
+      fitCheckCount: wears.filter(row => row.active).length + allFitChecks.filter(fit => fit.type === "daily_fit_check" && !fit.wearOccurrenceId).length,
       collectionCount: collections.length,
       collectionMembershipCount: memberships.length,
     };
     const contextLimited = items.length > 300 || allFitChecks.length > 50 || collections.length > 100 || memberships.length > 500;
-    const fingerprint = styleBioContextFingerprint(counts) + (contextLimited ? `:${items[0]?._id ?? ""}:${allFitChecks[0]?._id ?? ""}:${collections[0]?.updatedAt ?? ""}:${memberships[0]?._id ?? ""}` : "");
+    const fingerprint = `wear-v2:${styleBioContextFingerprint(counts)}:${wears.map(row => `${row._id}.${row.revision}`).join(",")}` + (contextLimited ? `:${items[0]?._id ?? ""}:${allFitChecks[0]?._id ?? ""}:${collections[0]?.updatedAt ?? ""}:${memberships[0]?._id ?? ""}` : "");
     const refreshState = getStyleBioRefreshState(profile, counts);
+    const evidenceChanged = wears.length > 0 && fingerprint !== profile?.bioContextFingerprint;
 
     return {
       profile,
       counts,
       fingerprint,
       contextLimited,
-      shouldRefresh: refreshState.refresh || (contextLimited && fingerprint !== profile?.bioContextFingerprint),
-      refreshReason: contextLimited ? "recent_context_shift" : refreshState.reason,
+      shouldRefresh: refreshState.refresh || evidenceChanged || (contextLimited && fingerprint !== profile?.bioContextFingerprint),
+      rebuildFromEvidence: evidenceChanged,
+      refreshReason: evidenceChanged ? "wear_evidence_changed" : contextLimited ? "recent_context_shift" : refreshState.reason,
       closetItems: readyItems.slice(0, 40).map((item) => ({
         category: item.category ?? null,
         description: item.description ?? null,
         styleTags: item.styleTags ?? [],
       })),
-      recentFits: allFitChecks.slice(0, 20).map((fit) => ({
-        type: fit.type,
-        description: fit.transcription ?? fit.description ?? null,
-        createdAt: fit.createdAt,
+      recentFits: await Promise.all(wears.filter(row => row.active && row.itemIds.length > 0).slice(0, 20).map(async row => {
+        const pieces = await Promise.all(row.itemIds.slice(0, 12).map(id => ctx.db.get(id)));
+        return { type: "actual_wear", description: pieces.filter(piece => piece?.userId === userId).map(piece => (piece!.description ?? piece!.category ?? "Saved piece").slice(0, 300)).join("; "), localDate: row.localDate ?? null, createdAt: row.createdAt };
       })),
       collections: collections.slice(0, 100).map((collection) => ({
         name: collection.name,

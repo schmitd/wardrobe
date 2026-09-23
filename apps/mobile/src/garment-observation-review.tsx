@@ -17,7 +17,7 @@ export function GarmentObservationReview({ observations }: { observations: Garme
     mutationFn: (input: { observationId: string; itemId?: string }) => input.itemId
       ? resolveObservation(getToken, input.observationId, input.itemId)
       : promoteObservation(getToken, input.observationId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["mobile-bootstrap"] }),
+    onSuccess: async () => { await Promise.all([queryClient.invalidateQueries({ queryKey: ["mobile-bootstrap"] }), queryClient.invalidateQueries({ queryKey: ["wear-diary"] }), queryClient.invalidateQueries({ queryKey: ["day-planning"] })]); },
   });
 
   if (!observations.length) return null;

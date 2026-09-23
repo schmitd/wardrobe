@@ -7,7 +7,7 @@ import spec from "./styleMemory.spec";
 import { generateMaintainedStyleBio } from "../src/server/inference/styleBio";
 import { InferenceLive } from "../src/services/InferenceService";
 import { truncateWords } from "../src/lib/inferenceOutputGuards";
-import { searchStyleBioGraphContext } from "./legacy/zep";
+import { searchWearCandidates } from "./legacy/wearGraphProvider";
 
 const refresh = FunctionImpl.make(schema, spec, "refresh", ({ userId }): Effect.Effect<null, never, ActionCtx> => Effect.gen(function* () {
   const ctx = yield* ActionCtx;
@@ -18,10 +18,13 @@ const refresh = FunctionImpl.make(schema, spec, "refresh", ({ userId }): Effect.
     if (!context.shouldRefresh) return;
     const currentBio = context.profile?.bio ?? "";
     const manualAnchor = context.profile?.bioManualAnchor ?? "";
-    const graphFacts = yield* Effect.tryPromise({ try: () => searchStyleBioGraphContext(userId), catch: () => new Error("Style graph unavailable") }).pipe(Effect.timeout("10 seconds"), Effect.catch(() => Effect.succeed([] as string[])));
+    const candidates = yield* Effect.tryPromise({ try: () => searchWearCandidates(userId, "Current actual wear and repeated outfits"), catch: () => new Error("Style graph unavailable") }).pipe(Effect.timeout("10 seconds"), Effect.catch(() => Effect.succeed([])));
+    const matched = candidates.length ? yield* Effect.promise(() => ctx.runQuery(internal.wearProjectionData.currentFacts, { userId, candidates })) : [];
+    const currentFacts = matched.length ? matched : yield* Effect.promise(() => ctx.runQuery(internal.wearProjectionData.currentFacts, { userId }));
+    const graphFacts = currentFacts.map(fact => fact.fact);
     const generated = context.counts.closetItemCount + context.counts.fitCheckCount + context.counts.collectionCount === 0
       ? { bio: manualAnchor || currentBio || "I'm building a clearer picture of what I like to wear. As my closet and outfit notes grow, this space will track the colors, shapes, textures, and combinations I return to without guessing ahead of the evidence." }
-      : yield* generateMaintainedStyleBio({ currentBio, manualAnchor, refreshReason: context.refreshReason, closetItems: context.closetItems, recentFits: context.recentFits, collections: context.collections, graphFacts }).pipe(Effect.provide(InferenceLive));
+      : yield* generateMaintainedStyleBio({ currentBio: context.rebuildFromEvidence ? manualAnchor : currentBio, manualAnchor, refreshReason: context.refreshReason, closetItems: context.closetItems, recentFits: context.recentFits, collections: context.collections, graphFacts }).pipe(Effect.provide(InferenceLive));
     yield* Effect.promise(() => ctx.runMutation(internal.styleMemoryData.save, {
       userId, jobRevision: snapshot.revision, bio: truncateWords(generated.bio, 110), reason: context.refreshReason, contextFingerprint: context.fingerprint, ...context.counts,
       ...(context.profile?.bioRevisionId ? { baseRevisionId: context.profile.bioRevisionId } : {}),

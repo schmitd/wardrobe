@@ -18,4 +18,7 @@ export const outfitFields = {
   createdAt: v.number(),
   updatedAt: v.number(),
   reason: v.optional(v.string()),
+  planRevision: v.optional(v.number()),
+  wearOccurrenceId: v.optional(v.id("wearOccurrences")),
+  notWornAt: v.optional(v.number()),
 };

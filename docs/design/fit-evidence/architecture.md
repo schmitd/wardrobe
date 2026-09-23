@@ -1,6 +1,6 @@
 # Planned intent and actual wear: domain and graph design
 
-Proposed, 2026-09-22. Related [#105](https://github.com/schmitd/wardrobe/issues/105) and [#106](https://github.com/schmitd/wardrobe/issues/106). No schema, ontology or production graph is changed by this document.
+Design and draft implementation, 2026-09-22. See [implementation status](implementation.md). Related [#105](https://github.com/schmitd/wardrobe/issues/105) and [#106](https://github.com/schmitd/wardrobe/issues/106). The draft adds application schema and gated projection code; production graph migration remains a separate release gate.
 
 ## Current code evidence
 
@@ -32,6 +32,8 @@ Proposed names describe responsibilities; final schemas should fit Confect/Effec
 Store `capturedAt`, `occurredAt`/local date, `recordedAt`, and time precision separately. With date-only evidence, preserve a local date and zone without fabricating an instant. Calendar start time is intention, not an observed duration of wear. Retain only the minimum consented calendar identifiers/timing needed for scheduling and reconciliation; do not ingest raw event descriptions or attendee lists.
 
 `PlanOutcome` is derived: unconfirmed, confirmed_as_planned, worn_differently, explicitly_not_worn. Cancellation is a plan lifecycle operation; a push dismissal is neither. `WearCoverage` is separate: partial versus supported. A partial wear occurrence may be associated with a still-unconfirmed plan.
+
+Confirmed in the 2026-09-22 discussion: untouched Calendar-generated suggestions produce no Zep episode. Explicit acceptance records intent; explicit wear affirmation or a daily fit records wear. Resolving a garment in a daily fit automatically adds its wear support at the original wear date, even when resolved later. The FAB and plan-linked capture use the same pipeline. Try-ons remain typed evaluation, and silence never becomes rejection or dislike.
 
 ### Transitions and precedence
 

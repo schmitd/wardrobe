@@ -2,6 +2,8 @@
 
 Status: design direction reviewed on 2026-09-22. David accepted the reminder cap and described the mockups as major improvements, especially B and C. Use B as the leading reference for Diary and correction interactions, and C for reminders and sharing. The architecture remains a technical proposal with its stated validation gates; PRs stay draft. This document does not authorize a production graph migration or release.
 
+Implementation status and verification: [draft implementation](implementation.md).
+
 Tracking: [user story #105](https://github.com/schmitd/wardrobe/issues/105), [ontology #106](https://github.com/schmitd/wardrobe/issues/106), [notifications #107](https://github.com/schmitd/wardrobe/issues/107), [image sharing #108](https://github.com/schmitd/wardrobe/issues/108). Existing [actual-worn editing #88](https://github.com/schmitd/wardrobe/issues/88), [planning #65](https://github.com/schmitd/wardrobe/issues/65), [matcher benchmark #66](https://github.com/schmitd/wardrobe/issues/66), [capture intent #93](https://github.com/schmitd/wardrobe/issues/93), and [style refresh #95](https://github.com/schmitd/wardrobe/issues/95) retain their history and release gates.
 
 ## The user story
@@ -65,7 +67,7 @@ An earlier fit that does not correspond to an evening plan cannot confirm it. Mu
 - Recommended: keep manual **Wore it** on the plan/Diary, with no direct background wear mutation from a lock-screen action. Push opens the current state.
 - Recommended: ask only about uncertain pieces/time/plan context; users can leave a partial record.
 - Recommended: past plans remain quietly unconfirmed indefinitely, with no follow-up push or inferred negative preference.
-- David accepted the two-per-day reminder cap on 2026-09-22. Retain the proposed three-hour spacing as the working cadence. Midday time, quiet hours and untimed-plan handling remain documented defaults/options in #107.
+- David accepted the two-per-day reminder cap on 2026-09-22. Retain the proposed three-hour spacing as the working cadence. Noon for untimed plans and one selected phone were also accepted; quiet hours remain the working default in #107.
 - The generated boards intentionally avoid a full manual outfit form. Review the hierarchy here or comment in #105/#106 before implementation.
 
 ## Implementation slices after review
