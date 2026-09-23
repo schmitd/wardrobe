@@ -12,6 +12,7 @@ The image was made with built-in imagegen using [this prompt](imagegen-prompts.m
 
 - Timed accepted plan: invite a fit photo when the event starts; cancel the reminder when the corresponding capture or wear has been recorded.
 - No accepted plan that local day: one reminder at noon if no fit/wear has been recorded. A saved partial daily fit counts as having answered the capture prompt; unresolved pieces remain an in-app question.
+- Accepted on 2026-09-22: an untimed plan gets one noon reminder. Delivery goes to one selected phone; registering another device does not enable multiple-device delivery.
 - Past unconfirmed plan: leave a quiet **Wore it** affordance in Diary. No repeated push demanding an answer.
 - Accepted cap for multiple events: at most two reminders per local day. Retain the proposed minimum three-hour spacing; quiet hours 9 PM–9 AM remain a working default. This records David’s explicit response.
 - Share fit: hand the image to the operating system. No contact permission, social destination inside Wardrobe or public link.

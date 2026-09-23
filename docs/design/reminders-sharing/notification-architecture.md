@@ -10,11 +10,11 @@ Consent is required for each enabled notification category and at the operating-
 | --- | --- | --- | --- | --- |
 | `planned_fit_due` | Start of an accepted timed outfit occurrence | Current active plan revision, reliable event time, no corresponding saved/in-progress capture or active wear affirmation | Once per occurrence; expire at min(start + 60 min, end), shared cap/cooldown/quiet hours | Open existing capture with occurrence context, then validate current state |
 | `daily_fit_due` | 12:00 in selected IANA zone; user configurable | No active accepted plan anywhere on that local date; no saved daily fit or manual wear on that date; no active capture | Once per local date, expire 2 hours after chosen midday time; shared controls | Open existing daily-fit capture |
-| `untimed_plan_fit_due` | Optional selected midday time | Accepted all-day/date-only plan, no capture/evidence | Proposed option, disabled until approved; replace any daily opportunity, never midnight | Open relevant plan/capture |
+| `untimed_plan_fit_due` | Noon in the selected IANA zone | Accepted all-day/date-only plan, no corresponding capture/evidence | Accepted 2026-09-22; replace any daily opportunity, never midnight | Open relevant plan/capture |
 | Past-plan follow-up | No push | Past unconfirmed plan | Quiet in-app action indefinitely | Wore it / add photo / edit |
 | Share, suggestion, try-on, graph update | No push in initial catalog | Separate issue must justify adding a kind | No default sends | — |
 
-An accepted plan later tonight suppresses the generic noon reminder. A bare calendar event, discarded suggestion or cancelled outfit does not count as an active outfit plan. Untimed/all-day accepted plans suppress the no-plan reminder even while the optional untimed-plan reminder remains disabled. This avoids pretending a day plan starts at midnight; review whether to enable the explicit midpoint option.
+An accepted plan later tonight suppresses the generic noon reminder. A bare calendar event, discarded suggestion or cancelled outfit does not count as an active outfit plan. Untimed/all-day accepted plans get one noon opportunity instead of the generic no-plan reminder. David accepted this behavior on 2026-09-22.
 
 A recorded morning fit suppresses the generic daily prompt, not a separate evening occurrence's prompt. A partial photo of the evening outfit suppresses another request to take that same photo; the plan can remain unconfirmed while the inline unknown-item question is available. A try-on does not count as a daily wear record. “Didn't wear this” resolves that occurrence's reminder without generating a negative style preference. Notification open, dismiss and delivery receipt never alter wear state.
 
