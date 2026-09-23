@@ -13,6 +13,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import GarmentObservationReview from '@/components/GarmentObservationReview';
 import DayPlanner from '@/components/DayPlanner';
 import WornOutfits from '@/components/WornOutfits';
+import FitWearEvidence from '@/components/FitWearEvidence';
 
 const dayKey = (date: Date | number) => {
   const value = new Date(date);
@@ -25,12 +26,12 @@ export default function FitsPage() {
 
 function FitsContent() {
   const searchParams = useSearchParams();
-  const activeView = searchParams.get('view') === 'diary' ? 'diary' : 'plan';
+  const activeView = searchParams.get('view') === 'plan' ? 'plan' : 'diary';
   const { isLoaded, isSignedIn } = useUser();
   const history = usePaginatedQuery(api.fitChecks.pageFitChecks, isLoaded && isSignedIn ? {} : 'skip', { initialNumItems: 20 });
   const fitChecks = history.results;
   const dailyChecks = useMemo(() => (fitChecks ?? []).filter((check) => check.type === 'daily_fit_check'), [fitChecks]);
-  const checkByDay = useMemo(() => new Map(dailyChecks.map((check) => [dayKey(check.createdAt), check])), [dailyChecks]);
+  const checkByDay = useMemo(() => new Map(dailyChecks.filter(check => check.localDate || !check.wearOccurrenceId).map((check) => [check.localDate ?? dayKey(check.createdAt), check])), [dailyChecks]);
   const days = useMemo(() => Array.from({ length: 84 }, (_, index) => {
     const date = new Date();
     date.setHours(0, 0, 0, 0);
@@ -68,7 +69,16 @@ function FitsContent() {
         </div>
       </section>
 
-      <section><h2 className="text-xl font-extrabold text-[#241426]">Recent fits</h2>{history.status === 'CanLoadMore' && <Button variant="outline" onClick={() => history.loadMore(20)}>Load earlier fits</Button>}<div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{(fitChecks ?? []).map((fitCheck) => <article id={`fit-${String(fitCheck._id)}`} key={String(fitCheck._id)} className="overflow-hidden border border-[var(--rack-line)] bg-white shadow-[3px_3px_0_var(--rack-panel-shadow)]"><div className="relative aspect-[4/3] bg-[var(--rack-wash)]">{fitCheck.imageUrl && <Image src={fitCheck.imageUrl} alt={fitCheck.transcription ?? fitCheck.type} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover" />}</div><div className="p-4"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#56345c]">{fitCheck.type === 'try_on' ? 'Try on' : 'Fit check'} · {new Date(fitCheck.createdAt).toLocaleDateString()}</p><p className="mt-2 text-sm font-medium leading-relaxed text-[#241426]">{fitCheck.transcription ?? fitCheck.description ?? 'No notes yet.'}</p>{fitCheck.type === 'daily_fit_check' && <GarmentObservationReview observations={fitCheck.observations} />}</div></article>)}</div></section>
+      <section><h2 className="text-xl font-extrabold text-[#241426]">Recent fits</h2>
+        {history.status === 'CanLoadMore' && <Button variant="outline" onClick={() => history.loadMore(20)}>Load earlier fits</Button>}
+        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{fitChecks.map(fitCheck => <article id={`fit-${fitCheck._id}`} key={fitCheck._id} data-private className="overflow-hidden rounded-2xl border border-[var(--rack-line)] bg-white">
+          <div className="relative aspect-[3/4] bg-[var(--rack-wash)]">{fitCheck.imageUrl && <Image src={fitCheck.imageUrl} alt={fitCheck.type === 'daily_fit_check' ? 'Your saved outfit photo' : 'Your try-on photo'} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-contain" />}</div>
+          <div className="p-4"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#56345c]">{fitCheck.type === 'try_on' ? 'Try on' : 'Fit check'} · Saved {new Date(fitCheck.createdAt).toLocaleDateString()}</p>
+            {fitCheck.type === 'daily_fit_check' && <><FitWearEvidence fitId={fitCheck._id} /><GarmentObservationReview observations={fitCheck.observations} /></>}
+            {(fitCheck.transcription || fitCheck.description) && <details className="mt-3 text-sm"><summary className="cursor-pointer text-[#735079]">Photo notes</summary><p className="mt-2 leading-relaxed">{fitCheck.transcription ?? fitCheck.description}</p></details>}
+          </div>
+        </article>)}</div>
+      </section>
       </div>}
     </main>
   );

@@ -23,6 +23,9 @@ import type * as styleMemoryData from "../styleMemoryData.js";
 import type * as uploads from "../uploads.js";
 import type * as wardrobe from "../wardrobe.js";
 import type * as wardrobes from "../wardrobes.js";
+import type * as wear from "../wear.js";
+import type * as wearGraph from "../wearGraph.js";
+import type * as wearProjectionData from "../wearProjectionData.js";
 import type * as zepSync from "../zepSync.js";
 
 import type {
@@ -47,6 +50,9 @@ declare const fullApi: ApiFromModules<{
   uploads: typeof uploads;
   wardrobe: typeof wardrobe;
   wardrobes: typeof wardrobes;
+  wear: typeof wear;
+  wearGraph: typeof wearGraph;
+  wearProjectionData: typeof wearProjectionData;
   zepSync: typeof zepSync;
 }>;
 

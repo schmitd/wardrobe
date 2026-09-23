@@ -1,4 +1,6 @@
 import { scheduleStyleBioRefresh } from "../styleBioQueue";
+import { recordPhotoWear } from "../wearDomain";
+import { validateWearDate } from "@wardrobe/shared";
 import { ownedStorageUrl, requireOwnedStorage } from "../storageAccess";
 import { paginationOptsValidator } from "convex/server";
 import { v, ConvexError } from "convex/values";
@@ -59,6 +61,9 @@ export const recordFitCheck = mutation({
     type: fitCheckType,
     description: v.optional(v.string()),
     transcription: v.optional(v.string()),
+    localDate: v.optional(v.string()),
+    timezone: v.optional(v.string()),
+    capturedAt: v.optional(v.number()),
     items: v.array(
       v.object({
         wardrobeItemId: v.optional(v.id("wardrobeItems")),
@@ -92,6 +97,8 @@ export const recordFitCheck = mutation({
     if (!user) throw new Error("Unauthorized");
     if (args.items.length > 30 || args.items.some(item => (item.observation?.candidateItemIds.length ?? 0) > 10 || (item.observation?.visualEmbedding.length ?? 0) > 768 || (item.observation?.semanticEmbedding?.length ?? 0) > 768)) throw new ConvexError({ _tag: "InvalidInput", message: "This fit contains too many pieces. Try a simpler photo." });
     const { traceId, traceparent } = ensureTraceContext(args);
+    validateWearDate(args.localDate, args.timezone);
+    if (args.capturedAt !== undefined && (!Number.isFinite(args.capturedAt) || args.capturedAt < 0 || args.capturedAt > Date.now() + 60_000)) throw new Error("Invalid capture time");
     await requireOwnedStorage(ctx, user.userId, args.storageId);
     for (const item of args.items) {
       if (item.wardrobeItemId) await requireOwnedItem(ctx, user.userId, item.wardrobeItemId);
@@ -109,11 +116,11 @@ export const recordFitCheck = mutation({
       .first();
     if (!upload) throw new Error("Upload not registered");
 
-    if (args.type === "try_on") {
+    {
       const existing = await ctx.db
         .query("fitChecks")
         .withIndex("by_user_storage_type", (q) =>
-          q.eq("userId", user.userId).eq("storageId", args.storageId).eq("type", "try_on")
+          q.eq("userId", user.userId).eq("storageId", args.storageId).eq("type", args.type)
         )
         .first();
       if (existing) {
@@ -132,6 +139,9 @@ export const recordFitCheck = mutation({
       type: args.type,
       description: args.description,
       transcription: args.transcription,
+      localDate: args.localDate,
+      timezone: args.timezone,
+      capturedAt: args.capturedAt,
       traceId,
       traceparent,
       createdAt: timestamp,
@@ -217,6 +227,7 @@ export const recordFitCheck = mutation({
       }
     }
 
+    await recordPhotoWear(ctx, fitCheckId);
     try {
       await retrier.run(ctx, internal.zepSync.syncFitCheck, {
         userId: user.userId,
@@ -300,6 +311,7 @@ export const resolveGarmentObservation = mutation({
       ctx.db.patch(observationId, { wardrobeItemId, resolutionStatus: "confirmed", resolvedAt: timestamp, updatedAt: timestamp }),
       ctx.db.patch(observation.fitCheckItemId, { wardrobeItemId, source: "matched_existing" }),
     ]);
+    await recordPhotoWear(ctx, observation.fitCheckId);
     try {
       await retrier.run(ctx, internal.zepSync.syncGarmentIdentityResolution, {
         userId: user.userId,
@@ -354,6 +366,7 @@ export const promoteGarmentObservation = mutation({
       ctx.db.patch(observationId, { wardrobeItemId, resolutionStatus: "promoted_new", resolvedAt: timestamp, updatedAt: timestamp }),
       ctx.db.patch(observation.fitCheckItemId, { wardrobeItemId, source: "created_from_fit_check" }),
     ]);
+    await recordPhotoWear(ctx, observation.fitCheckId);
     try {
       await retrier.run(ctx, internal.zepSync.syncGarmentIdentityResolution, {
         userId: user.userId,

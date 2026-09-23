@@ -7,6 +7,7 @@ import fitCheckItems from "./tables/fitCheckItems";
 import fitChecks from "./tables/fitChecks";
 import garmentObservations from "./tables/garmentObservations";
 import outfitSuggestions from "./tables/outfitSuggestions";
+import planRevisions from "./tables/planRevisions";
 import planningSettings from "./tables/planningSettings";
 import profileBioRevisions from "./tables/profileBioRevisions";
 import profiles from "./tables/profiles";
@@ -18,6 +19,12 @@ import uploads from "./tables/uploads";
 import wardrobeItems from "./tables/wardrobeItems";
 import wardrobeMemberships from "./tables/wardrobeMemberships";
 import wardrobes from "./tables/wardrobes";
+import wearEvidence from "./tables/wearEvidence";
+import wearGraphLocks from "./tables/wearGraphLocks";
+import wearGraphNodes from "./tables/wearGraphNodes";
+import wearOccurrences from "./tables/wearOccurrences";
+import wearProjectionOutbox from "./tables/wearProjectionOutbox";
+import wearRevisions from "./tables/wearRevisions";
 
 export default $defineSchema({
   candidateItems: $Table.tableDefinition(candidateItems),
@@ -26,6 +33,7 @@ export default $defineSchema({
   fitChecks: $Table.tableDefinition(fitChecks),
   garmentObservations: $Table.tableDefinition(garmentObservations),
   outfitSuggestions: $Table.tableDefinition(outfitSuggestions),
+  planRevisions: $Table.tableDefinition(planRevisions),
   planningSettings: $Table.tableDefinition(planningSettings),
   profileBioRevisions: $Table.tableDefinition(profileBioRevisions),
   profiles: $Table.tableDefinition(profiles),
@@ -37,4 +45,10 @@ export default $defineSchema({
   wardrobeItems: $Table.tableDefinition(wardrobeItems),
   wardrobeMemberships: $Table.tableDefinition(wardrobeMemberships),
   wardrobes: $Table.tableDefinition(wardrobes),
+  wearEvidence: $Table.tableDefinition(wearEvidence),
+  wearGraphLocks: $Table.tableDefinition(wearGraphLocks),
+  wearGraphNodes: $Table.tableDefinition(wearGraphNodes),
+  wearOccurrences: $Table.tableDefinition(wearOccurrences),
+  wearProjectionOutbox: $Table.tableDefinition(wearProjectionOutbox),
+  wearRevisions: $Table.tableDefinition(wearRevisions),
 });

@@ -20,6 +20,7 @@ import { colors } from "@/theme";
 import type { CaptureIntent } from "@/types";
 import { useVolumeShutter } from "@/use-volume-shutter";
 import { track, trackFailure } from "@/analytics";
+import { localDate } from "@wardrobe/shared";
 
 function IntentControl({ value, onChange }: { value: CaptureIntent; onChange: (intent: CaptureIntent) => void }) {
   return (
@@ -64,8 +65,8 @@ export default function Capture() {
     if (permission) track("native_camera_permission_observed", { permission: permission.status, can_ask_again: permission.canAskAgain, onboarding });
   }, [permission?.status, permission?.canAskAgain, onboarding]);
 
-  const processPhoto = useCallback((uri: string) => {
-    router.replace({ pathname: "/capture/processing", params: { uri, intent, onboarding: onboarding ? "1" : undefined } });
+  const processPhoto = useCallback((uri: string, source: "camera" | "library" = "library") => {
+    router.replace({ pathname: "/capture/processing", params: { uri, intent, source, localDate: source === "camera" ? localDate() : undefined, capturedAt: source === "camera" ? String(Date.now()) : undefined, onboarding: onboarding ? "1" : undefined } });
   }, [intent, onboarding, router]);
 
   const takePhoto = useCallback(async () => {
@@ -78,7 +79,7 @@ export default function Capture() {
       const photo = await camera.current.takePictureAsync({ quality: 0.86, skipProcessing: false });
       if (!photo?.uri) throw new Error("The camera did not return a photo.");
       track("native_photo_selected", { source: "camera", intent, onboarding });
-      processPhoto(photo.uri);
+      processPhoto(photo.uri, "camera");
     } catch {
       trackFailure("camera");
       operationLocked.current = false;

@@ -5,7 +5,8 @@ import * as Haptics from "expo-haptics";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { localDate, validateWearDate } from "@wardrobe/shared";
 
 import { routeCapture, runCaptureOperation, tryOn } from "@/api";
 import { useCaptureResult } from "@/capture-context";
@@ -23,7 +24,7 @@ export default function CaptureProcessing() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { getToken } = useAuth({ treatPendingAsSignedOut: false });
-  const params = useLocalSearchParams<{ uri?: string; intent?: CaptureIntent; onboarding?: string }>();
+  const params = useLocalSearchParams<{ uri?: string; intent?: CaptureIntent; onboarding?: string; source?: string; localDate?: string; capturedAt?: string }>();
   const uri = Array.isArray(params.uri) ? params.uri[0] : params.uri;
   const intent: CaptureIntent = params.intent === "just_trying" ? "just_trying" : "my_wardrobe";
   const onboarding = params.onboarding === "1";
@@ -35,6 +36,9 @@ export default function CaptureProcessing() {
   const [status, setStatus] = useState("Preparing your photo…");
   const [error, setError] = useState<string | null>(null);
   const [complete, setComplete] = useState<"try_on" | null>(null);
+  const [reviewDate, setReviewDate] = useState(false);
+  const [wearDate, setWearDate] = useState(params.localDate ?? localDate());
+  const approvedDate = useRef<string | undefined>(params.source === "camera" ? params.localDate : undefined);
   const { result, setResult } = useCaptureResult();
   const verdict = useMemo(() => !result?.evaluation ? "A new direction" : result.evaluation.score >= 75 ? "Strong closet fit" : result.evaluation.score >= 50 ? "Useful with limits" : "Harder to integrate", [result]);
 
@@ -53,7 +57,7 @@ export default function CaptureProcessing() {
     }
     if (scope === "full_fit") {
       setStatus("Recording your fit and recognizing familiar pieces…");
-      yield* Effect.tryPromise({ try: () => runCaptureOperation(getToken, { operation: "record_fit", storageId: id, traceId }), catch: (cause) => cause instanceof Error ? cause : new Error("This fit could not be recorded.") });
+      yield* Effect.tryPromise({ try: () => runCaptureOperation(getToken, { operation: "record_fit", storageId: id, traceId, localDate: approvedDate.current, timezone: approvedDate.current ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined, capturedAt: params.source === "camera" && params.capturedAt ? Number(params.capturedAt) : undefined }), catch: (cause) => cause instanceof Error ? cause : new Error("This fit could not be recorded.") });
       return "fit" as const;
     }
     setStatus("Adding this piece to your wardrobe…");
@@ -81,6 +85,10 @@ export default function CaptureProcessing() {
       setStatus("Deciding whether this is one piece or a full fit…");
       const detected = yield* Effect.tryPromise({ try: () => routeCapture(getToken, id, traceId), catch: (cause) => cause instanceof Error ? cause : new Error("Photo routing failed.") });
       track("native_capture_routed", { intent, scope: detected.scope, confidence: detected.confidence, needs_review: detected.needsReview, trace_id: traceId });
+      if (detected.scope === "full_fit" && intent === "my_wardrobe" && !approvedDate.current) {
+        setReviewDate(true);
+        return "date_review" as const;
+      }
       return yield* commit(id, detected.scope);
     });
     void Effect.runPromiseExit(workflow).then((exit) => {
@@ -90,9 +98,11 @@ export default function CaptureProcessing() {
         const failure = Option.getOrUndefined(Cause.findErrorOption(exit.cause));
         setError(failure?.message ?? "Could not save this photo right now. Please try again.");
       } else {
+        if (exit.value === "date_review") { setStatus(""); return; }
         track("native_capture_completed", { intent, onboarding, attempt: attempt.current, duration_ms: Date.now() - attemptStarted, trace_id: traceId });
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
         void queryClient.invalidateQueries({ queryKey: ["mobile-bootstrap"] });
+        void queryClient.invalidateQueries({ queryKey: ["wear-diary"] });
         const destination = captureCompletionDestination(exit.value);
         if (destination) router.replace(destination);
         else setComplete("try_on");
@@ -111,7 +121,12 @@ export default function CaptureProcessing() {
 
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={{ flexGrow: 1, padding: 18, paddingBottom: 48, gap: 16, justifyContent: complete || error ? "flex-start" : "center" }}>
-      {!complete && !error ? (
+      {reviewDate && <Panel><Text style={{ color: colors.ink, fontSize: 24, fontWeight: "800" }}>Save this fit</Text><Text style={{ color: colors.muted }}>When did you wear this outfit?</Text><Image source={uri} style={{ height: 260, width: "100%" }} contentFit="contain" /><TextInput accessibilityLabel="Wear date in YYYY-MM-DD format" value={wearDate} onChangeText={setWearDate} placeholder="YYYY-MM-DD" autoCapitalize="none" style={{ minHeight: 48, borderWidth: 1, borderColor: colors.line, borderRadius: 12, padding: 12, color: colors.ink }} /><Pressable onPress={() => {
+        try { validateWearDate(wearDate, Intl.DateTimeFormat().resolvedOptions().timeZone); }
+        catch (cause) { setError(cause instanceof Error ? cause.message : "Choose a valid date."); return; }
+        approvedDate.current = wearDate; setReviewDate(false); analyze();
+      }} style={{ minHeight: 48, borderRadius: 12, backgroundColor: colors.lime, alignItems: "center", justifyContent: "center" }}><Text style={{ fontWeight: "800", color: colors.ink }}>Save fit</Text></Pressable></Panel>}
+      {!complete && !error && !reviewDate ? (
         <View accessibilityRole="progressbar" style={{ alignItems: "center", gap: 18, paddingVertical: 36 }}>
           <ActivityIndicator size="large" color={colors.plum} />
           <Text selectable style={{ color: colors.ink, fontSize: 24, fontWeight: "900", textAlign: "center" }}>Wardrobe is looking</Text>

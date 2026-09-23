@@ -28,6 +28,15 @@ export function usePaginatedQuery(query: string, args: object | "skip", _options
   return { results: result ?? [], status: result ? "Exhausted" : "LoadingFirstPage", loadMore() {} };
 }
 export const useMutation = (name: string) => async (args: unknown) => { const result = await action("mutation", { name, args }); invalidate(); return result; };
+const originalFetch = globalThis.fetch.bind(globalThis);
+globalThis.fetch = (async (...args: Parameters<typeof fetch>) => {
+  const response = await originalFetch(...args);
+  if (args[0] === "/api/planning" && response.ok) {
+    const body = typeof args[1]?.body === "string" ? JSON.parse(args[1].body) : {};
+    if (!["planning_load", "planning_week", "planning_interpret", "wear_list"].includes(body.operation)) invalidate();
+  }
+  return response;
+}) as typeof fetch;
 export const analytics = { capture() {}, captureException() {}, has_opted_out_capturing: () => true };
 export const Link = ({ href, children, ...props }: React.ComponentProps<"a">) => <a href={href} {...props}>{children}</a>;
 export const Image = ({ fill, unoptimized: _unoptimized, style, ...props }: React.ComponentProps<"img"> & { fill?: boolean; unoptimized?: boolean }) => <img alt={props.alt ?? ""} style={{ ...(fill ? { position: "absolute", inset: 0, width: "100%", height: "100%" } : {}), ...style }} {...props} />; // eslint-disable-line @next/next/no-img-element, @typescript-eslint/no-unused-vars

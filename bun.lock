@@ -95,7 +95,7 @@
         "@confect/server": "10.0.0-next.22",
         "@convex-dev/action-retrier": "^0.3.0",
         "@effect/opentelemetry": "4.0.0-rc.115",
-        "@getzep/zep-cloud": "^3.14.0",
+        "@getzep/zep-cloud": "3.28.0",
         "@google/generative-ai": "^0.24.1",
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/exporter-logs-otlp-http": "^0.208.0",
@@ -558,7 +558,7 @@
 
     "@floating-ui/utils": ["@floating-ui/utils@0.2.10", "", {}, "sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ=="],
 
-    "@getzep/zep-cloud": ["@getzep/zep-cloud@3.14.0", "", { "dependencies": { "zod": "^3.23.8" } }, "sha512-uBjk/U2qxa/ovLEEcy3NE32tqVWAIWDQoDyiuH6a/zeqbHYS0RxG6CaOTdhMw1CYYTtnEYrgG0jfJ1dyUmMYMA=="],
+    "@getzep/zep-cloud": ["@getzep/zep-cloud@3.28.0", "", { "dependencies": { "zod": "^3.23.8" } }, "sha512-OcvQzq7Fq3W3zxeZsCM8RMsvx3Kim6sBrfJGFpAMAkDgAllU7+x7Gl5l6MnmFN9ZEhYBECqYSGwlDxjWRzdz6g=="],
 
     "@google/generative-ai": ["@google/generative-ai@0.24.1", "", {}, "sha512-MqO+MLfM6kjxcKoy0p1wRzG3b4ZZXtPI+z2IE26UogS2Cm/XHO+7gGRBh6gcJsOiIVoH93UwKvW4HdgiOZCy9Q=="],
 

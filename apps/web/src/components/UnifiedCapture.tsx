@@ -3,6 +3,8 @@
 import { uploadPhoto } from "@/services/photoUpload";
 
 import Link from 'next/link';
+import Image from 'next/image';
+import { localDate } from '@wardrobe/shared';
 import { ChangeEvent, useEffect, useRef, useState } from 'react';
 import {
   Check,
@@ -47,6 +49,7 @@ type PendingCapture = {
   previewUrl: string;
   route: CaptureRoute;
   intent: CaptureIntent;
+  localDate?: string;
 };
 
 type Toast = {
@@ -180,6 +183,8 @@ export function UnifiedCaptureController() {
   const [toast, setToast] = useState<Toast | null>(null);
   const [tryOnOpen, setTryOnOpen] = useState(false);
   const [tryOnPreview, setTryOnPreview] = useState<string | null>(null);
+  const [dateReview, setDateReview] = useState<PendingCapture | null>(null);
+  const [wearDate, setWearDate] = useState(localDate);
   const tryOn = useCompatibilityCheck();
 
   useEffect(() => {
@@ -246,7 +251,7 @@ export function UnifiedCaptureController() {
       scope === 'full_fit'
         ? promiseEffect(async (): Promise<SavedCapture> => {
             setStatus('Recording your fit and recognizing familiar pieces…');
-            const saved = await recordDailyFitCheckAction({ storageId: capture.storageId, ...trace });
+            const saved = await recordDailyFitCheckAction({ storageId: capture.storageId, localDate: capture.localDate, timezone: capture.localDate ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined, ...trace });
             return { kind: 'fit' as const, id: String(saved.id) };
           })
         : Effect.gen(function* () {
@@ -327,7 +332,11 @@ export function UnifiedCaptureController() {
       return;
     }
 
-    void completeCapture(outcome.success, outcome.success.route.scope);
+    if (outcome.success.intent === 'my_wardrobe' && outcome.success.route.scope === 'full_fit') {
+      setPending(false); setStatus(null); setWearDate(localDate()); setDateReview(outcome.success);
+    } else {
+      void completeCapture(outcome.success, outcome.success.route.scope);
+    }
   };
 
   return (
@@ -371,6 +380,15 @@ export function UnifiedCaptureController() {
           {tryOn.isProcessing && <div className="rack-panel rack-panel--shell flex min-h-64 flex-col items-center justify-center text-center"><Loader2 className="h-7 w-7 animate-spin" /><p className="mt-4 text-base font-extrabold">{tryOn.status}</p></div>}
           {!tryOn.isProcessing && tryOn.status && !tryOn.result && <p role="alert" className="border border-[#B93267] bg-[var(--rack-danger-wash)] p-4 text-sm font-semibold text-[#B93267]">{tryOn.status}</p>}
           {tryOn.result && <TryOnFeedback result={tryOn.result} previewUrl={tryOnPreview} />}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={dateReview !== null} onOpenChange={open => { if (!open && dateReview) { URL.revokeObjectURL(dateReview.previewUrl); setDateReview(null); } }}>
+        <DialogContent className="max-h-[90dvh] overflow-y-auto rounded-2xl sm:max-w-md">
+          <DialogTitle>Save this fit</DialogTitle>
+          <DialogDescription>We’ll recognize your pieces and record what you wore.</DialogDescription>
+          {dateReview && <Image src={dateReview.previewUrl} alt="Outfit to record" width={400} height={480} unoptimized className="h-64 w-full rounded-xl bg-[#f7f5f8] object-contain" />}
+          <label className="space-y-2 text-sm font-semibold">Worn on<input type="date" value={wearDate} max={localDate()} onChange={event => setWearDate(event.target.value)} className="block min-h-11 w-full rounded-xl border p-3" /></label>
+          <Button disabled={!wearDate || wearDate > localDate()} onClick={() => { if (!dateReview) return; const capture = { ...dateReview, localDate: wearDate }; setDateReview(null); void completeCapture(capture, 'full_fit'); }}>Save fit</Button>
         </DialogContent>
       </Dialog>
     </>

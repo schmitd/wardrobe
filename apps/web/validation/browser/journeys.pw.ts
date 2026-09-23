@@ -6,17 +6,17 @@ test("planner: adjust yesterday's outfit from history and preserve saved-but-sta
   await page.goto("/?scenario=history");
   await page.getByText("Swap a piece", { exact: true }).click();
   await page.getByRole("button", { name: "Add a piece", exact: true }).click();
-  await page.getByLabel("Add an owned piece").selectOption("piece-2");
+  await page.getByRole("button", { name: "No photo Coat", exact: true }).click();
   await expect(page.getByRole("article").getByText("Synthetic coat", { exact: true })).toBeVisible();
   await page.getByRole("listitem").filter({ hasText: "Synthetic shirt" }).getByRole("button", { name: "Remove", exact: true }).click();
   await expect(page.getByRole("article").getByText("Synthetic shirt", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "I wore this", exact: true }).click();
+  await page.getByRole("button", { name: "Wore it", exact: true }).click();
   await expect(page.getByText("Recorded as worn.", { exact: true })).toBeVisible();
   const state = await page.request.get("/__fixture/state").then(r => r.json());
   expect(state.data.suggestions[0].itemIds).toEqual(["piece-1", "piece-2"]);
 
   await page.goto("/?scenario=history&case=stale");
-  await page.getByRole("button", { name: "I wore this", exact: true }).click();
+  await page.getByRole("button", { name: "Wore it", exact: true }).click();
   await expect(page.getByText("Saved. The view could not refresh; reload to see your change.", { exact: true })).toBeVisible();
 });
 

@@ -1,3 +1,5 @@
+import type { WearOperation } from "./wear";
+
 export const CALENDAR_SCOPES = [
   "https://www.googleapis.com/auth/calendar.events.readonly",
   "https://www.googleapis.com/auth/calendar.calendarlist.readonly",
@@ -19,6 +21,9 @@ export type OutfitSuggestion = {
   missing: string[];
   status: OutfitStatus;
   calendarDerived: boolean;
+  planRevision?: number;
+  wearOccurrenceId?: string;
+  notWornAt?: number;
 };
 export type PlanningData = {
   items: PlanningItem[];
@@ -29,6 +34,7 @@ export type PlanningData = {
   calendarIds: string[];
 };
 export type PlanningOperation =
+  | WearOperation
   | { operation: "planning_load"; week?: string }
   | {
       operation: "planning_interpret";
@@ -58,10 +64,14 @@ export type PlanningOperation =
         | "planning_accept"
         | "planning_worn"
         | "planning_dismiss"
+        | "planning_not_worn"
+        | "planning_clear_response"
         | "planning_edit";
       id: string;
       itemIds?: string[];
       reason?: string;
+      timezone?: string;
+      expectedRevision?: number;
     }
   | { operation: "calendar_list" }
   | { operation: "calendar_connect"; calendarIds: string[] }
