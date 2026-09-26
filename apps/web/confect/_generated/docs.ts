@@ -6,6 +6,11 @@ export type DeletedAccountsDoc = Document.Document<typeof schemaDefinition, "del
 export type FitCheckItemsDoc = Document.Document<typeof schemaDefinition, "fitCheckItems">;
 export type FitChecksDoc = Document.Document<typeof schemaDefinition, "fitChecks">;
 export type GarmentObservationsDoc = Document.Document<typeof schemaDefinition, "garmentObservations">;
+export type NotificationAttemptsDoc = Document.Document<typeof schemaDefinition, "notificationAttempts">;
+export type NotificationBudgetsDoc = Document.Document<typeof schemaDefinition, "notificationBudgets">;
+export type NotificationInstallationsDoc = Document.Document<typeof schemaDefinition, "notificationInstallations">;
+export type NotificationIntentsDoc = Document.Document<typeof schemaDefinition, "notificationIntents">;
+export type NotificationPreferencesDoc = Document.Document<typeof schemaDefinition, "notificationPreferences">;
 export type OutfitSuggestionsDoc = Document.Document<typeof schemaDefinition, "outfitSuggestions">;
 export type PlanRevisionsDoc = Document.Document<typeof schemaDefinition, "planRevisions">;
 export type PlanningSettingsDoc = Document.Document<typeof schemaDefinition, "planningSettings">;
@@ -32,6 +37,11 @@ export interface Docs {
   fitCheckItems: FitCheckItemsDoc;
   fitChecks: FitChecksDoc;
   garmentObservations: GarmentObservationsDoc;
+  notificationAttempts: NotificationAttemptsDoc;
+  notificationBudgets: NotificationBudgetsDoc;
+  notificationInstallations: NotificationInstallationsDoc;
+  notificationIntents: NotificationIntentsDoc;
+  notificationPreferences: NotificationPreferencesDoc;
   outfitSuggestions: OutfitSuggestionsDoc;
   planRevisions: PlanRevisionsDoc;
   planningSettings: PlanningSettingsDoc;

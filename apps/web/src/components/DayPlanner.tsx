@@ -1,4 +1,5 @@
 "use client";
+import PlanReminderTime from '@/components/PlanReminderTime';
 import Image from "next/image";
 import { useUser } from "@clerk/nextjs";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -344,6 +345,7 @@ function WeekPlanner({ userId, historyDate }: { userId: string; historyDate?: st
                 </div>
                 {outfit.context.some(c => c.startsWith("Collection: ")) && <p data-private className="text-sm text-[#735079]">Drawing from {outfit.context.filter(c => c.startsWith("Collection: ")).map(c => c.slice(12)).join(" · ")}</p>}
                 {pieces(outfit.itemIds, true)}
+                <PlanReminderTime key={`${outfit.id}:${outfit.planRevision}`} plan={outfit} events={calendar?.days.find(day => day.date === selected)?.events} />
               {outfit.status === "suggested" ? (
                 <Button
                   className="rack-primary-action"

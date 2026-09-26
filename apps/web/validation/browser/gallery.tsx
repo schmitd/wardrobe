@@ -1,5 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
+import ReminderSettings from "../../src/components/ReminderSettings";
 import DayPlanner from "../../src/components/DayPlanner";
 import Navbar from "../../src/components/Navbar";
 import FitsPage from "../../src/app/fits/page";
@@ -16,5 +17,5 @@ function WardrobeFixture() {
 const scenario = new URLSearchParams(location.search).get("scenario") ?? (location.pathname === "/" ? "wardrobe" : "fits");
 createRoot(document.getElementById("root")!).render(<>
   <div className="fixture-banner">Design review · synthetic data</div>
-  {scenario === "wardrobe" ? <WardrobeFixture /> : scenario === "fits" ? <><Navbar /><FitsPage /></> : scenario === "capture" ? <><UnifiedCaptureTrigger variant="desktop" /><UnifiedCaptureController /></> : <main className="p-5"><DayPlanner historyDate={scenario === "history" ? shiftDay(localDate(), -1) : undefined} /></main>}
+  {scenario === "reminders" ? <><Navbar /><main className="mx-auto max-w-2xl px-4 py-6 pb-28"><ReminderSettings /></main></> : scenario === "wardrobe" ? <WardrobeFixture /> : scenario === "fits" ? <><Navbar /><FitsPage /></> : scenario === "capture" ? <><UnifiedCaptureTrigger variant="desktop" /><UnifiedCaptureController /></> : <main className="p-5"><DayPlanner historyDate={scenario === "history" ? shiftDay(localDate(), -1) : undefined} /></main>}
 </>);

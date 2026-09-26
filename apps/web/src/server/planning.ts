@@ -135,6 +135,7 @@ async function calendarDay(
     calendarIds.map((id) =>
       google<{
         items?: {
+          id?: string;
           summary?: string;
           location?: string;
           start?: { date?: string; dateTime?: string };
@@ -153,17 +154,19 @@ async function calendarDay(
           orderBy: "startTime",
           maxResults: "50",
           showDeleted: "false",
-          fields: includeDetails ? "items(summary,location,start,end,status),nextPageToken" : "items(summary,start,status),nextPageToken",
+          fields: includeDetails ? "items(id,summary,location,start,end,status),nextPageToken" : "items(id,summary,start,end,status),nextPageToken",
         }),
       ),
     ),
   );
   return {
     events: responses
-      .flatMap((r) =>
+      .flatMap((r, index) =>
         (r.items ?? [])
           .filter((e) => e.status !== "cancelled")
           .map((e) => ({
+            ...(!includeDetails ? { calendarId: calendarIds[index], eventId: e.id } : {}),
+            end: e.end?.dateTime ?? e.end?.date ?? "",
             title: (e.summary ?? "Busy").slice(0, 200),
             ...(includeDetails ? { location: (e.location ?? "").slice(0, 200), end: e.end?.dateTime ?? e.end?.date ?? "" } : {}),
             start: e.start?.dateTime ?? e.start?.date ?? "",
@@ -308,13 +311,13 @@ export async function executePlanning(body: PlanningOperation) {
           date,
           events: result.events.map((e) => ({
             title: e.title,
-            start: e.start,
+            start: e.start, end: e.end, calendarId: e.calendarId, eventId: e.eventId,
           })),
           truncated: result.truncated,
         };
       }),
     );
-    // Raw titles/times are returned for display only, never retained or logged.
+    // Display context is ephemeral. Only an explicitly linked event ID and timing are retained.
     return { days };
   }
   let data = await fetchQuery(api.planning.load, {
@@ -459,6 +462,9 @@ export async function executePlanning(body: PlanningOperation) {
         planRevision: s.planRevision,
         wearOccurrenceId: s.wearOccurrenceId,
         notWornAt: s.notWornAt,
+        reminderStartsAt: s.reminderStartsAt,
+        reminderTimezone: s.reminderTimezone,
+        reminderCalendarId: s.reminderCalendarId,
       })),
       calendarEnabled: data.calendarEnabled,
       calendarIds: data.calendarIds,

@@ -5,6 +5,8 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Switch, Text, View } from "react-native";
+import { NativeReminderSettings, revokePhone } from "@/reminders";
+import { clearFitShareCache } from "@/share-fit";
 import { analytics } from "@/analytics";
 import { nativeReplayAvailable } from "@/replay-privacy";
 import { readReplayConsent, setReplayConsent } from "@/replay-consent";
@@ -14,7 +16,7 @@ import { colors } from "@/theme";
 import { useWardrobe } from "@/use-wardrobe";
 
 export function AccountScreen() {
-  const { signOut } = useAuth();
+  const { signOut, getToken } = useAuth();
   const { user } = useUser();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -56,11 +58,12 @@ export function AccountScreen() {
         <Text selectable style={{ color: colors.muted, lineHeight: 20 }}>Your style and fit context now live with your wardrobe.</Text>
       </View>
       <Pressable
-        onPress={() => { void setReplayConsent(false).catch(() => undefined).then(() => signOut()).then(() => { queryClient.clear(); router.replace("/sign-in"); }); }}
+        onPress={() => { clearFitShareCache(); void revokePhone(getToken).catch(() => undefined).then(() => setReplayConsent(false)).catch(() => undefined).then(() => signOut()).then(() => { queryClient.clear(); router.replace("/sign-in"); }); }}
         style={{ alignSelf: "flex-start", borderColor: colors.line, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderRadius: 10, borderCurve: "continuous" }}
       >
         <Text style={{ color: colors.ink, fontWeight: "900" }}>Sign out</Text>
       </Pressable>
+      <NativeReminderSettings />
       <Panel>
         <Text style={{ color: colors.ink, fontWeight: "900" }}>Help improve Wardrobe</Text>
         <Text style={{ color: colors.muted, lineHeight: 20 }}>Share usage events and sanitized errors with PostHog. Session recordings are a separate choice below. Essential server reliability logs remain enabled.</Text>

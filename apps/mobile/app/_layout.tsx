@@ -6,6 +6,8 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 
+import { ReminderObserver } from "@/reminders";
+import { sweepFitShareCache, clearFitShareCache } from "@/share-fit";
 import { CaptureProvider } from "@/capture-context";
 import { colors } from "@/theme";
 import {
@@ -50,6 +52,7 @@ function Navigation() {
           <Stack.Screen name="sign-in" options={{ headerShown: false }} />
         </Stack.Protected>
         <Stack.Protected guard={Boolean(isSignedIn)}>
+          <Stack.Screen name="reminder" options={{ title: "Fit reminder" }} />
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen
             name="capture/index"
@@ -134,13 +137,14 @@ function Navigation() {
 }
 
 function SessionProviders() {
+  useEffect(() => { try { sweepFitShareCache(); } catch { /* Private cache cleanup can retry on next start. */ } }, []);
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: { queries: { staleTime: 20_000, retry: 2 } },
   }));
-  useEffect(() => () => { void queryClient.cancelQueries(); queryClient.clear(); }, [queryClient]);
+  useEffect(() => () => { try { clearFitShareCache(); } catch { /* Next start retries cleanup. */ } void queryClient.cancelQueries(); queryClient.clear(); }, [queryClient]);
   return (
     <QueryClientProvider client={queryClient}>
-      <AnalyticsObserver />
+      <AnalyticsObserver /><ReminderObserver />
       <AnalyticsErrorBoundary>
         <CaptureProvider>
           <StatusBar style="dark" />

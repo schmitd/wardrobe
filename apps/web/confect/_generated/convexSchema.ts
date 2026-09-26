@@ -6,6 +6,11 @@ import deletedAccounts from "./tables/deletedAccounts";
 import fitCheckItems from "./tables/fitCheckItems";
 import fitChecks from "./tables/fitChecks";
 import garmentObservations from "./tables/garmentObservations";
+import notificationAttempts from "./tables/notificationAttempts";
+import notificationBudgets from "./tables/notificationBudgets";
+import notificationInstallations from "./tables/notificationInstallations";
+import notificationIntents from "./tables/notificationIntents";
+import notificationPreferences from "./tables/notificationPreferences";
 import outfitSuggestions from "./tables/outfitSuggestions";
 import planRevisions from "./tables/planRevisions";
 import planningSettings from "./tables/planningSettings";
@@ -32,6 +37,11 @@ export default $defineSchema({
   fitCheckItems: $Table.tableDefinition(fitCheckItems),
   fitChecks: $Table.tableDefinition(fitChecks),
   garmentObservations: $Table.tableDefinition(garmentObservations),
+  notificationAttempts: $Table.tableDefinition(notificationAttempts),
+  notificationBudgets: $Table.tableDefinition(notificationBudgets),
+  notificationInstallations: $Table.tableDefinition(notificationInstallations),
+  notificationIntents: $Table.tableDefinition(notificationIntents),
+  notificationPreferences: $Table.tableDefinition(notificationPreferences),
   outfitSuggestions: $Table.tableDefinition(outfitSuggestions),
   planRevisions: $Table.tableDefinition(planRevisions),
   planningSettings: $Table.tableDefinition(planningSettings),

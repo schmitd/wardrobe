@@ -314,7 +314,7 @@ export default function Home() {
                 loadMore={closet.status === "CanLoadMore" ? () => closet.loadMore(48) : undefined}
                 items={displayItems}
                 optimisticItems={filteredOptimisticItems}
-                onAddPiece={openCaptureMenu}
+                onAddPiece={() => openCaptureMenu()}
                 onRemoveOptimistic={handleRemoveOptimistic}
               />
             </>

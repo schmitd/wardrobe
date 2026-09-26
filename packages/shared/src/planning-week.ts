@@ -9,7 +9,7 @@ export type WeekInterpretation = { days: ReviewedDay[]; clarification: string };
 export type CalendarWeek = {
   days: {
     date: string;
-    events: { title: string; start: string }[];
+    events: { title: string; start: string; end?: string; calendarId?: string; eventId?: string }[];
     truncated: boolean;
   }[];
 };

@@ -24,6 +24,9 @@ export type OutfitSuggestion = {
   planRevision?: number;
   wearOccurrenceId?: string;
   notWornAt?: number;
+  reminderStartsAt?: number;
+  reminderTimezone?: string;
+  reminderCalendarId?: string;
 };
 export type PlanningData = {
   items: PlanningItem[];

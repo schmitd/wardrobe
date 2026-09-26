@@ -10,12 +10,15 @@
 
 import type * as account from "../account.js";
 import type * as candidates from "../candidates.js";
+import type * as crons from "../crons.js";
 import type * as fitChecks from "../fitChecks.js";
 import type * as garmentIdentityQueries from "../garmentIdentityQueries.js";
 import type * as http from "../http.js";
 import type * as mobile from "../mobile.js";
 import type * as planning from "../planning.js";
 import type * as profile from "../profile.js";
+import type * as reminderDelivery from "../reminderDelivery.js";
+import type * as reminders from "../reminders.js";
 import type * as storage from "../storage.js";
 import type * as storageMigration from "../storageMigration.js";
 import type * as styleMemory from "../styleMemory.js";
@@ -37,12 +40,15 @@ import type {
 declare const fullApi: ApiFromModules<{
   account: typeof account;
   candidates: typeof candidates;
+  crons: typeof crons;
   fitChecks: typeof fitChecks;
   garmentIdentityQueries: typeof garmentIdentityQueries;
   http: typeof http;
   mobile: typeof mobile;
   planning: typeof planning;
   profile: typeof profile;
+  reminderDelivery: typeof reminderDelivery;
+  reminders: typeof reminders;
   storage: typeof storage;
   storageMigration: typeof storageMigration;
   styleMemory: typeof styleMemory;

@@ -253,6 +253,7 @@ export async function affirmPlan(
 export async function recordPhotoWear(
   ctx: MutationCtx,
   fitCheckId: Id<"fitChecks">,
+  context?: { planId?: Id<"outfitSuggestions">; expectedPlanRevision?: number },
 ) {
   const fit = await ctx.db.get(fitCheckId);
   if (!fit || fit.type !== "daily_fit_check" || fit.wearRetractedAt) return;
@@ -299,18 +300,33 @@ export async function recordPhotoWear(
   const accepted = sameDay.filter(
     (plan) => plan.status === "planned" && !plan.notWornAt,
   );
-  const candidate =
-    sameDay.length <= 100 &&
+  let candidate =
+    !context?.planId && sameDay.length <= 100 &&
     accepted.length === 1 &&
-    !accepted[0]!.wearOccurrenceId &&
+    !accepted[0]!.wearOccurrenceId && accepted[0]!.reminderStartsAt === undefined &&
     itemIds.some((id) => accepted[0]!.itemIds.includes(id))
       ? accepted[0]
       : undefined;
+  let contextualOccurrence: Doc<"wearOccurrences"> | null = null;
+  if (!occurrence && context?.planId) {
+    const plan = await ctx.db.get(context.planId);
+    const timeMatches = !plan?.reminderStartsAt || !fit.capturedAt ||
+      (fit.capturedAt >= plan.reminderStartsAt - 30 * 60_000 && fit.capturedAt <= (plan.reminderEndsAt ?? plan.reminderStartsAt + 3_600_000));
+    if (plan?.userId === fit.userId && ["planned", "worn"].includes(plan.status) && !plan.notWornAt &&
+      plan.date === fit.localDate && context.expectedPlanRevision === (plan.planRevision ?? 0) && timeMatches) {
+      const target = plan.wearOccurrenceId ? await ctx.db.get(plan.wearOccurrenceId) : null;
+      // Capture context is explicit association, never a source of garment identities.
+      // Conflicting manual corrections keep the new photo independent for review.
+      if (!target || (target.userId === fit.userId && target.planId === plan._id && target.planRevision === plan.planRevision && itemIds.every(id => target.itemIds.includes(id)))) {
+        candidate = plan; contextualOccurrence = target;
+      }
+    }
+  }
   const planRevision = candidate
     ? (candidate.planRevision ?? (await snapshotPlan(ctx, candidate)))
     : undefined;
   const occurrenceId =
-    occurrence?._id ??
+    occurrence?._id ?? contextualOccurrence?._id ??
     (await newWear(ctx, fit.userId, {
       localDate: fit.localDate,
       timezone: fit.timezone,

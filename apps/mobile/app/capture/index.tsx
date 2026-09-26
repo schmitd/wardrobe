@@ -1,3 +1,4 @@
+import { useCaptureLease } from "@/reminders";
 import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { CameraView, useCameraPermissions, type CameraType } from "expo-camera";
 import { PostHogMaskView } from "posthog-react-native";
@@ -35,7 +36,8 @@ function IntentControl({ value, onChange }: { value: CaptureIntent; onChange: (i
 
 export default function Capture() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ onboarding?: string }>();
+  const params = useLocalSearchParams<{ onboarding?: string; planId?: string; planRevision?: string }>();
+  useCaptureLease(params.planId);
   const onboarding = params.onboarding === "1";
   const camera = useRef<CameraView>(null);
   const operationLocked = useRef(false);
@@ -66,8 +68,8 @@ export default function Capture() {
   }, [permission?.status, permission?.canAskAgain, onboarding]);
 
   const processPhoto = useCallback((uri: string, source: "camera" | "library" = "library") => {
-    router.replace({ pathname: "/capture/processing", params: { uri, intent, source, localDate: source === "camera" ? localDate() : undefined, capturedAt: source === "camera" ? String(Date.now()) : undefined, onboarding: onboarding ? "1" : undefined } });
-  }, [intent, onboarding, router]);
+    router.replace({ pathname: "/capture/processing", params: { uri, intent, source, planId: params.planId, planRevision: params.planRevision, localDate: source === "camera" ? localDate() : undefined, capturedAt: source === "camera" ? String(Date.now()) : undefined, onboarding: onboarding ? "1" : undefined } });
+  }, [intent, onboarding, router, params.planId, params.planRevision]);
 
   const takePhoto = useCallback(async () => {
     if (!camera.current || !cameraReady || operationLocked.current) return;

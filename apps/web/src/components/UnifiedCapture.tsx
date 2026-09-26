@@ -35,8 +35,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useCompatibilityCheck } from '@/hooks/useCompatibilityCheck';
-import { OPEN_CAPTURE_MENU_EVENT, openCaptureMenu } from '@/lib/captureEvents';
+import { OPEN_CAPTURE_MENU_EVENT, openCaptureMenu, type CapturePlanContext } from '@/lib/captureEvents';
 import { Result, promiseEffect, runEffectResult } from '@/lib/effect-result';
+import { reminderRequest } from '@/lib/reminder-client';
 import { createTraceContext } from '@/lib/trace';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import type { CaptureRoute, CaptureScope } from '@/server/captureRouter';
@@ -50,6 +51,7 @@ type PendingCapture = {
   route: CaptureRoute;
   intent: CaptureIntent;
   localDate?: string;
+  planContext?: CapturePlanContext;
 };
 
 type Toast = {
@@ -150,7 +152,7 @@ export function UnifiedCaptureTrigger({ variant }: { variant: 'mobile' | 'deskto
     return (
       <button
         type="button"
-        onClick={openCaptureMenu}
+        onClick={() => openCaptureMenu()}
         className="rack-capture-trigger rack-capture-trigger--mobile"
         aria-label="Add a wardrobe photo"
         aria-haspopup="menu"
@@ -164,7 +166,7 @@ export function UnifiedCaptureTrigger({ variant }: { variant: 'mobile' | 'deskto
     <Button
       type="button"
       variant="outline"
-      onClick={openCaptureMenu}
+      onClick={() => openCaptureMenu()}
       aria-haspopup="menu"
       className="min-h-11 rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-3 text-xs font-extrabold text-[var(--rack-ink)] shadow-[2px_2px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)]"
     >
@@ -176,6 +178,7 @@ export function UnifiedCaptureTrigger({ variant }: { variant: 'mobile' | 'deskto
 
 export function UnifiedCaptureController() {
   const inputRef = useRef<HTMLInputElement>(null);
+  const planContext = useRef<CapturePlanContext | undefined>(undefined);
   const selectedIntentRef = useRef<CaptureIntent>('my_wardrobe');
   const [menuOpen, setMenuOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -188,7 +191,8 @@ export function UnifiedCaptureController() {
   const tryOn = useCompatibilityCheck();
 
   useEffect(() => {
-    const open = () => {
+    const open = (event: Event) => {
+      planContext.current = (event as CustomEvent<CapturePlanContext | undefined>).detail;
       setToast(null);
       setMenuOpen((current) => !current);
     };
@@ -214,6 +218,13 @@ export function UnifiedCaptureController() {
       window.removeEventListener('pointerdown', onPointerDown);
     };
   }, [menuOpen]);
+
+  useEffect(() => {
+    if (!(menuOpen || pending || dateReview)) return;
+    const renew = () => { void reminderRequest({ operation: 'capture', active: true, planId: planContext.current?.planId }).catch(() => undefined); };
+    renew(); const timer = setInterval(renew, 300_000);
+    return () => { clearInterval(timer); };
+  }, [menuOpen, pending, dateReview]);
 
   const chooseIntent = (intent: CaptureIntent) => {
     if (pending) return;
@@ -251,7 +262,7 @@ export function UnifiedCaptureController() {
       scope === 'full_fit'
         ? promiseEffect(async (): Promise<SavedCapture> => {
             setStatus('Recording your fit and recognizing familiar pieces…');
-            const saved = await recordDailyFitCheckAction({ storageId: capture.storageId, localDate: capture.localDate, timezone: capture.localDate ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined, ...trace });
+            const saved = await recordDailyFitCheckAction({ storageId: capture.storageId, localDate: capture.localDate, ...capture.planContext, timezone: capture.localDate ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined, ...trace });
             return { kind: 'fit' as const, id: String(saved.id) };
           })
         : Effect.gen(function* () {
@@ -298,6 +309,7 @@ export function UnifiedCaptureController() {
     event.target.value = '';
     if (!file || pending) return;
     const intent = selectedIntentRef.current;
+    const capturePlan = planContext.current;
     if (!file.type.startsWith('image/')) {
       setToast({ message: 'Choose a photo to continue.', error: true });
       return;
@@ -317,6 +329,7 @@ export function UnifiedCaptureController() {
           previewUrl,
           route,
           intent,
+          planContext: capturePlan,
         } satisfies PendingCapture;
       })
     );

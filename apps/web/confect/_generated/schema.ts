@@ -5,6 +5,11 @@ import deletedAccounts from "./tables/deletedAccounts";
 import fitCheckItems from "./tables/fitCheckItems";
 import fitChecks from "./tables/fitChecks";
 import garmentObservations from "./tables/garmentObservations";
+import notificationAttempts from "./tables/notificationAttempts";
+import notificationBudgets from "./tables/notificationBudgets";
+import notificationInstallations from "./tables/notificationInstallations";
+import notificationIntents from "./tables/notificationIntents";
+import notificationPreferences from "./tables/notificationPreferences";
 import outfitSuggestions from "./tables/outfitSuggestions";
 import planRevisions from "./tables/planRevisions";
 import planningSettings from "./tables/planningSettings";
@@ -31,6 +36,11 @@ const databaseSchema: $DatabaseSchema.DatabaseSchema<
   typeof fitCheckItems |
   typeof fitChecks |
   typeof garmentObservations |
+  typeof notificationAttempts |
+  typeof notificationBudgets |
+  typeof notificationInstallations |
+  typeof notificationIntents |
+  typeof notificationPreferences |
   typeof outfitSuggestions |
   typeof planRevisions |
   typeof planningSettings |
@@ -56,6 +66,11 @@ const databaseSchema: $DatabaseSchema.DatabaseSchema<
   fitCheckItems,
   fitChecks,
   garmentObservations,
+  notificationAttempts,
+  notificationBudgets,
+  notificationInstallations,
+  notificationIntents,
+  notificationPreferences,
   outfitSuggestions,
   planRevisions,
   planningSettings,

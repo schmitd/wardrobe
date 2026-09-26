@@ -13,6 +13,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import GarmentObservationReview from '@/components/GarmentObservationReview';
 import DayPlanner from '@/components/DayPlanner';
 import WornOutfits from '@/components/WornOutfits';
+import ReminderPrompt from '@/components/ReminderPrompt';
+import ShareFit from '@/components/ShareFit';
 import FitWearEvidence from '@/components/FitWearEvidence';
 
 const dayKey = (date: Date | number) => {
@@ -54,7 +56,8 @@ function FitsContent() {
         </nav>
       </section>
 
-      {activeView === 'plan' ? <DayPlanner /> : <div id="fits-diary" className="space-y-6">
+      {searchParams.get('reminder') && <ReminderPrompt key={searchParams.get('reminder')} id={searchParams.get('reminder')!} />}
+      {activeView === 'plan' ? <DayPlanner historyDate={/^\d{4}-\d{2}-\d{2}$/.test(searchParams.get('date') ?? '') ? searchParams.get('date')! : undefined} /> : <div id="fits-diary" className="space-y-6">
       <WornOutfits />
       <section className="rack-panel rounded-none">
         <div className="flex flex-wrap items-end justify-between gap-4"><div><h2 className="text-xl font-extrabold text-[#241426]">Your recent rhythm</h2><p className="mt-1 text-sm font-medium text-[#56345c]">Each photo marks a day you checked in.</p></div><span className="text-xs font-semibold text-[#56345c]">Last 12 weeks</span></div>
@@ -74,6 +77,7 @@ function FitsContent() {
         <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">{fitChecks.map(fitCheck => <article id={`fit-${fitCheck._id}`} key={fitCheck._id} data-private className="overflow-hidden rounded-2xl border border-[var(--rack-line)] bg-white">
           <div className="relative aspect-[3/4] bg-[var(--rack-wash)]">{fitCheck.imageUrl && <Image src={fitCheck.imageUrl} alt={fitCheck.type === 'daily_fit_check' ? 'Your saved outfit photo' : 'Your try-on photo'} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-contain" />}</div>
           <div className="p-4"><p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#56345c]">{fitCheck.type === 'try_on' ? 'Try on' : 'Fit check'} · Saved {new Date(fitCheck.createdAt).toLocaleDateString()}</p>
+            <ShareFit fitId={fitCheck._id} />
             {fitCheck.type === 'daily_fit_check' && <><FitWearEvidence fitId={fitCheck._id} /><GarmentObservationReview observations={fitCheck.observations} /></>}
             {(fitCheck.transcription || fitCheck.description) && <details className="mt-3 text-sm"><summary className="cursor-pointer text-[#735079]">Photo notes</summary><p className="mt-2 leading-relaxed">{fitCheck.transcription ?? fitCheck.description}</p></details>}
           </div>

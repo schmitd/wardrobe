@@ -1,8 +1,9 @@
+import sharp from "sharp";
 import postcss from "postcss";
 import tailwind from "@tailwindcss/postcss";
 import { collectionFixture, pieceSvg } from "./collection-fixture";
 import { resolve } from "node:path";
-import { shiftDay, sevenDays, type PlanningData, type WearOutfit } from "@wardrobe/shared";
+import { shiftDay, sevenDays, type PlanningData, type WearOutfit, defaultReminders, type ReminderPreferences } from "@wardrobe/shared";
 import { boundedInteger } from "../property-options";
 
 const port = boundedInteger(process.env.PROBE_PORT, 4173, 1024, 65535);
@@ -23,17 +24,18 @@ const build = await Bun.build({
 });
 if (!build.success) throw new AggregateError(build.logs, "Gallery build failed");
 const bundle = build.outputs[0]!;
-type State = { wears: WearOutfit[]; catalog: ReturnType<typeof collectionFixture>; data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean };
+type State = { reminders: ReminderPreferences; wears: WearOutfit[]; catalog: ReturnType<typeof collectionFixture>; data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean };
 const states = new Map<string, State>();
 function fixture(url: URL): State {
   // Match the Playwright/probe browser even when the runner's local date is UTC.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   return {
-    wears: [], catalog: collectionFixture(),
+    reminders: defaultReminders("America/New_York"), wears: [], catalog: collectionFixture(),
     data: { items: ["Shirt", "Trousers", "Coat"].map((category, i) => ({ id: `piece-${i}`, category, description: `Synthetic ${category.toLowerCase()}`, imageUrl: null })), plans: [], calendarEnabled: true, calendarIds: ["synthetic-calendar"], suggestions: [{ id: "outfit", date: url.searchParams.get("scenario") === "history" ? shiftDay(today, -1) : today, title: "Easy structure for your day", rationale: "Relaxed tailoring draws on Work edit; the cotton layers work together for your client meeting.", itemIds: ["piece-0", "piece-1"], missing: [], context: ["Collection: Work edit", "Style profile"], status: "planned", calendarDerived: false }] },
     calls: [], stale: url.searchParams.get("case") === "stale", latency: boundedInteger(url.searchParams.get("latency") ?? undefined, 0, 0, 5000), scope: url.searchParams.get("scope") === "single_piece" ? "single_piece" : "full_fit", wrote: false,
   };
 }
+const shareImage = await sharp({ create: { width: 300, height: 450, channels: 3, background: "#b9a3c3" } }).composite([{ input: Buffer.from(pieceSvg(0).replace(/width="[^"]+" height="[^"]+"/, 'width="220" height="300"')), gravity: "centre" }]).png().toBuffer();
 const cssPath = resolve(import.meta.dir, "../../src/app/globals.css");
 const css = await postcss([tailwind()]).process(await Bun.file(cssPath).text(), { from: cssPath });
 const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Wardrobe review gallery</title><link rel="stylesheet" href="/gallery.css"><style>body{font-family:Arial,sans-serif}.fixture-banner{padding:5px 12px;background:#241426;color:#eee5f0;font-size:11px;text-align:center}</style><div id="root"></div><script type="module" src="/gallery.js"></script></html>`;
@@ -44,7 +46,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
   if (url.pathname === "/gallery.js") return new Response(bundle, { headers: { "Content-Type": "application/javascript" } });
   if (url.pathname === "/gallery.css") return new Response(css.css, { headers: { "Content-Type": "text/css" } });
   if (/^\/__fixture\/piece-\d\.svg$/.test(url.pathname)) return new Response(pieceSvg(Number(url.pathname.match(/piece-(\d)/)?.[1])), { headers: { "Content-Type": "image/svg+xml" } });
-  if (url.pathname === "/" || url.pathname === "/fits") {
+  if (url.pathname === "/" || url.pathname === "/fits" || url.pathname === "/reminders") {
     const session = crypto.randomUUID();
     if (states.size > 100) states.delete(states.keys().next().value!);
     const next = fixture(url);
@@ -64,11 +66,20 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
   const session = request.headers.get("cookie")?.match(/(?:^|;\s*)probe_session=([^;]+)/)?.[1];
   const state = session ? states.get(session) : undefined;
   if (!state) return Response.json({ error: "Open a fixture first" }, { status: 400 });
+  if (/^\/api\/fits\/[^/]+\/image$/.test(url.pathname)) return new Response(new Uint8Array(shareImage), { headers: { "Content-Type": "image/png", "Cache-Control": "private, no-store" } });
   if (url.pathname === "/__fixture/state") return Response.json(state);
   if (url.pathname === "/__fixture/upload") return Response.json({ storageId: "synthetic-storage" });
   if (url.pathname === "/api/wardrobe/process-stream") return new Response('{"type":"status","stage":"persisting"}\n{"type":"complete"}\n', { headers: { "Content-Type": "application/x-ndjson" } });
   if (request.method !== "POST") return new Response("Not found", { status: 404 });
   const input = await request.json() as Record<string, unknown>;
+  if (url.pathname === "/api/reminders") {
+    state.calls.push({ operation: `reminders_${input.operation}`, input });
+    if (input.operation === "settings") return Response.json({ preferences: state.reminders, installations: [{ id: "synthetic-installation", label: "My phone", transport: "expo" }], primaryInstallationId: "synthetic-installation", live: false, webPublicKey: null });
+    if (input.operation === "preferences") state.reminders = input as unknown as ReminderPreferences;
+    if (input.operation === "open") { const plan = state.data.suggestions[0]!; return Response.json({ planId: plan.id, planRevision: plan.planRevision ?? 0, date: plan.date, resolved: false, expired: false }); }
+    if (input.operation === "schedule") state.data.suggestions[0]!.reminderStartsAt = input.startsAt as number | undefined;
+    return Response.json(null);
+  }
   if (url.pathname === "/__fixture/query") {
     const args = input.args as Record<string, string>;
     const c = state.catalog;
