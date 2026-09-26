@@ -2,6 +2,9 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { Trash2 } from "lucide-react";
+import { deleteWardrobeItemAction } from "@/app/actions/wardrobe";
+import { userFacingErrorMessage } from "@/lib/userFacingError";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
@@ -84,7 +87,25 @@ export default function ItemDetailsDrawer({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const [removeReason, setRemoveReason] = useState("Disliked item style");
+  const [removing, setRemoving] = useState(false);
   const note = draft ?? details?.note ?? item.note ?? "";
+  const removeItem = async () => {
+    setBusy(true);
+    setRemoving(true);
+    setError("");
+    setMessage("");
+    try {
+      await deleteWardrobeItemAction({ itemId: item.id, reason: removeReason, ...createTraceContext() });
+      onClose();
+    } catch (cause) {
+      setError(userFacingErrorMessage(cause, "Could not remove this piece. Try again."));
+    } finally {
+      setBusy(false);
+      setRemoving(false);
+    }
+  };
   const run = async (work: () => Promise<unknown>, success: string) => {
     setBusy(true);
     setError("");
@@ -107,6 +128,12 @@ export default function ItemDetailsDrawer({
     >
       <DialogContent
         className="item-details-drawer ph-no-capture"
+        onEscapeKeyDown={(event) => {
+          if (confirmRemove) {
+            event.preventDefault();
+            if (!busy) setConfirmRemove(false);
+          }
+        }}
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           (
@@ -140,7 +167,7 @@ export default function ItemDetailsDrawer({
         {(preview?.enabled || preview?.status === "ready") && (
           <section aria-label="Catalog preview" className="space-y-2">
             <h3 className="font-semibold">Catalog preview</h3>
-            <p className="text-sm text-[#685e70]">AI removes the background and fills hidden fabric. Your original photo is kept.</p>
+            <p className="text-sm text-[#685e70]">AI removes the background and reconstructs hidden parts. Your original photo is kept.</p>
             {(preview.status === "queued" || preview.status === "processing") ? (
               <p role="status" className="text-sm">Creating preview…</p>
             ) : preview.status !== "ready" && (
@@ -257,7 +284,7 @@ export default function ItemDetailsDrawer({
             }, "Note saved.")
           }
         >
-          {busy ? "Saving…" : "Save note"}
+          Save note
         </Button>
         {message && (
           <p role="status" className="text-sm">
@@ -269,6 +296,38 @@ export default function ItemDetailsDrawer({
             {error}
           </p>
         )}
+        <section aria-label="Remove piece" className="border-t border-[#d8c9dc] pt-4">
+          {confirmRemove ? (
+            <div className="space-y-3">
+              <h3 className="font-semibold">Remove this piece from your wardrobe?</h3>
+              <label className="block space-y-2 text-sm">
+                Reason for removing this piece
+                <select
+                  data-private
+                  value={removeReason}
+                  disabled={busy}
+                  onChange={(event) => setRemoveReason(event.target.value)}
+                  className="block min-h-11 w-full rounded-md border border-[#b6aabb] bg-white px-3"
+                >
+                  <option value="Disliked item style">Disliked style</option>
+                  <option value="Item damaged/lost">Damaged or lost</option>
+                  <option value="Poor fit">Poor fit</option>
+                  <option value="Other">Other</option>
+                </select>
+              </label>
+              <div className="flex justify-end gap-3">
+                <Button variant="outline" disabled={busy} onClick={() => setConfirmRemove(false)}>Cancel</Button>
+                <Button variant="destructive" disabled={busy} onClick={() => void removeItem()}>
+                  {removing ? "Removing…" : "Remove piece"}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button variant="ghost" disabled={busy} className="text-[#B93267]" onClick={() => setConfirmRemove(true)}>
+              <Trash2 aria-hidden="true" className="size-4" /> Remove from wardrobe
+            </Button>
+          )}
+        </section>
       </DialogContent>
     </Dialog>
   );

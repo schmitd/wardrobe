@@ -45,6 +45,6 @@ export const createWardrobeItemAction = (input: unknown) => action("create-piece
 export const checkCompatibilityAction = (input: unknown) => action("try-on", input);
 export const saveInspirationAction = (input: unknown) => action("save-inspiration", input);
 export const enrichInspirationAction = (input: unknown) => action("enrich-inspiration", input);
-export const deleteWardrobeItemAction = (input: unknown) => action("delete-piece", input);
+export const deleteWardrobeItemAction = async (input: unknown) => { const result = await action("delete-piece", input); invalidate(); return result; };
 export const refreshStyleBioAction = async () => ({ updated: false });
 export const updateProfileBioAction = async (input: unknown) => { const result = await action("update-bio", input); invalidate(); return result; };

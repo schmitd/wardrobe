@@ -156,8 +156,8 @@ export default function RackItemCard({
               <circle cx="22" cy="7" r="2.5" />
             </svg>
             <span className="rack-piece-tag-icons">
-              <Folder size={17} aria-hidden="true" />
-              {hasNote && <Pencil size={14} aria-hidden="true" />}
+              <Folder size={16} aria-hidden="true" />
+              {hasNote && <Pencil size={12} aria-hidden="true" />}
             </span>
             <span className="sr-only">
               {collectionLabel
