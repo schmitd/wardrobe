@@ -48,6 +48,10 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
     const session = crypto.randomUUID();
     if (states.size > 100) states.delete(states.keys().next().value!);
     const next = fixture(url);
+    if (url.searchParams.get("case") === "item-states") {
+      next.catalog.items[0]!.analysisStatus = "processing_description";
+      next.catalog.items[1]!.analysisStatus = "error";
+    }
     if (!url.searchParams.has("scenario") || url.searchParams.get("scenario") === "fits") {
       next.data.items = next.catalog.items.map(i => ({ id: i.id, category: i.category!, description: i.description!, imageUrl: i.imageUrl }));
       next.data.suggestions[0]!.status = "suggested";
@@ -98,6 +102,11 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
       else if (input.name === "wardrobes.updateWardrobe") { const collection = c.collections.find(collection => collection._id === args.wardrobeId); if (collection) { collection.name = args.name!; collection.description = args.description ?? ""; } }
       else if (input.name === "wardrobes.createWardrobe") { const id = `collection-${c.collections.length}`; c.collections.push({ _id: id, name: args.name!, description: args.description ?? "" }); return Response.json({ id }); }
       return Response.json(null);
+    }
+    case "delete-piece": {
+      state.catalog.items = state.catalog.items.filter(item => item.id !== input.itemId);
+      state.catalog.memberships = state.catalog.memberships.filter(membership => membership.itemId !== input.itemId);
+      return Response.json({ success: true });
     }
     case "enrich-inspiration": return Response.json({ success: true });
     case "update-bio": state.catalog.bio = String(input.bio); return Response.json({ success: true });

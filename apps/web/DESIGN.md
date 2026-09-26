@@ -46,7 +46,7 @@ Default panels are white to chalk. Support panels use mauve or citron washes. Gr
 
 Buttons remain square and direct. Primary non-destructive actions use citron with ink text, but app chrome should stay lighter than rack cards. Destructive actions use ink or danger treatment with clear destructive copy. Avoid pill badges; metadata should read as compact garment notes, labels, or physical hang tags.
 
-Item removal stays contextual. The delete control should appear on hover, on tap/focus of the item card, and when keyboard users move into the card, rather than remaining permanently visible.
+Item removal lives at the bottom of the item detail drawer, after labels, collections, and notes. Confirm removal there with a reason; keep destructive controls off the rack cards. Pending analysis uses one small card badge without an additional blocking Processing overlay.
 
 The guest demo starts with the closet bio concept, not a generic landing hero. Upload instructions sit as normal document structure, followed by a single clear `Add Clothes` button. Do not show an empty bio textarea before analysis; the editable bio appears only after the analysis has produced a draft.
 
