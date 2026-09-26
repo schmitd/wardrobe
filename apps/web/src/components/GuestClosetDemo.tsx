@@ -195,9 +195,6 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         aria-labelledby="guest-style-bio-title"
       >
         <div className="max-w-3xl">
-          <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--rack-ink-soft)]">
-            Your closet starts here
-          </p>
           <h1
             id="guest-style-bio-title"
             className="mt-2 text-3xl font-extrabold leading-tight text-[var(--rack-ink)] md:text-5xl"
@@ -205,21 +202,18 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
             Create your dream wardrobe
           </h1>
           <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-[var(--rack-ink-soft)] md:text-base">
-            Find your style based on what you already wear. Start with one full-body photo and we will pick out the pieces, define your look, and help you perfect your wardrobe.
+            Start with an outfit you love wearing.
           </p>
         </div>
 
         {!demoComplete && (
           <div className="mt-6 border-t border-[var(--rack-line)] pt-5">
             <div className="max-w-2xl">
-              <h2 id="guest-upload-title" className="text-xl font-extrabold text-[var(--rack-ink)] md:text-2xl">
-                Add one full-body fit check
-              </h2>
               <p
                 id="guest-upload-help"
                 className="mt-2 text-sm font-medium leading-relaxed text-[var(--rack-ink-soft)]"
               >
-                Take a full-body selfie or choose one from your camera roll. Keep your whole outfit in frame and wear something that feels quintessentially &quot;you.&quot;
+                Keep your whole outfit in frame.
               </p>
             </div>
 
@@ -227,18 +221,13 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
               type="button"
               disabled={isAnalyzing}
               aria-describedby="guest-upload-help"
+              aria-live="polite"
               onClick={() => fileInputRef.current?.click()}
               className="mt-5 min-h-12 w-full rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)] sm:w-fit"
             >
               {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
               {isAnalyzing ? 'Reading your fit…' : error ? 'Try another fit check' : 'Start with a fit check'}
             </Button>
-
-            {isAnalyzing && (
-              <p className="mt-3 text-sm font-semibold text-[var(--rack-ink)]" role="status" aria-live="polite">
-                Reading your outfit’s textures, palette, and silhouette…
-              </p>
-            )}
 
             {error && (
               <p
@@ -262,9 +251,6 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
               onChange={(event) => setBio(event.target.value)}
               className="h-36 w-full resize-none rounded-none border border-[var(--rack-line)] bg-white p-4 text-sm font-medium leading-relaxed text-[var(--rack-ink)]"
             />
-            <p className="mt-3 text-sm font-medium text-[var(--rack-ink-soft)]">
-              Edit the bio after analysis, then save it to your account.
-            </p>
           </div>
         )}
 

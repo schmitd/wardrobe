@@ -51,10 +51,6 @@ export function AccountScreen() {
           </View>
         </View>
       </Panel>
-      <View style={{ gap: 6 }}>
-        <Text selectable style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>Account</Text>
-        <Text selectable style={{ color: colors.muted, lineHeight: 20 }}>Your style and fit context now live with your wardrobe.</Text>
-      </View>
       <Pressable
         onPress={() => { void setReplayConsent(false).catch(() => undefined).then(() => signOut()).then(() => { queryClient.clear(); router.replace("/sign-in"); }); }}
         style={{ alignSelf: "flex-start", borderColor: colors.line, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: colors.surface, borderRadius: 10, borderCurve: "continuous" }}

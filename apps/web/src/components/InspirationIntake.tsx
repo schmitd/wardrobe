@@ -31,7 +31,7 @@ export default function InspirationIntake({ collectionId, collectionName }: { co
       return;
     }
     setState('saving');
-    setMessage('Adding this visual reference…');
+    setMessage('');
     let stage: 'upload' | 'register' | 'save' = 'upload';
     const outcome = await runEffectResult(
       promiseEffect(async () => {

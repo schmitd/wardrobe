@@ -81,7 +81,6 @@ export default function ItemDetailsDrawer({
   const saveNote = useMutation(api.wardrobe.saveNote);
   const preview = useQuery(api.garmentPreviewData.status, { itemId });
   const generatePreview = useMutation(api.garmentPreviewData.request);
-  const restorePhoto = useMutation(api.garmentPreviewData.restore);
   const [draft, setDraft] = useState<string | null>(null);
   const [manage, setManage] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -164,27 +163,21 @@ export default function ItemDetailsDrawer({
             </DialogDescription>
           </div>
         </div>
-        {(preview?.enabled || preview?.status === "ready") && (
-          <section aria-label="Catalog preview" className="space-y-2">
-            <h3 className="font-semibold">Catalog preview</h3>
-            <p className="text-sm text-[#685e70]">AI removes the background and reconstructs hidden parts. Your original photo is kept.</p>
-            {(preview.status === "queued" || preview.status === "processing") ? (
-              <p role="status" className="text-sm">Creating preview…</p>
-            ) : preview.status !== "ready" && (
-              <Button variant="outline" disabled={busy || item.analysisStatus !== "ready"} onClick={() => void run(async () => {
-                const queued = await generatePreview({ itemId });
-                if (!queued) throw new Error("Preview unavailable");
-                posthog.capture("wardrobe_preview_changed", { operation: "requested", surface: "wardrobe" });
-              }, "Preview requested.")}>Create catalog preview</Button>
+        {preview?.enabled && preview.status !== "ready" && (
+          <section aria-label="Photo status" className="space-y-2">
+            {preview.status === "queued" || preview.status === "processing" ? (
+              <p role="status" className="text-sm">Preparing photo…</p>
+            ) : (
+              <>
+                {preview.status === "skipped" && <p className="text-sm">Try a clearer photo of this piece.</p>}
+                {preview.status === "error" && <p className="text-sm">Couldn’t prepare this photo.</p>}
+                {preview.status !== "skipped" && <Button variant="outline" disabled={busy || item.analysisStatus !== "ready"} onClick={() => void run(async () => {
+                  const queued = await generatePreview({ itemId });
+                  if (!queued) throw new Error("Photo unavailable");
+                  posthog.capture("wardrobe_preview_changed", { operation: "requested", surface: "wardrobe" });
+                }, "")}>{preview.status === "error" ? "Try again" : "Prepare photo"}</Button>}
+              </>
             )}
-            {["ready", "queued", "processing"].includes(preview.status) && (
-              <Button variant="ghost" disabled={busy} onClick={() => void run(async () => {
-                await restorePhoto({ itemId });
-                posthog.capture("wardrobe_preview_changed", { operation: "restored", surface: "wardrobe" });
-              }, "Original photo restored.")}>Use original photo</Button>
-            )}
-            {preview.status === "skipped" && <p className="text-sm">This photo cannot produce a reliable preview. Try a clearer, closer photo.</p>}
-            {preview.status === "error" && <p className="text-sm">The preview could not be completed. Your original photo is still shown.</p>}
           </section>
         )}
         <section aria-label="Item labels">

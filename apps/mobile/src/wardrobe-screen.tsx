@@ -17,16 +17,15 @@ export function WardrobeScreen() {
     <Page refresh={() => void query.refetch()} refreshing={query.isRefetching}>
       <View style={{ gap: 7 }}>
         <Text selectable style={{ color: colors.plum, fontSize: 13, fontWeight: "900", textTransform: "uppercase" }}>Your wardrobe</Text>
-        <Text selectable style={{ color: colors.muted, fontSize: 15, lineHeight: 22 }}>Everything you own, with the context that helps Wardrobe understand how you like to dress.</Text>
       </View>
       {query.isLoading ? <Loading /> : query.error ? <ErrorPanel message={query.error.message} retry={() => void query.refetch()} /> : null}
       {!query.isLoading && !query.error ? <StyleMemory profile={query.data?.profile ?? null} /> : null}
       {query.data?.items.length === 0 ? (
         <Panel tint={colors.wash}>
           <Text selectable style={{ color: colors.ink, fontSize: 20, fontWeight: "900" }}>Start with what you wore.</Text>
-          <Text selectable style={{ color: colors.muted, lineHeight: 21 }}>One full-body fit check is enough for the agent to begin recognizing the pieces in your wardrobe.</Text>
+          <Text selectable style={{ color: colors.muted, lineHeight: 21 }}>Keep your whole outfit in frame.</Text>
           <Pressable onPress={() => router.push("/capture")} style={{ alignSelf: "flex-start", backgroundColor: colors.lime, borderColor: colors.line, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12 }}>
-            <Text style={{ color: colors.ink, fontWeight: "900" }}>Capture a fit</Text>
+            <Text style={{ color: colors.ink, fontWeight: "900" }}>Add owned outfit</Text>
           </Pressable>
         </Panel>
       ) : (
