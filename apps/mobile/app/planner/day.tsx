@@ -1,3 +1,4 @@
+import { localDate } from "@wardrobe/shared";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Alert } from "react-native";
@@ -85,10 +86,10 @@ export default function Day() {
             />
           ) : s.status === "planned" ? (
             <PlannerButton
-              title="I wore this"
-              disabled={p.busy}
+              title="Wore it"
+              disabled={p.busy || s.date > localDate()}
               onPress={() =>
-                void update({ operation: "planning_worn", id: s.id })
+                void update({ operation: "planning_worn", id: s.id, expectedRevision: s.planRevision ?? 0 })
               }
             />
           ) : null}

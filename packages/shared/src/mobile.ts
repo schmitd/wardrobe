@@ -38,6 +38,9 @@ export type FitCheck = {
   transcription: string | null;
   description: string | null;
   createdAt: number;
+  localDate?: string;
+  timezone?: string;
+  wearOccurrenceId?: string;
   items: Array<{ id: string; category: string | null; description: string | null }>;
   observations: GarmentObservation[];
 };

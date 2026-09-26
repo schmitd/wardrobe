@@ -68,6 +68,7 @@ export const collection = query({
 });
 
 function mobileFits(fitChecks: Awaited<ReturnType<typeof projectFitChecks>>) { return fitChecks.map(fit => ({ id: fit._id, imageUrl: fit.imageUrl, type: fit.type, transcription: fit.transcription ?? null, description: fit.description ?? null, createdAt: fit.createdAt,
+        localDate: fit.localDate, timezone: fit.timezone, wearOccurrenceId: fit.wearOccurrenceId,
         items: fit.items.map(item => ({ id: item._id, category: item.category ?? null, description: item.description ?? null })),
         observations: fit.observations.map(observation => ({ id: observation._id, category: observation.category, description: observation.description, cropUrl: observation.cropUrl, resolutionStatus: observation.resolutionStatus, matchScore: observation.matchScore ?? null, candidates: observation.candidates })),
       })); }

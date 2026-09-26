@@ -4,7 +4,8 @@ import { mutation, query, internalMutation } from "../../convex/_generated/serve
 import { internal } from "../../convex/_generated/api";
 import { getAuthenticatedUserId } from "./authIdentity";
 import { outfitFields, outfitStatus } from "./planningValidators";
-import { shiftDay, recallCollections } from "@wardrobe/shared";
+import { shiftDay, recallCollections, validateWearDate } from "@wardrobe/shared";
+import { affirmPlan, snapshotPlan } from "../wearDomain";
 
 const item = v.object({
   id: v.id("wardrobeItems"),
@@ -55,7 +56,7 @@ export const load = query({
           .order("desc")
           .take(100),
         ctx.db
-          .query("fitChecks")
+          .query("wearOccurrences")
           .withIndex("by_user", (q) => q.eq("userId", userId))
           .order("desc")
           .take(20),
@@ -82,6 +83,7 @@ export const load = query({
     ))).flat().filter(m => m.userId === userId);
     const referenced = new Set([
       ...suggestions.flatMap(s => s.itemIds),
+      ...history.filter(row => row.active).flatMap(row => row.itemIds),
       ...selectedMemberships.flatMap(m => m.userId === userId && m.itemId ? [m.itemId] : []),
     ]);
     const inventory = new Map(items.slice(0, 300).map(i => [i._id, i]));
@@ -105,10 +107,8 @@ export const load = query({
           description: p.description ?? "",
           itemIds: selectedMemberships.flatMap(m => m.wardrobeId === p._id && m.itemId && inventory.get(m.itemId)?.userId === userId ? [m.itemId] : []),
         })),
-      history: history.map((h) =>
-        (h.transcription ?? h.description ?? "").slice(0, 1200),
-      ),
-      bio: (profile?.bio ?? "").slice(0, 4000),
+      history: history.filter(row => row.active && row.itemIds.length > 0).map(row => `${row.localDate ?? "Wear date unknown"}: ${row.itemIds.map(id => inventory.get(id)?.description ?? inventory.get(id)?.category ?? "Saved piece").join("; ")}`.slice(0, 1200)),
+      bio: (profile?.bioSource === "manual" ? profile.bio ?? "" : profile?.bioManualAnchor ?? "").slice(0, 4000),
       suggestions,
       calendarEnabled: settings?.calendarEnabled ?? false,
       calendarIds: settings?.calendarIds ?? [],
@@ -204,11 +204,7 @@ export const save = mutation({
       const expired = existing.find(
         (o) => o.status !== "planned" && o.status !== "worn",
       );
-      if (!expired)
-        throw Error(
-          "Your outfit history is full. Remove an old outfit before generating more.",
-        );
-      await ctx.db.delete(expired._id);
+      if (expired && !expired.planRevision) await ctx.db.delete(expired._id);
     }
     const { calendarRevision: _revision, ...outfit } = args;
     return ctx.db.insert("outfitSuggestions", {
@@ -227,6 +223,9 @@ export const update = mutation({
     status: v.optional(outfitStatus),
     itemIds: v.optional(v.array(v.id("wardrobeItems"))),
     reason: v.optional(v.string()),
+    timezone: v.optional(v.string()),
+    expectedRevision: v.optional(v.number()),
+    notWorn: v.optional(v.boolean()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -234,6 +233,14 @@ export const update = mutation({
       row = await ctx.db.get(args.id);
     if (!userId || row?.userId !== userId)
       throw new ConvexError({ _tag: "PlanningInput", message: "Recommendation unavailable" });
+    if (args.notWorn !== undefined) {
+      if (row.status !== "planned" || args.expectedRevision !== (row.planRevision ?? 0)) throw new ConvexError({ _tag: "PlanningInput", message: "Review the current accepted plan first." });
+      if (row.wearOccurrenceId && (await ctx.db.get(row.wearOccurrenceId))?.active) throw new ConvexError({ _tag: "PlanningInput", message: "This plan has wear evidence. Review the actual outfit before changing your response." });
+      if (!args.timezone) throw new ConvexError({ _tag: "PlanningInput", message: "Refresh this screen first." });
+      validateWearDate(row.date, args.timezone);
+      await ctx.db.patch(row._id, { notWornAt: args.notWorn ? Date.now() : undefined, updatedAt: Date.now() });
+      return null;
+    }
     if (args.reason && args.reason.length > 500)
       throw new ConvexError({ _tag: "PlanningInput", message: "Keep your reason under 500 characters." });
     const chosen = args.itemIds ?? row.itemIds;
@@ -246,14 +253,24 @@ export const update = mutation({
     }
     if (args.status === "planned" && row.status !== "suggested")
       throw new ConvexError({ _tag: "PlanningInput", message: "Only a suggestion can be accepted." });
-    if (args.status === "worn" && row.status !== "planned")
+    if (args.status === "worn" && row.status !== "planned" && row.status !== "worn")
       throw new ConvexError({ _tag: "PlanningInput", message: "Accept this suggestion first." });
+    if (args.status === "worn") {
+      if (row.notWornAt) throw new ConvexError({ _tag: "PlanningInput", message: "Clear your didn't-wear response before confirming." });
+      if (!args.timezone) throw new ConvexError({ _tag: "PlanningInput", message: "Refresh this screen before recording wear." });
+      await affirmPlan(ctx, row, { itemIds: chosen, timezone: args.timezone, expectedRevision: args.expectedRevision });
+      return null;
+    }
     if (row.status === "dismissed" || row.status === "worn")
       throw new ConvexError({ _tag: "PlanningInput", message: "This outfit is already finished." });
     if (args.status === "dismissed" && !args.reason?.trim())
       throw new ConvexError({ _tag: "PlanningInput", message: "Choose a dismissal reason." });
     if (args.status === "planned" && !(args.itemIds ?? row.itemIds).length)
-      throw new ConvexError({ _tag: "PlanningInput", message: "Add owned pieces before accepting." });
+        throw new ConvexError({ _tag: "PlanningInput", message: "Add owned pieces before accepting." });
+    if (args.status === "planned" || (row.status === "planned" && args.itemIds)) {
+      if (args.expectedRevision !== undefined && args.expectedRevision !== (row.planRevision ?? 0)) throw new ConvexError({ _tag: "PlanningInput", message: "This plan changed. Review its pieces again." });
+      await snapshotPlan(ctx, row, [...new Set(chosen)]);
+    }
     await ctx.db.patch(args.id, {
       ...(args.status ? { status: args.status } : {}),
       ...(args.itemIds ? { itemIds: [...new Set(args.itemIds)] } : {}),
@@ -359,11 +376,7 @@ export const saveWeek = mutation({
               o.status !== "worn" &&
               !args.outfits.some((day) => day.date === o.date),
           );
-          if (!expired)
-            throw Error(
-              "Your outfit history is full. Remove an old outfit before generating more.",
-            );
-          await ctx.db.delete(expired._id);
+          if (expired && !expired.planRevision) await ctx.db.delete(expired._id);
         }
         await ctx.db.insert("outfitSuggestions", {
           ...value,
@@ -413,7 +426,7 @@ export const calendar = mutation({
         .withIndex("by_user", (q) => q.eq("userId", userId))
         .take(100);
       for (const row of suggestions)
-        if (row.calendarDerived) await ctx.db.delete(row._id);
+        if (row.calendarDerived && !row.planRevision && row.status === "suggested") await ctx.db.delete(row._id);
     }
     return null;
   },

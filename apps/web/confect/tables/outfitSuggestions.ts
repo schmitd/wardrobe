@@ -15,6 +15,10 @@ export default Table.make(() => Schema.Struct({
   createdAt: Schema.Number,
   updatedAt: Schema.Number,
   reason: Schema.optionalKey(Schema.String),
+  planRevision: Schema.optionalKey(Schema.Number),
+  wearOccurrenceId: Schema.optionalKey(Id("wearOccurrences")),
+  notWornAt: Schema.optionalKey(Schema.Number),
 }))
     .index("by_user", ["userId"])
+    .index("by_user_status_date", ["userId", "status", "date"])
     .index("by_user_date", ["userId", "date"]);

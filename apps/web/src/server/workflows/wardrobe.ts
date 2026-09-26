@@ -85,6 +85,9 @@ export const getMobileBootstrapAction = async () => {
     transcription: fitCheck.transcription ?? null,
     description: fitCheck.description ?? null,
     createdAt: fitCheck.createdAt,
+    localDate: fitCheck.localDate,
+    timezone: fitCheck.timezone,
+    wearOccurrenceId: fitCheck.wearOccurrenceId,
     items: fitCheck.items.map((item) => ({
       id: item._id,
       category: item.category ?? null,
@@ -1104,7 +1107,7 @@ export const refreshStyleBioAction = async (input: {
   const generated = context.counts.closetItemCount === 0 && context.counts.fitCheckCount === 0 && context.counts.collectionCount === 0
     ? { bio: manualAnchor || currentBio || "I'm building a clearer picture of what I like to wear. As my closet and outfit notes grow, this space will track the colors, shapes, textures, and combinations I return to without guessing ahead of the evidence." }
     : await runInference(generateMaintainedStyleBio({
-        currentBio,
+        currentBio: context.rebuildFromEvidence ? manualAnchor : currentBio,
         manualAnchor,
         refreshReason: context.refreshReason,
         closetItems: context.closetItems,
@@ -1139,6 +1142,9 @@ export const recordFitCheckForAuth = async (
   input: {
     storageId: string;
     type: FitCheckKind;
+    localDate?: string;
+    timezone?: string;
+    capturedAt?: number;
     traceId?: string;
     traceparent?: string;
   }
@@ -1275,7 +1281,7 @@ export const recordFitCheckForAuth = async (
     }
     const saved = await fetchMutation(
       api.fitChecks.recordFitCheck,
-      { storageId: input.storageId as Id<"_storage">, type: input.type, transcription: analysis.transcription, items, traceId, traceparent },
+      { storageId: input.storageId as Id<"_storage">, type: input.type, localDate: input.localDate, timezone: input.timezone, capturedAt: input.capturedAt, transcription: analysis.transcription, items, traceId, traceparent },
       { token }
     );
     return { ...saved, transcription: analysis.transcription };
@@ -1291,6 +1297,9 @@ export const recordFitCheckForAuth = async (
         storageId: input.storageId as Id<"_storage">,
         type: input.type,
         description: "Visual analysis is pending.",
+        localDate: input.localDate,
+        timezone: input.timezone,
+        capturedAt: input.capturedAt,
         items: [],
         traceId,
         traceparent,
@@ -1317,6 +1326,9 @@ export const recordFitCheckForAuth = async (
 
 export const recordDailyFitCheckAction = async (input: {
   storageId: string;
+  localDate?: string;
+  timezone?: string;
+  capturedAt?: number;
   traceId?: string;
   traceparent?: string;
 }) =>

@@ -1,7 +1,7 @@
 "use node";
 
 import { Zep, ZepClient } from "@getzep/zep-cloud";
-import { wardrobeEdgeTypes, wardrobeEntityTypes } from "./zepOntology";
+import { wardrobeEdgeTypes, wardrobeEntityTypes, wearEntityTypes, wearEdgeTypes } from "./zepOntology";
 import type { AuthenticatedUser } from "./authIdentity";
 
 type Scalar = string | number | boolean | null;
@@ -245,7 +245,7 @@ const addFactTriple = async (
   userId: string,
   user: AuthenticatedUser | null | undefined,
   input: {
-    factName: keyof typeof wardrobeEdgeTypes;
+    factName: keyof typeof wardrobeEdgeTypes | keyof typeof wearEdgeTypes;
     fact: string;
     sourceNodeName?: string;
     sourceNodeSummary?: string;
@@ -298,7 +298,8 @@ const wardrobeSummaryInstructions = [
 let projectSetupPromise: Promise<void> | null = null;
 
 const runProjectSetup = async (client: ZepClient) => {
-  await client.graph.setOntology(zepOntologyText(wardrobeEntityTypes), zepOntologyText(wardrobeEdgeTypes));
+  const wearLive = process.env.WARDROBE_WEAR_ZEP_MODE === "live";
+  await client.graph.setOntology(zepOntologyText({ ...wardrobeEntityTypes, ...(wearLive ? wearEntityTypes : {}) }), zepOntologyText({ ...wardrobeEdgeTypes, ...(wearLive ? wearEdgeTypes : {}) }));
 
   const existing = await client.user.listUserSummaryInstructions({});
   const existingNames = new Set((existing.instructions ?? []).map((instruction) => instruction.name));
@@ -654,22 +655,6 @@ export const updateProfileMemory = async (
   }
 };
 
-export const searchStyleBioGraphContext = async (userId: string) => {
-  if (!apiKey) return [];
-  const client = ensureClient();
-  const result = await client.graph.search({
-    userId,
-    query: "Current personal style, closet patterns, repeated outfits, fit-check behavior, collection goals, inspiration, preferences, corrections, and style bio history",
-    scope: "edges",
-    limit: 20,
-  });
-  return (result.edges ?? [])
-    .filter((edge) => !edge.invalidAt && !edge.expiredAt)
-    .map((edge) => `${edge.validAt ?? edge.createdAt}: ${edge.fact}`)
-    .filter(Boolean)
-    .slice(0, 20);
-};
-
 export const addWardrobeCollectionMemory = async (
   userId: string,
   collection: WardrobeCollectionMemory,
@@ -825,170 +810,33 @@ export const addFitCheckMemory = async (
   fitCheck: FitCheckMemory,
   user?: AuthenticatedUser | null
 ) => {
-  if (!apiKey) return;
-
+  // Actual wear is projected solely from the durable occurrence/evidence ledger.
+  // Never feed unresolved observations or free-text photo narrative to extraction.
+  if (!apiKey || process.env.WARDROBE_WEAR_ZEP_MODE !== "live" || fitCheck.type === "daily_fit_check") return;
   const client = ensureClient();
-  const createdAt = fitCheck.createdAt;
-  const contextName = truncate(`Fit check ${fitCheck.fitCheckId}`, 50);
-  const contextSummary = truncate(
-    [
-      `Type: ${fitCheck.type}.`,
-      fitCheck.description ? `Description: ${fitCheck.description}.` : undefined,
-      fitCheck.transcription ? `Transcription: ${fitCheck.transcription}.` : undefined,
-    ]
-      .filter(Boolean)
-      .join(" "),
-    500
-  );
-
-  await addGraphEpisode(client, userId, user, {
-    sourceDescription:
-      fitCheck.type === "daily_fit_check" ? "Daily outfit fit check" : "Try-on fit check",
-    createdAt,
-    data: {
-      event: fitCheck.type,
-      ontology_hints: {
-        entities: ["WearContext", "WardrobeItem", "CandidateItem", "StyleConcept"],
-        edges: ["WORN_FOR", "STYLE_RELATION", "HAS_STYLE_CONCEPT", "ADDED_TO_WARDROBE"],
-      },
-      user: userMetadata(user),
-      fitCheck,
-    },
-  });
-
   for (const item of fitCheck.items) {
-    // Unresolved visual observations stay in the source episode, but do not
-    // become graph identities until the app or user resolves them.
-    if (item.source === "observed_unresolved") continue;
-    const wardrobeItem: WardrobeItemMemory = {
-      ...item,
-      itemId: item.wardrobeItemId ?? item.itemId ?? null,
-      sourceFitCheckId: fitCheck.fitCheckId,
-    };
-    const itemNode = itemNodeName(
-      wardrobeItem,
-      fitCheck.type === "try_on" && item.source === "transcribed_only" ? "Candidate" : "Wardrobe item"
-    );
-    const itemNodeSummary = itemSummary(wardrobeItem);
-
+    if (!item.wardrobeItemId || item.source === "observed_unresolved") continue;
+    const wardrobeItem: WardrobeItemMemory = { ...item, itemId: item.wardrobeItemId };
     await addFactTriple(client, userId, user, {
-      factName: "WORN_FOR",
-      fact: `${itemReference(wardrobeItem)} was recorded in ${fitCheck.type}.`,
-      sourceNodeName: itemNode,
-      sourceNodeSummary: itemNodeSummary,
+      factName: "TRIED_IN",
+      fact: itemReference(wardrobeItem) + " was evaluated in try-on " + fitCheck.fitCheckId + ". This is not actual wear.",
+      sourceNodeName: itemNodeName(wardrobeItem, "Wardrobe item"),
       sourceNodeAttributes: itemAttributes(wardrobeItem),
-      targetNodeName: contextName,
-      targetNodeSummary: contextSummary,
-      targetNodeAttributes: {
-        context_kind: fitCheck.type,
-        description: fitCheck.description ?? fitCheck.transcription ?? null,
-        timeframe: toIso(createdAt),
-        source_ref: fitCheck.fitCheckId,
-      },
-      edgeAttributes: {
-        usage_kind: fitCheck.type,
-        feedback: item.source,
-        event_time: toIso(createdAt),
-      },
-      createdAt,
+      targetNodeName: "Try on " + fitCheck.fitCheckId,
+      targetNodeAttributes: { source_ref: fitCheck.fitCheckId, context_kind: "try_on" },
+      edgeAttributes: { source_ref: fitCheck.fitCheckId, event_time: toIso(fitCheck.createdAt) },
+      createdAt: fitCheck.createdAt,
     });
-
-    if (item.source === "created_from_fit_check") {
-      await addFactTriple(client, userId, user, {
-        factName: "ADDED_TO_WARDROBE",
-        fact: `User created wardrobe item ${itemReference(wardrobeItem)} from ${fitCheck.type}.`,
-        targetNodeName: itemNode,
-        targetNodeSummary: itemNodeSummary,
-        targetNodeAttributes: itemAttributes(wardrobeItem),
-        edgeAttributes: {
-          added_reason: `created_from_${fitCheck.type}`,
-          source_ref: fitCheck.fitCheckId,
-          event_time: toIso(createdAt),
-        },
-        createdAt,
-      });
-    }
-
-    await addStyleConceptFacts(client, userId, user, wardrobeItem, itemNode, itemNodeSummary, createdAt);
   }
 };
 
+/** Old queued resolution jobs are intentionally inert. The committing mutation
+ * now updates the original daily-fit occurrence and its durable projection. */
 export const addGarmentIdentityResolutionMemory = async (
-  userId: string,
-  resolution: {
-    fitCheckId: string;
-    wardrobeItemId: string;
-    category: string;
-    description: string;
-    resolution: "confirmed" | "promoted_new";
-    score?: number | null;
-    createdAt: number;
-  },
-  user?: AuthenticatedUser | null
-) => {
-  if (!apiKey) return;
-  const client = ensureClient();
-  const item: WardrobeItemMemory = {
-    itemId: resolution.wardrobeItemId,
-    category: resolution.category,
-    description: resolution.description,
-    sourceFitCheckId: resolution.fitCheckId,
-  };
-  const itemNode = itemNodeName(item, "Wardrobe item");
-  const contextName = truncate(`Fit check ${resolution.fitCheckId}`, 50);
-
-  await addGraphEpisode(client, userId, user, {
-    sourceDescription: "Garment observation identity resolved",
-    createdAt: resolution.createdAt,
-    data: {
-      event: "garment_identity_resolved",
-      wardrobeItemId: resolution.wardrobeItemId,
-      fitCheckId: resolution.fitCheckId,
-      category: resolution.category,
-      description: resolution.description,
-      resolution: resolution.resolution,
-      matchScore: resolution.score ?? null,
-    },
-  });
-
-  await addFactTriple(client, userId, user, {
-    factName: "WORN_FOR",
-    fact: `${itemReference(item)} was identified in daily fit check ${resolution.fitCheckId}.`,
-    sourceNodeName: itemNode,
-    sourceNodeSummary: itemSummary(item),
-    sourceNodeAttributes: itemAttributes(item),
-    targetNodeName: contextName,
-    targetNodeSummary: `Daily fit check containing ${resolution.description}.`,
-    targetNodeAttributes: {
-      context_kind: "daily_fit_check",
-      timeframe: toIso(resolution.createdAt),
-      source_ref: resolution.fitCheckId,
-    },
-    edgeAttributes: {
-      usage_kind: "worn",
-      feedback: resolution.resolution,
-      event_time: toIso(resolution.createdAt),
-      match_score: resolution.score ?? null,
-    },
-    createdAt: resolution.createdAt,
-  });
-
-  if (resolution.resolution === "promoted_new") {
-    await addFactTriple(client, userId, user, {
-      factName: "ADDED_TO_WARDROBE",
-      fact: `User added ${itemReference(item)} after identifying it in a daily fit check.`,
-      targetNodeName: itemNode,
-      targetNodeSummary: itemSummary(item),
-      targetNodeAttributes: itemAttributes(item),
-      edgeAttributes: {
-        added_reason: "confirmed_from_daily_fit_check",
-        source_ref: resolution.fitCheckId,
-        event_time: toIso(resolution.createdAt),
-      },
-      createdAt: resolution.createdAt,
-    });
-  }
-};
+  _userId: string,
+  _resolution: { fitCheckId: string; wardrobeItemId: string; category: string; description: string; resolution: "confirmed" | "promoted_new"; score?: number | null; createdAt: number },
+  _user?: AuthenticatedUser | null,
+) => undefined;
 
 export const addCandidateInspirationMemory = async (
   userId: string,
@@ -1025,18 +873,6 @@ export const addCandidateInspirationMemory = async (
     createdAt,
   });
   await addStyleConceptFacts(client, userId, user, inspiration.candidate, candidateNode, candidateSummary, createdAt);
-};
-
-export const searchWardrobeStyleMemory = async (
-  userId: string,
-  query: string,
-  user?: AuthenticatedUser | null
-) => {
-  if (!apiKey) return [];
-  const client = ensureClient();
-  await ensureUser(client, userId, user);
-  const results = await client.graph.search({ userId, query: truncate(query, 500), limit: 8, scope: "edges" });
-  return (results.edges ?? []).map((edge) => ({ fact: edge.fact, relation: edge.name, relevance: edge.relevance ?? edge.score ?? null }));
 };
 
 export const setWardrobeOntology = async (targets?: { userIds?: string[]; graphIds?: string[] }) => {

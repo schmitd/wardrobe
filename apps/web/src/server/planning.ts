@@ -195,6 +195,20 @@ export async function generateJson(prompt: string, maxOutputTokens = 4096) {
 export async function executePlanning(body: PlanningOperation) {
   const { userId, token } = await getConvexAuth();
   const options = { token };
+  if (body.operation === "wear_pending") return fetchQuery(api.wear.pendingPlans, { through: body.through, paginationOpts: { numItems: 20, cursor: body.cursor ?? null } }, options);
+  if (body.operation === "wear_list") return fetchQuery(api.wear.list, {}, options);
+  if (body.operation === "wear_update") {
+    await fetchMutation(api.wear.update, {
+      id: body.id as Id<"wearOccurrences">, action: body.action, expectedRevision: body.expectedRevision,
+      ...(body.itemIds ? { itemIds: body.itemIds as Id<"wardrobeItems">[] } : {}),
+      ...(body.localDate ? { localDate: body.localDate } : {}),
+      ...(body.timezone ? { timezone: body.timezone } : {}),
+      ...(body.fitId ? { fitId: body.fitId as Id<"fitChecks"> } : {}),
+      ...(body.planId ? { planId: body.planId as Id<"outfitSuggestions"> } : {}),
+      ...(body.expectedPlanRevision !== undefined ? { expectedPlanRevision: body.expectedPlanRevision } : {}),
+    }, options);
+    return { success: true };
+  }
   if (body.operation === "calendar_list") return listCalendars(userId);
   if (body.operation === "calendar_disconnect") {
     // Keep Google sign-in intact. Wardrobe stops all reads and deletes derived suggestions.
@@ -229,10 +243,12 @@ export async function executePlanning(body: PlanningOperation) {
       "planning_accept",
       "planning_worn",
       "planning_dismiss",
+      "planning_not_worn",
+      "planning_clear_response",
       "planning_edit",
     ].includes(body.operation)
   ) {
-    const input = body as Extract<PlanningOperation, { id: string }>;
+    const input = body as Extract<PlanningOperation, { operation: "planning_accept" | "planning_worn" | "planning_edit" | "planning_dismiss" | "planning_not_worn" | "planning_clear_response" }>;
     if (typeof input.id !== "string" || input.id.length > 100)
       throw new PlanningError("Choose a recommendation.");
     await fetchMutation(
@@ -242,7 +258,7 @@ export async function executePlanning(body: PlanningOperation) {
         ...(input.itemIds
           ? { itemIds: input.itemIds as Id<"wardrobeItems">[] }
           : {}),
-        ...(input.operation !== "planning_edit"
+        ...(input.operation !== "planning_edit" && input.operation !== "planning_not_worn" && input.operation !== "planning_clear_response"
           ? {
               status:
                 input.operation === "planning_accept"
@@ -252,7 +268,10 @@ export async function executePlanning(body: PlanningOperation) {
                     : ("dismissed" as const),
             }
           : {}),
+        ...((input.operation === "planning_not_worn" || input.operation === "planning_clear_response") ? { notWorn: input.operation === "planning_not_worn" } : {}),
         ...(input.reason ? { reason: input.reason } : {}),
+        ...(input.timezone ? { timezone: input.timezone } : {}),
+        ...(input.expectedRevision !== undefined ? { expectedRevision: input.expectedRevision } : {}),
       },
       options,
     );
@@ -437,6 +456,9 @@ export async function executePlanning(body: PlanningOperation) {
         missing: s.missing,
         status: s.status,
         calendarDerived: s.calendarDerived,
+        planRevision: s.planRevision,
+        wearOccurrenceId: s.wearOccurrenceId,
+        notWornAt: s.notWornAt,
       })),
       calendarEnabled: data.calendarEnabled,
       calendarIds: data.calendarIds,

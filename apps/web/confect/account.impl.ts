@@ -5,7 +5,7 @@ import schema from "./_generated/schema";
 import { MutationCtx } from "./_generated/services";
 import spec from "./account.spec";
 
-const tables = ["styleBioJobs", "uploadTickets", "wardrobeItems", "candidateItems", "profiles", "wardrobes", "wardrobeMemberships", "fitChecks", "fitCheckItems", "garmentObservations", "uploads", "subscriptions", "profileBioRevisions", "outfitSuggestions", "planningSettings"] as const;
+const tables = ["styleBioJobs", "uploadTickets", "wardrobeItems", "candidateItems", "profiles", "wardrobes", "wardrobeMemberships", "fitChecks", "fitCheckItems", "garmentObservations", "uploads", "subscriptions", "profileBioRevisions", "outfitSuggestions", "planningSettings", "wearOccurrences", "wearEvidence", "wearRevisions", "planRevisions", "wearProjectionOutbox", "wearGraphNodes", "wearGraphLocks"] as const;
 const batchSize = 100;
 const deleteUserData = FunctionImpl.make(schema, spec, "deleteUserData", ({ userId }): Effect.Effect<{ scheduled: true }, never, MutationCtx> => Effect.gen(function* () {
   const ctx = yield* MutationCtx;

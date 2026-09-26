@@ -15,10 +15,9 @@ import {
   deleteUserMemory,
   deleteWardrobeItemMemory,
   ensureWardrobeZepProject,
-  searchStyleBioGraphContext,
-  searchWardrobeStyleMemory,
   updateProfileMemory,
 } from "./zep";
+import { searchWearCandidates } from "./wearGraphProvider";
 
 const zepUser = v.optional(
   v.object({
@@ -167,17 +166,20 @@ export const syncProfileUpdate = internalAction({
 
 export const getStyleBioGraphContext = action({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<string[]> => {
     const user = await getAuthenticatedUser(ctx);
     if (!user) throw new Error("Unauthorized");
     try {
-      return await searchStyleBioGraphContext(user.userId);
+      const candidates = await searchWearCandidates(user.userId, "Recent actual outfits and repeated worn pieces");
+      const facts = candidates.length ? await ctx.runQuery(internal.wearProjectionData.currentFacts, { userId: user.userId, candidates }) : [];
+      const current = facts.length ? facts : await ctx.runQuery(internal.wearProjectionData.currentFacts, { userId: user.userId });
+      return current.map(fact => fact.fact);
     } catch (error) {
       console.warn("zep.style_bio_context.failed", {
         userId: redactUserId(user.userId),
         message: error instanceof Error ? error.message : String(error),
       });
-      return [];
+      return (await ctx.runQuery(internal.wearProjectionData.currentFacts, { userId: user.userId })).map(fact => fact.fact);
     }
   },
 });
@@ -344,10 +346,12 @@ export const syncCandidateComparison = action({
 
 export const searchStyleContext = action({
   args: { query: v.string(), traceId: v.optional(v.string()), traceparent: v.optional(v.string()) },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ fact: string; relation: string; relevance: null }[]> => {
     const user = await getAuthenticatedUser(ctx);
     if (!user) throw new Error("Unauthorized");
-    return searchWardrobeStyleMemory(user.userId, args.query, user);
+    const candidates = await searchWearCandidates(user.userId, args.query).catch(() => []);
+    const facts = candidates.length ? await ctx.runQuery(internal.wearProjectionData.currentFacts, { userId: user.userId, candidates }) : [];
+    return facts.length ? facts : ctx.runQuery(internal.wearProjectionData.currentFacts, { userId: user.userId });
   },
 });
 
