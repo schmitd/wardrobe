@@ -23,13 +23,13 @@ const build = await Bun.build({
 });
 if (!build.success) throw new AggregateError(build.logs, "Gallery build failed");
 const bundle = build.outputs[0]!;
-type State = { catalog: ReturnType<typeof collectionFixture>; data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean };
+type State = { previews: Record<string, string>; catalog: ReturnType<typeof collectionFixture>; data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean };
 const states = new Map<string, State>();
 function fixture(url: URL): State {
   // Match the Playwright/probe browser even when the runner's local date is UTC.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   return {
-    catalog: collectionFixture(),
+    previews: {}, catalog: collectionFixture(),
     data: { items: ["Shirt", "Trousers", "Coat"].map((category, i) => ({ id: `piece-${i}`, category, description: `Synthetic ${category.toLowerCase()}`, imageUrl: null })), plans: [], calendarEnabled: true, calendarIds: ["synthetic-calendar"], suggestions: [{ id: "outfit", date: url.searchParams.get("scenario") === "history" ? shiftDay(today, -1) : today, title: "Easy structure for your day", rationale: "Relaxed tailoring draws on Work edit; the cotton layers work together for your client meeting.", itemIds: ["piece-0", "piece-1"], missing: [], context: ["Collection: Work edit", "Style profile"], status: "planned", calendarDerived: false }] },
     calls: [], stale: url.searchParams.get("case") === "stale", latency: boundedInteger(url.searchParams.get("latency") ?? undefined, 0, 0, 5000), scope: url.searchParams.get("scope") === "single_piece" ? "single_piece" : "full_fit", wrote: false,
   };
@@ -72,6 +72,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
       case "wardrobe.pageCollections": return Response.json(c.collections.map(collection => ({ ...collection, previews: [...c.items.filter(i => c.memberships.some(m => m.wardrobeId === collection._id && m.itemId === i.id)), ...c.inspirations.filter(r => r.wardrobeId === collection._id).map(r => ({ id: r._id, imageUrl: r.imageUrl, category: r.category }))].slice(0, 3) })));
       case "wardrobe.pageWardrobeItems": return Response.json(c.items);
       case "wardrobe.pagePieces": return Response.json(c.items.filter(i => c.memberships.some(m => m.wardrobeId === args.wardrobeId && m.itemId === i.id)));
+      case "garmentPreviewData.status": return Response.json({ status: state.previews[args.itemId!] ?? "original", enabled: true, imageUrl: c.items.find(i => i.id === args.itemId)?.imageUrl ?? null });
       case "wardrobe.itemDetails": return Response.json({ note: c.items.find(i => i.id === args.itemId)?.note ?? "", collections: c.collections.filter(collection => c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === collection._id)).map(collection => ({ id: collection._id, name: collection.name })), truncated: false });
       case "wardrobe.itemCollectionMembership": return Response.json(c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === args.wardrobeId));
       case "profile.getProfile": return Response.json({ bio: c.bio });
@@ -87,6 +88,8 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
   switch (operation) {
     case "mutation": {
       const args = input.args as Record<string, string>; const c = state.catalog;
+      if (input.name === "garmentPreviewData.request") { state.previews[args.itemId!] = "ready"; return Response.json(true); }
+      if (input.name === "garmentPreviewData.restore") { state.previews[args.itemId!] = "original"; return Response.json(null); }
       if (input.name === "wardrobe.getUploadUrl") return Response.json(`http://127.0.0.1:${port}/__fixture/upload`);
       if (input.name === "candidates.createInspiration") { const id = `reference-${c.inspirations.length}`; c.inspirations.unshift({ _id: id, wardrobeId: args.wardrobeId!, category: args.category!, description: args.description!, imageUrl: "/__fixture/piece-0.svg" }); return Response.json({ id }); }
       if (input.name === "wardrobe.saveNote") { const item = c.items.find(i => i.id === args.itemId); if (item) item.note = args.note.trim(); }

@@ -1,6 +1,6 @@
 import { Context, Effect, Layer } from "effect";
 import type { Id } from "../convex/_generated/dataModel";
-import type { QueryCtx } from "../convex/_generated/server";
+import type { QueryCtx, MutationCtx } from "../convex/_generated/server";
 import { StorageNotOwned } from "./errors";
 
 type StorageContext = Pick<QueryCtx, "db" | "storage">;
@@ -33,3 +33,17 @@ export const requireOwnedStorage = (ctx: StorageContext, userId: string, storage
 
 export const ownedStorageUrl = (ctx: StorageContext, userId: string, storageId: Id<"_storage">) =>
   Effect.runPromise(make(ctx, userId).url(storageId));
+
+export const deleteGeneratedPreview = (ctx: MutationCtx, userId: string, storageId: Id<"_storage">) => Effect.gen(function* () {
+  const record = yield* Effect.promise(() => ctx.db.query("storageObjects").withIndex("by_storage", q => q.eq("storageId", storageId)).unique());
+  if (record?.userId === userId && record.provenance === "generated_preview") {
+    yield* Effect.promise(() => ctx.storage.delete(storageId));
+    yield* Effect.promise(() => ctx.db.delete(record._id));
+  }
+});
+
+/** Internal actions pass only their freshly stored output; never client references. */
+export const discardUnregisteredPreview = (ctx: MutationCtx, storageId: Id<"_storage">) => Effect.gen(function* () {
+  const record = yield* Effect.promise(() => ctx.db.query("storageObjects").withIndex("by_storage", q => q.eq("storageId", storageId)).unique());
+  if (!record) yield* Effect.promise(() => ctx.storage.delete(storageId));
+});

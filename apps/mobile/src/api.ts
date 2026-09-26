@@ -68,7 +68,7 @@ export const tryOn = (getToken: GetToken, storageId: string, traceId?: string, s
   runCaptureOperation<CompatibilityResult>(getToken, { operation: "try_on", storageId, traceId, scope });
 
 type ManageInput = {
-  operation: "create_collection" | "add_collection_item" | "remove_collection_item" | "save_inspiration" | "update_bio" | "delete_item" | "analyze_selfie" | "resolve_observation" | "promote_observation";
+  operation: "create_collection" | "add_collection_item" | "remove_collection_item" | "save_inspiration" | "update_bio" | "delete_item" | "analyze_selfie" | "resolve_observation" | "promote_observation" | "request_preview" | "restore_preview";
   wardrobeId?: string;
   itemId?: string;
   observationId?: string;
@@ -117,3 +117,6 @@ export const loadMobilePage = <T>(getToken: GetToken, view: "closet" | "plans" |
 export const loadCollection = (getToken: GetToken, id: string, cursor: string | null = null) => Effect.runPromise(request<Collection | null>(getToken, `/api/mobile/data?view=collection&id=${encodeURIComponent(id)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`));
 
 export const loadItem = (getToken: GetToken, id: string) => Effect.runPromise(request<WardrobeItem | null>(getToken, `/api/mobile/data?view=item&id=${encodeURIComponent(id)}`));
+
+export const loadPreview = (getToken: GetToken, id: string) => Effect.runPromise(request<{ status: string; enabled: boolean; imageUrl: string | null } | null>(getToken, `/api/mobile/data?view=preview&id=${encodeURIComponent(id)}`));
+export const changePreview = (getToken: GetToken, itemId: string, operation: "request_preview" | "restore_preview") => runManageOperation<{ success: boolean }>(getToken, { operation, itemId });

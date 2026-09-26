@@ -21,6 +21,11 @@ async function handle(request: Request) {
         const [item] = await fetchQuery(api.wardrobe.getWardrobeItemsDisplayByIds, { itemIds: [id as Id<"wardrobeItems">] }, { token });
         return Response.json(item ?? null);
       }
+      case "preview": {
+        const id = params.get("id");
+        if (!id || !/^[a-z0-9]{20,64}$/.test(id)) throw new RequestFailure({ status: 400, message: "Invalid piece." });
+        return Response.json(await fetchQuery(api.garmentPreviewData.status, { itemId: id as Id<"wardrobeItems"> }, { token }));
+      }
       case "plans": return Response.json(await fetchQuery(api.mobile.plans, { paginationOpts }, { token }));
       case "collection": {
         const id = params.get("id");

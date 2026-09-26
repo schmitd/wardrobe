@@ -1,3 +1,4 @@
+import { queuePreview } from "../previewQueue";
 import { scheduleStyleBioRefresh } from "../styleBioQueue";
 import { ownedStorageUrl, requireOwnedStorage } from "../storageAccess";
 import { paginationOptsValidator } from "convex/server";
@@ -370,6 +371,7 @@ export const promoteGarmentObservation = mutation({
       console.warn("zep.sync.garment_identity.enqueue_failed", { observationId, message: toErrorMessage(error) });
     }
     await scheduleStyleBioRefresh(ctx, user.userId);
+    await queuePreview(ctx, wardrobeItemId);
     return { success: true as const, wardrobeItemId };
   },
 });

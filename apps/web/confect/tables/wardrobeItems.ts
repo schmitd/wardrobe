@@ -5,6 +5,9 @@ import { Id } from "../_generated/id";
 export default Table.make(() => Schema.Struct({
   userId: Schema.String,
   storageId: GenericId.GenericId("_storage"),
+  previewStorageId: Schema.optionalKey(GenericId.GenericId("_storage")),
+  previewStatus: Schema.optionalKey(Schema.Literals(["queued", "processing", "ready", "original", "error", "skipped"])),
+  previewRevision: Schema.optionalKey(Schema.Number),
   wardrobeId: Schema.optionalKey(Id("wardrobes")),
   sourceFitCheckId: Schema.optionalKey(Id("fitChecks")),
   clientFileName: Schema.optionalKey(Schema.String),

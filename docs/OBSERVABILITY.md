@@ -46,6 +46,7 @@ Native TestFlight instrumentation and release checks are documented in [TESTFLIG
 | `unified_capture_completed` | bounded `intent`, `scope` | Which capture flows complete? |
 | `planning_operation_finished` | bounded `operation`, `outcome`, `duration_ms`, `source`, `analytics_schema` | Where do planning requests fail or slow down? |
 | `wardrobe_item_note_saved` | `character_count`, bounded `surface` | Are users keeping practical context on individual pieces? |
+| `wardrobe_preview_changed` | `operation` (`requested`, `restored`), `surface` (`wardrobe`) | Are users choosing generated previews or restoring originals? |
 | `wardrobe_collection_changed` | `operation` (`created`, `updated`, `piece_added`, `piece_removed`), `surface` (`wardrobe`) | Are collections helping users organize existing pieces? |
 | `profile_bio_saved` | `character_count`, bounded `surface` | Are users personalizing recommendations? |
 | `selfie_analyzed` | `has_color_season` | Is color-profile personalization completing? |
@@ -89,3 +90,5 @@ The web app proxies `/ingest/*` to PostHog, which keeps browser analytics first-
 4. Exercise one server-backed workflow and confirm its Axiom trace carries the deployment SHA or trace ID.
 
 Last dashboard and connection verification: 2026-07-15. Production smoke `9e965e17-a5bc-4702-96f4-f1c8f3b6a6a2` was accepted by both PostHog and Axiom for commit `466213e2a7c4d7a3ead952a244e123101c5ab116`.
+
+Catalog previews emit Axiom-only `garment_preview.finished` with model, item ID, available source trace ID, duration and bounded outcome (`ready`, `skipped`, `error`, `stale`), never prompts, images, storage URLs or raw provider failures. Native operation allowlists include `request_preview` and `restore_preview`. See [rollout checks](GARMENT_PREVIEWS.md).

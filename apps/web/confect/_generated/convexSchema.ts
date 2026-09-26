@@ -6,6 +6,7 @@ import deletedAccounts from "./tables/deletedAccounts";
 import fitCheckItems from "./tables/fitCheckItems";
 import fitChecks from "./tables/fitChecks";
 import garmentObservations from "./tables/garmentObservations";
+import garmentPreviewJobs from "./tables/garmentPreviewJobs";
 import outfitSuggestions from "./tables/outfitSuggestions";
 import planningSettings from "./tables/planningSettings";
 import profileBioRevisions from "./tables/profileBioRevisions";
@@ -25,6 +26,7 @@ export default $defineSchema({
   fitCheckItems: $Table.tableDefinition(fitCheckItems),
   fitChecks: $Table.tableDefinition(fitChecks),
   garmentObservations: $Table.tableDefinition(garmentObservations),
+  garmentPreviewJobs: $Table.tableDefinition(garmentPreviewJobs),
   outfitSuggestions: $Table.tableDefinition(outfitSuggestions),
   planningSettings: $Table.tableDefinition(planningSettings),
   profileBioRevisions: $Table.tableDefinition(profileBioRevisions),

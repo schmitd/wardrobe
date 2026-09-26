@@ -34,6 +34,8 @@ const values: Record<string, readonly string[]> = {
     "analyze_selfie",
     "resolve_observation",
     "promote_observation",
+  "request_preview",
+  "restore_preview",
     "planning_load",
     "planning_generate",
     "planning_accept",

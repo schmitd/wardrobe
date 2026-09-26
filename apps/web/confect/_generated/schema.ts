@@ -5,6 +5,7 @@ import deletedAccounts from "./tables/deletedAccounts";
 import fitCheckItems from "./tables/fitCheckItems";
 import fitChecks from "./tables/fitChecks";
 import garmentObservations from "./tables/garmentObservations";
+import garmentPreviewJobs from "./tables/garmentPreviewJobs";
 import outfitSuggestions from "./tables/outfitSuggestions";
 import planningSettings from "./tables/planningSettings";
 import profileBioRevisions from "./tables/profileBioRevisions";
@@ -24,6 +25,7 @@ const databaseSchema: $DatabaseSchema.DatabaseSchema<
   typeof fitCheckItems |
   typeof fitChecks |
   typeof garmentObservations |
+  typeof garmentPreviewJobs |
   typeof outfitSuggestions |
   typeof planningSettings |
   typeof profileBioRevisions |
@@ -42,6 +44,7 @@ const databaseSchema: $DatabaseSchema.DatabaseSchema<
   fitCheckItems,
   fitChecks,
   garmentObservations,
+  garmentPreviewJobs,
   outfitSuggestions,
   planningSettings,
   profileBioRevisions,

@@ -4,7 +4,8 @@
     "externalPackages": [
       "@google/generative-ai",
       "@getzep/zep-cloud",
-      "effect"
+      "effect",
+      "sharp"
     ]
   }
 }

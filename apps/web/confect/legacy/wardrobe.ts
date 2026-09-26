@@ -1,8 +1,9 @@
+import { queuePreview, wardrobeDisplayUrl } from "../previewQueue";
 import { scheduleStyleBioRefresh } from "../styleBioQueue";
 import { Effect } from "effect";
 import { issueUploadTicket } from "../uploadTicket";
 import type { QueryCtx } from "../../convex/_generated/server";
-import { ownedStorageUrl, requireOwnedStorage } from "../storageAccess";
+import { deleteGeneratedPreview, ownedStorageUrl, requireOwnedStorage } from "../storageAccess";
 import { v } from "convex/values";
 import { paginationOptsValidator, makeFunctionReference } from "convex/server";
 import { action, internalQuery, mutation, query } from "../../convex/_generated/server";
@@ -177,6 +178,9 @@ export const deleteWardrobeItem = mutation({
       traceparent: argTraceparent ?? item.traceparent,
     });
 
+    if (item.previewStorageId) {
+      await Effect.runPromise(deleteGeneratedPreview(ctx, userId, item.previewStorageId));
+    }
     await ctx.db.delete(itemId);
     await scheduleStyleBioRefresh(ctx, userId);
     const description = item.description ?? item.category ?? "Unknown item";
@@ -273,7 +277,7 @@ export const getWardrobeItemsDisplayByIds = query({
           return null;
         }
 
-        const imageUrl = await ownedStorageUrl(ctx, userId, item.storageId);
+        const imageUrl = await wardrobeDisplayUrl(ctx, userId, item);
         if (!imageUrl) {
           return null;
         }
@@ -592,6 +596,7 @@ export const applyFullAnalysis = mutation({
     }
 
     await scheduleStyleBioRefresh(ctx, userId);
+    await queuePreview(ctx, itemId);
     return { skipped: false as const };
   },
 });
@@ -625,7 +630,7 @@ export async function projectWardrobeItems(ctx: QueryCtx, userId: string, items:
     const withUrls = await Promise.all(
       items.map(async (item) => ({
         id: item._id,
-        imageUrl: await ownedStorageUrl(ctx, userId, item.storageId),
+        imageUrl: await wardrobeDisplayUrl(ctx, userId, item),
         category: item.category ?? null,
         description: item.description ?? null,
         styleTags: item.styleTags ?? null,
