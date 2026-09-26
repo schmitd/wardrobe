@@ -31,7 +31,7 @@ test("forged legacy photo references never authorize attachment, display, promot
     const fit = await ctx.db.insert("fitChecks", { userId: "alice", storageId: foreign, type: "daily_fit_check", createdAt: 1, updatedAt: 1 });
     const fitItem = await ctx.db.insert("fitCheckItems", { userId: "alice", fitCheckId: fit, source: "observed_unresolved", createdAt: 1 });
     const observation = await ctx.db.insert("garmentObservations", { userId: "alice", fitCheckId: fit, fitCheckItemId: fitItem, cropStorageId: foreign, category: "shirt", categoryKey: "top", description: "test", styleTags: [], boundingBox: { x: 0, y: 0, width: 1, height: 1 }, visualEmbedding: [], embeddingModel: "test", detectorModel: "test", resolutionStatus: "unresolved", candidateItemIds: [item], candidateScores: [1], createdAt: 1, updatedAt: 1 });
-    return { own, foreign, item, wardrobe, observation };
+    return { own, foreign, item, wardrobe, observation, fit };
   });
   await expect(alice.mutation(api.storage.registerUpload, { storageId: fixture.foreign, purpose: "selfie" })).rejects.toThrow();
   await expect(alice.query(api.storage.getStorageUrl, { storageId: fixture.foreign })).rejects.toThrow();
@@ -40,7 +40,12 @@ test("forged legacy photo references never authorize attachment, display, promot
   await expect(alice.mutation(api.fitChecks.promoteGarmentObservation, { observationId: fixture.observation })).rejects.toThrow();
   expect(await alice.query(api.storage.getLatestUploadByPurpose, { purpose: "selfie" })).toBeNull();
   expect(await alice.query(api.wardrobe.listWardrobeItems, {})).toEqual([]);
-  const fits = await alice.query(api.fitChecks.listFitChecks, {});
+  expect(await alice.query(api.fitChecks.exportImage, { id: fixture.fit })).toBeNull();
+  expect(await bob.query(api.fitChecks.exportImage, { id: fixture.fit })).toBeNull();
+  const ownedFit = await t.run(ctx => ctx.db.insert("fitChecks", { userId: "alice", storageId: fixture.own, type: "daily_fit_check", createdAt: 1, updatedAt: 1 }));
+  expect(await alice.query(api.fitChecks.exportImage, { id: ownedFit })).not.toBeNull();
+  expect(await bob.query(api.fitChecks.exportImage, { id: ownedFit })).toBeNull();
+  const fits = (await alice.query(api.fitChecks.listFitChecks, {})).filter(fit => fit._id === fixture.fit);
   expect(fits[0]?.imageUrl).toBeNull();
   expect(fits[0]?.observations[0]?.cropUrl).toBeNull();
   expect(fits[0]?.observations[0]?.candidates[0]?.imageUrl).toBeNull();

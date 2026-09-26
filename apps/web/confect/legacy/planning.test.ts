@@ -20,7 +20,7 @@ function fixture(userId = "alice") {
     wearEvidence: [],
     wearRevisions: [],
     wearProjectionOutbox: [],
-    styleBioJobs: [],
+    styleBioJobs: [], notificationPreferences: [],
     wardrobeItems: [
       { _id: "shirt", userId: "alice" },
       { _id: "coat", userId: "alice" },

@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
-import { Sparkles, Shirt } from 'lucide-react';
+import { Bell, Sparkles, Shirt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UnifiedCaptureController, UnifiedCaptureTrigger } from '@/components/UnifiedCapture';
+import { WebReminderLifecycle } from '@/components/ReminderSettings';
 import { cn } from '@/lib/utils';
 
 const navClass = (active: boolean) =>
@@ -31,7 +32,7 @@ export default function Navbar() {
   const pathname = usePathname();
   return (
     <>
-      <UnifiedCaptureController />
+      <UnifiedCaptureController /><WebReminderLifecycle />
       <nav className="sticky top-0 z-40 border-b border-[var(--rack-line)] bg-[#D8C9DC]/95 backdrop-blur-sm">
         <div className="mx-auto flex min-h-16 w-full max-w-[1320px] items-center justify-between gap-4 px-4 py-2 lg:px-8">
           <Link href="/" className="inline-flex min-h-11 items-center gap-2" aria-label="Wardrobe home">
@@ -62,8 +63,8 @@ export default function Navbar() {
           </div>
 
           <SignedIn>
-            <div className="grid min-h-11 min-w-11 place-items-center border border-[var(--rack-line)] bg-white shadow-[2px_2px_0_var(--rack-panel-shadow)]" aria-label="Account, privacy, and sign out">
-              <UserButton />
+            <div className="flex min-h-11 min-w-11 items-center border border-[var(--rack-line)] bg-white shadow-[2px_2px_0_var(--rack-panel-shadow)]" aria-label="Account, privacy, and sign out">
+              <Link href="/reminders" aria-label="Fit reminders" className="grid min-h-11 min-w-11 place-items-center"><Bell className="h-4 w-4" /></Link><UserButton />
             </div>
           </SignedIn>
 

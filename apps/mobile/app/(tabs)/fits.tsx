@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { GarmentObservationReview } from "@/garment-observation-review";
+import { ShareFit } from "@/share-fit";
 import { WearDiary, FitWearEvidence } from "@/wear-diary";
 import { ErrorPanel, Loading, Page, Panel } from "@/screen";
 import { colors } from "@/theme";
@@ -334,6 +335,7 @@ export default function Fits() {
                     {fit.type === "try_on" ? "Try on" : "Fit check"} · Saved{" "}
                     {new Date(fit.createdAt).toLocaleDateString()}
                   </Text>
+                  <ShareFit fitId={fit.id} />
                   <PhotoNotes text={fit.transcription ?? fit.description ?? "This fit is still being read."} />
                   {fit.items.length > 0 ? (
                     <Text

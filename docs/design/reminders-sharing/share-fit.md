@@ -1,6 +1,6 @@
 # Share the fit photo
 
-Proposed implementation contract for [#108](https://github.com/schmitd/wardrobe/issues/108). A user chooses **Share fit** from fit detail and hands an image to the device's normal sharing system. Sharing has no effect on wear confirmation, ownership or social state.
+Reviewed implementation contract for [#108](https://github.com/schmitd/wardrobe/issues/108). A user chooses **Share fit** from fit detail and hands an image to the device's normal sharing system. Sharing has no effect on wear confirmation, ownership or social state.
 
 ## Interaction
 
@@ -49,7 +49,7 @@ Use an explicit image clipboard API only when available and tested; [Expo Clipbo
 
 ## Verification and release
 
-No sharing implementation or device test is included in this design PR. The release gate must demonstrate:
+Image export and web/native adapters are implemented; see [implementation.md](implementation.md) for verified web behavior and remaining native gates. Before release, demonstrate:
 
 - Actual image arrival in another installed app on iOS and Android, correct orientation/framing, MIME handling and tablet presentation; cancellation returns to the original fit.
 - Web mobile/desktop file-share supported and unsupported cases, user-gesture expiry during preparation, clipboard denied/unavailable, image paste into another app, and a valid download fallback.

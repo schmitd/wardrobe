@@ -64,6 +64,8 @@ export const recordFitCheck = mutation({
     localDate: v.optional(v.string()),
     timezone: v.optional(v.string()),
     capturedAt: v.optional(v.number()),
+    planId: v.optional(v.id("outfitSuggestions")),
+    expectedPlanRevision: v.optional(v.number()),
     items: v.array(
       v.object({
         wardrobeItemId: v.optional(v.id("wardrobeItems")),
@@ -227,7 +229,7 @@ export const recordFitCheck = mutation({
       }
     }
 
-    await recordPhotoWear(ctx, fitCheckId);
+    await recordPhotoWear(ctx, fitCheckId, { planId: args.planId, expectedPlanRevision: args.expectedPlanRevision });
     try {
       await retrier.run(ctx, internal.zepSync.syncFitCheck, {
         userId: user.userId,
@@ -434,5 +436,16 @@ export const pageFitChecks = query({
     if (!userId) return { page: [], isDone: true, continueCursor: "" };
     const result = await ctx.db.query("fitChecks").withIndex("by_user", q => q.eq("userId", userId)).order("desc").paginate({ ...paginationOpts, numItems: Math.max(1, Math.min(20, paginationOpts.numItems)), maximumRowsRead: 20 });
     return { ...result, page: await projectFitChecks(ctx, userId, result.page) };
+  },
+});
+
+export const exportImage = query({
+  args: { id: v.id("fitChecks") },
+  handler: async (ctx, { id }) => {
+    const userId = await getAuthenticatedUserId(ctx);
+    const fit = await ctx.db.get(id);
+    if (!userId || fit?.userId !== userId) return null;
+    const imageUrl = await ownedStorageUrl(ctx, userId, fit.storageId);
+    return imageUrl ? { imageUrl, revision: fit.updatedAt } : null;
   },
 });

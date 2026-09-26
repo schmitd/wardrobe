@@ -1,6 +1,6 @@
 # Notification policy and delivery architecture
 
-Proposed foundation for [#107](https://github.com/schmitd/wardrobe/issues/107). Product decisions are reviewable configuration; platform transports do not decide when the user needs a reminder.
+Reviewed architecture for [#107](https://github.com/schmitd/wardrobe/issues/107). Platform transports do not decide when the user needs a reminder. The original proposal below is retained for design history; [implementation.md](implementation.md) records implemented controls, conservative retry behavior, validation and remaining release gates.
 
 ## Catalog and proposed defaults
 
@@ -113,7 +113,7 @@ Both native and web adapters are in the architecture scope. They may be reviewed
 | Matching or partial capture saved for current event | No duplicate photo reminder; unresolved pieces remain in app |
 | Fit in progress | Brief defer within original TTL; save suppresses, abandonment can remain eligible |
 | Try-on only | Not evidence for generic daily suppression |
-| Untimed/all-day plan | No midnight push; no generic daily; optional midpoint policy awaits review |
+| Untimed/all-day plan | One noon opportunity; no midnight push and no generic daily |
 | Three simultaneous/nearby events | Earliest eligible wins; deterministic suppression of others; no late backlog |
 | Confirm on a different device before send | Claim/revision check suppresses on selected device |
 | Confirm after provider submission | Cannot promise recall; stale tap opens current saved fit |
@@ -123,7 +123,7 @@ Both native and web adapters are in the architecture scope. They may be reviewed
 | Provider accepted then process crashes | Unknown/ledger reconciliation, no blind resend |
 | Definitive 429, expired TTL, revoked token | Bounded retry before TTL, otherwise terminal; invalid token retired |
 
-Validation has not yet run. First run pure deterministic policy tests and Convex transactional/race tests, then a no-send shadow schedule with synthetic accounts. Roll out behind per-kind and transport feature flags plus a global kill switch. Verify actual device receipt/open and server state separately. A debug log proving scheduling is not delivery proof.
+Deterministic policy, Convex transaction and browser checks have run; see [implementation.md](implementation.md). Real provider/device tests remain required. Roll out behind per-kind and transport feature flags plus a global kill switch. Verify actual device receipt/open and server state separately. A debug log proving scheduling is not delivery proof.
 
 Operational metrics: bounded kind/policy version, eligibility/suppression reason, due-to-submit latency, terminal error class and aggregate receipt outcomes. Product metrics, with existing consent: prompt opened, capture completed and opt-out as bounded outcomes. Never raw tokens/subscriptions, calendar data, media, personal context or recipient identifiers in analytics/replay. Audit intents/attempts in restricted storage for a proposed 30 days, purge on account deletion; retain only minimal dedup/budget state required to prevent replay, with review of retention before launch.
 

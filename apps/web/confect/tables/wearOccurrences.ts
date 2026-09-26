@@ -25,6 +25,6 @@ export default Table.make(() =>
     updatedAt: Schema.Number,
   }),
 )
-  .index("by_user", ["userId"])
+  .index("by_user", ["userId"]).index("by_user_date", ["userId", "localDate"])
   .index("by_user_date", ["userId", "localDate"])
   .index("by_plan", ["planId"]);

@@ -24,7 +24,7 @@ const CaptureBody = Schema.Struct({
   storageId: Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(100)),
   scope: Schema.optionalKey(Schema.Literals(["single_piece", "full_fit"])),
   clientFileName: Schema.optionalKey(Schema.String), contentType: Schema.optionalKey(Schema.String),
-  localDate: Schema.optionalKey(Schema.String), timezone: Schema.optionalKey(Schema.String), capturedAt: Schema.optionalKey(Schema.Number),
+  localDate: Schema.optionalKey(Schema.String), timezone: Schema.optionalKey(Schema.String), capturedAt: Schema.optionalKey(Schema.Number), planId: Schema.optionalKey(Schema.String), expectedPlanRevision: Schema.optionalKey(Schema.Number),
 });
 type CompleteCaptureBody = typeof CaptureBody.Type;
 
@@ -47,7 +47,7 @@ async function handleCapture(request: Request, traceId: string) {
           case "route":
             return routeCaptureAction({ storageId: body.storageId, ...trace });
           case "record_fit":
-            return recordDailyFitCheckAction({ storageId: body.storageId, localDate: body.localDate, timezone: body.timezone, capturedAt: body.capturedAt, ...trace });
+            return recordDailyFitCheckAction({ storageId: body.storageId, localDate: body.localDate, timezone: body.timezone, capturedAt: body.capturedAt, planId: body.planId, expectedPlanRevision: body.expectedPlanRevision, ...trace });
           case "try_on":
             return checkCompatibilityAction({ storageId: body.storageId, scope: body.scope, ...trace });
           case "add_piece": {

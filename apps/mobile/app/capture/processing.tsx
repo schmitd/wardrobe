@@ -1,3 +1,4 @@
+import { useCaptureLease } from "@/reminders";
 import { useAuth } from "@clerk/expo";
 import { useQueryClient } from "@tanstack/react-query";
 import { Cause, Effect, Exit, Option } from "effect";
@@ -24,7 +25,8 @@ export default function CaptureProcessing() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { getToken } = useAuth({ treatPendingAsSignedOut: false });
-  const params = useLocalSearchParams<{ uri?: string; intent?: CaptureIntent; onboarding?: string; source?: string; localDate?: string; capturedAt?: string }>();
+  const params = useLocalSearchParams<{ uri?: string; intent?: CaptureIntent; onboarding?: string; source?: string; localDate?: string; capturedAt?: string; planId?: string; planRevision?: string }>();
+  useCaptureLease(params.planId);
   const uri = Array.isArray(params.uri) ? params.uri[0] : params.uri;
   const intent: CaptureIntent = params.intent === "just_trying" ? "just_trying" : "my_wardrobe";
   const onboarding = params.onboarding === "1";
@@ -57,7 +59,7 @@ export default function CaptureProcessing() {
     }
     if (scope === "full_fit") {
       setStatus("Recording your fit and recognizing familiar pieces…");
-      yield* Effect.tryPromise({ try: () => runCaptureOperation(getToken, { operation: "record_fit", storageId: id, traceId, localDate: approvedDate.current, timezone: approvedDate.current ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined, capturedAt: params.source === "camera" && params.capturedAt ? Number(params.capturedAt) : undefined }), catch: (cause) => cause instanceof Error ? cause : new Error("This fit could not be recorded.") });
+      yield* Effect.tryPromise({ try: () => runCaptureOperation(getToken, { operation: "record_fit", storageId: id, traceId, planId: params.planId, expectedPlanRevision: params.planRevision ? Number(params.planRevision) : undefined, localDate: approvedDate.current, timezone: approvedDate.current ? Intl.DateTimeFormat().resolvedOptions().timeZone : undefined, capturedAt: params.source === "camera" && params.capturedAt ? Number(params.capturedAt) : undefined }), catch: (cause) => cause instanceof Error ? cause : new Error("This fit could not be recorded.") });
       return "fit" as const;
     }
     setStatus("Adding this piece to your wardrobe…");

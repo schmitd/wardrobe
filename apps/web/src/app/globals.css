@@ -781,3 +781,7 @@ h4 {
 .rack-primary-action:hover { background:var(--rack-action-hover); }
 .rack-primary-action:disabled { background:#ece9ec; color:#766979; border-color:#d8c9dc; opacity:1; box-shadow:none; }
 @media(min-width:640px) { .item-details-drawer::before { display:none; } }
+
+/* A foreground dialog keeps capture feedback beneath its overlay. */
+body:has([data-slot="dialog-content"][data-state="open"]) .rack-capture-toast,
+body:has([data-slot="dialog-content"][data-state="open"]) .rack-capture-status { z-index: 45; }

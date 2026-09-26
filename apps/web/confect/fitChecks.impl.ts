@@ -6,6 +6,7 @@ import * as functions from "./legacy/fitChecks";
 
 export default GroupImpl.make(databaseSchema, group).pipe(
   Layer.provide(Layer.mergeAll(
+    FunctionImpl.make(databaseSchema, group, "exportImage", functions.exportImage),
     FunctionImpl.make(databaseSchema, group, "pageFitChecks", functions.pageFitChecks),
     FunctionImpl.make(databaseSchema, group, "recordFitCheck", functions.recordFitCheck),
     FunctionImpl.make(databaseSchema, group, "listFitChecks", functions.listFitChecks),

@@ -1145,6 +1145,8 @@ export const recordFitCheckForAuth = async (
     localDate?: string;
     timezone?: string;
     capturedAt?: number;
+    planId?: string;
+    expectedPlanRevision?: number;
     traceId?: string;
     traceparent?: string;
   }
@@ -1281,7 +1283,7 @@ export const recordFitCheckForAuth = async (
     }
     const saved = await fetchMutation(
       api.fitChecks.recordFitCheck,
-      { storageId: input.storageId as Id<"_storage">, type: input.type, localDate: input.localDate, timezone: input.timezone, capturedAt: input.capturedAt, transcription: analysis.transcription, items, traceId, traceparent },
+      { storageId: input.storageId as Id<"_storage">, type: input.type, localDate: input.localDate, timezone: input.timezone, capturedAt: input.capturedAt, planId: input.planId as Id<"outfitSuggestions"> | undefined, expectedPlanRevision: input.expectedPlanRevision, transcription: analysis.transcription, items, traceId, traceparent },
       { token }
     );
     return { ...saved, transcription: analysis.transcription };
@@ -1300,6 +1302,8 @@ export const recordFitCheckForAuth = async (
         localDate: input.localDate,
         timezone: input.timezone,
         capturedAt: input.capturedAt,
+        planId: input.planId as Id<"outfitSuggestions"> | undefined,
+        expectedPlanRevision: input.expectedPlanRevision,
         items: [],
         traceId,
         traceparent,
@@ -1329,6 +1333,8 @@ export const recordDailyFitCheckAction = async (input: {
   localDate?: string;
   timezone?: string;
   capturedAt?: number;
+    planId?: string;
+    expectedPlanRevision?: number;
   traceId?: string;
   traceparent?: string;
 }) =>

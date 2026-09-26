@@ -517,3 +517,20 @@ test("unconfirmed plans remain reachable through bounded pages beyond recent his
     new Set([...first.page, ...second.page].map((plan) => plan.id)).size,
   ).toBe(25);
 });
+
+test('reminder capture links partial timed evidence without copying planned pieces; stale context stays separate', async () => {
+  const { t, alice, plan, fit, shirt, shoes } = await fixture();
+  await alice.mutation(api.planning.update, { id: plan, status: 'planned' });
+  await t.run(async ctx => {
+    await ctx.db.patch(plan, { reminderStartsAt: Date.parse('2026-09-01T22:00:00Z') });
+    await ctx.db.patch(fit, { capturedAt: Date.parse('2026-09-01T22:02:00Z') });
+    await recordPhotoWear(ctx, fit, { planId: plan, expectedPlanRevision: 1 });
+  });
+  const [wear] = await alice.query(api.wear.list, {});
+  expect(wear).toMatchObject({ planId: plan, itemIds: [shirt], coverage: 'partial' });
+  expect(wear?.itemIds).not.toContain(shoes);
+  const stale = await fixture();
+  await stale.alice.mutation(api.planning.update, { id: stale.plan, status: 'planned' });
+  await stale.t.run(ctx => recordPhotoWear(ctx, stale.fit, { planId: stale.plan, expectedPlanRevision: 0 }));
+  expect((await stale.alice.query(api.wear.list, {}))[0]?.planId).toBeUndefined();
+});

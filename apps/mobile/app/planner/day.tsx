@@ -1,3 +1,4 @@
+import { PlanReminderTime } from "@/plan-reminder-time";
 import { localDate } from "@wardrobe/shared";
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
@@ -51,6 +52,7 @@ export default function Day() {
                 : "Suggested for your day"}
           </PlannerText>
           <PieceImages ids={s.itemIds} data={p.data} size={86} />
+          <PlanReminderTime key={`${s.id}:${s.planRevision}`} plan={s} events={events} />
           <PlannerGroup>
             <PostHogMaskView>
               {s.itemIds.map((id) => {

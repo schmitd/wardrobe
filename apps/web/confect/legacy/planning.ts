@@ -5,6 +5,7 @@ import { internal } from "../../convex/_generated/api";
 import { getAuthenticatedUserId } from "./authIdentity";
 import { outfitFields, outfitStatus } from "./planningValidators";
 import { shiftDay, recallCollections, validateWearDate } from "@wardrobe/shared";
+import { scheduleReminderRefresh } from "../reminderDomain";
 import { affirmPlan, snapshotPlan } from "../wearDomain";
 
 const item = v.object({
@@ -277,6 +278,7 @@ export const update = mutation({
       ...(args.reason ? { reason: args.reason } : {}),
       updatedAt: Date.now(),
     });
+    await scheduleReminderRefresh(ctx, userId);
     return null;
   },
 });
@@ -420,6 +422,7 @@ export const calendar = mutation({
         ...values,
         lastGenerationAt: 0,
       });
+    await ctx.scheduler.runAfter(0, internal.reminders.clearCalendarLinks, { userId, paginationOpts: { numItems: 50, cursor: null } });
     if (!args.enabled) {
       const suggestions = await ctx.db
         .query("outfitSuggestions")

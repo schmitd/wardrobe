@@ -52,6 +52,8 @@ export const runCaptureOperation = <T>(
     localDate?: string;
     timezone?: string;
     capturedAt?: number;
+    planId?: string;
+    expectedPlanRevision?: number;
     scope?: "single_piece" | "full_fit";
     storageId: string;
     clientFileName?: string;
@@ -120,3 +122,10 @@ export const loadMobilePage = <T>(getToken: GetToken, view: "closet" | "plans" |
 export const loadCollection = (getToken: GetToken, id: string, cursor: string | null = null) => Effect.runPromise(request<Collection | null>(getToken, `/api/mobile/data?view=collection&id=${encodeURIComponent(id)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`));
 
 export const loadItem = (getToken: GetToken, id: string) => Effect.runPromise(request<WardrobeItem | null>(getToken, `/api/mobile/data?view=item&id=${encodeURIComponent(id)}`));
+
+export const reminderRequest = async <T>(getToken: GetToken, operation: import("@wardrobe/shared").ReminderOperation): Promise<T> => {
+  const controller = new AbortController();
+  const deadline = setTimeout(() => controller.abort(), 15_000);
+  try { return await Effect.runPromise(request<T>(getToken, "/api/reminders", { method: "POST", body: JSON.stringify(operation), signal: controller.signal }, "reminders")); }
+  finally { clearTimeout(deadline); }
+};
