@@ -23,7 +23,7 @@ export function GarmentObservationReview({ observations }: { observations: Garme
   if (!observations.length) return null;
   return (
     <View style={{ borderTopWidth: 1, borderTopColor: colors.washStrong, paddingTop: 12, gap: 12 }}>
-      <View style={{ gap: 3 }}><Text selectable style={{ color: colors.plum, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.7 }}>Detected pieces</Text><Text selectable style={{ color: colors.muted, fontSize: 12, lineHeight: 17 }}>Wardrobe asks only when a repeat match stays genuinely ambiguous.</Text></View>
+      <View style={{ gap: 3 }}><Text selectable style={{ color: colors.plum, fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.7 }}>Detected pieces</Text></View>
       {mutation.error ? <Text selectable accessibilityRole="alert" style={{ color: colors.danger, fontSize: 12, fontWeight: "800" }}>{mutation.error.message}</Text> : null}
       {observations.map((observation) => {
         const resolved = resolvedStatuses.has(observation.resolutionStatus);

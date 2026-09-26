@@ -30,8 +30,7 @@ const signedInLinks = [
 export default function Navbar() {
   const pathname = usePathname();
   return (
-    <>
-      <UnifiedCaptureController />
+    <UnifiedCaptureController>
       <nav className="sticky top-0 z-40 border-b border-[var(--rack-line)] bg-[#D8C9DC]/95 backdrop-blur-sm">
         <div className="mx-auto flex min-h-16 w-full max-w-[1320px] items-center justify-between gap-4 px-4 py-2 lg:px-8">
           <Link href="/" className="inline-flex min-h-11 items-center gap-2" aria-label="Wardrobe home">
@@ -49,7 +48,7 @@ export default function Navbar() {
                   <span>Wardrobe</span>
                 </Link>
               </Button>
-              <UnifiedCaptureTrigger variant="desktop" />
+              <UnifiedCaptureTrigger key={pathname} variant="desktop" />
               {signedInLinks.slice(1).map(({ href, label, icon: Icon }) => (
                 <Button key={href} asChild variant="outline" className={navClass(pathname === href)}>
                   <Link href={href}>
@@ -88,7 +87,7 @@ export default function Navbar() {
               <span>Wardrobe</span>
             </Link>
             <div className="rack-mobile-capture-slot flex items-start justify-center">
-              <UnifiedCaptureTrigger variant="mobile" />
+              <UnifiedCaptureTrigger key={pathname} variant="mobile" />
             </div>
             <Link href="/fits" className={mobileNavClass(pathname === '/fits')} aria-current={pathname === '/fits' ? 'page' : undefined}>
               <Sparkles className="h-5 w-5" />
@@ -97,6 +96,6 @@ export default function Navbar() {
           </div>
         </nav>
       </SignedIn>
-    </>
+    </UnifiedCaptureController>
   );
 }

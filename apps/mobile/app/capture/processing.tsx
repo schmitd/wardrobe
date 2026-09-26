@@ -39,24 +39,24 @@ export default function CaptureProcessing() {
   const verdict = useMemo(() => !result?.evaluation ? "A new direction" : result.evaluation.score >= 75 ? "Strong closet fit" : result.evaluation.score >= 50 ? "Useful with limits" : "Harder to integrate", [result]);
 
   const upload = (sourceUri: string) => Effect.gen(function* () {
-    setStatus("Uploading securely…");
+    setStatus("Uploading photo…");
     return yield* Effect.tryPromise({ try: () => uploadPhoto(getToken, sourceUri), catch: (cause) => cause instanceof Error ? cause : new Error("Upload failed. Please try again.") });
   });
 
   const commit = (id: string, scope: CaptureScope) => Effect.gen(function* () {
     stage.current = "commit";
     if (intent === "just_trying") {
-      setStatus("Reading your wardrobe and finding useful anchors…");
+      setStatus("Checking outfit…");
       const feedback = yield* Effect.tryPromise({ try: () => tryOn(getToken, id, traceId, scope), catch: (cause) => cause instanceof Error ? cause : new Error("Try-on feedback failed.") });
       setResult(feedback);
       return "try_on" as const;
     }
     if (scope === "full_fit") {
-      setStatus("Recording your fit and recognizing familiar pieces…");
+      setStatus("Saving outfit…");
       yield* Effect.tryPromise({ try: () => runCaptureOperation(getToken, { operation: "record_fit", storageId: id, traceId }), catch: (cause) => cause instanceof Error ? cause : new Error("This fit could not be recorded.") });
       return "fit" as const;
     }
-    setStatus("Adding this piece to your wardrobe…");
+    setStatus("Adding piece…");
     yield* Effect.tryPromise({ try: () => runCaptureOperation(getToken, { operation: "add_piece", storageId: id, clientFileName: "native-capture.jpg", contentType: "image/jpeg", traceId }), catch: (cause) => cause instanceof Error ? cause : new Error("This piece could not be added.") });
     return "piece" as const;
   });
@@ -73,12 +73,12 @@ export default function CaptureProcessing() {
     track("native_capture_started", { intent, onboarding, trace_id: traceId, attempt: attempt.current });
     stage.current = storageId.current ? "route" : "upload";
     setError(null);
-    setStatus(storageId.current ? "Placing your photo…" : "Preparing your photo…");
+    setStatus(storageId.current ? "Adding photo…" : "Preparing your photo…");
     const workflow = Effect.gen(function* () {
       const id = storageId.current ?? (yield* upload(uri));
       storageId.current = id;
       stage.current = "route";
-      setStatus("Deciding whether this is one piece or a full fit…");
+      setStatus("Adding photo…");
       const detected = yield* Effect.tryPromise({ try: () => routeCapture(getToken, id, traceId), catch: (cause) => cause instanceof Error ? cause : new Error("Photo routing failed.") });
       track("native_capture_routed", { intent, scope: detected.scope, confidence: detected.confidence, needs_review: detected.needsReview, trace_id: traceId });
       return yield* commit(id, detected.scope);
@@ -114,8 +114,7 @@ export default function CaptureProcessing() {
       {!complete && !error ? (
         <View accessibilityRole="progressbar" style={{ alignItems: "center", gap: 18, paddingVertical: 36 }}>
           <ActivityIndicator size="large" color={colors.plum} />
-          <Text selectable style={{ color: colors.ink, fontSize: 24, fontWeight: "900", textAlign: "center" }}>Wardrobe is looking</Text>
-          <Text selectable style={{ color: colors.muted, lineHeight: 22, textAlign: "center", maxWidth: 330 }}>{status}</Text>
+          <Text selectable style={{ color: colors.ink, fontSize: 24, fontWeight: "900", textAlign: "center" }} accessibilityLiveRegion="polite">{status}</Text>
         </View>
       ) : null}
 
@@ -123,7 +122,7 @@ export default function CaptureProcessing() {
       {error ? <ErrorPanel message={error} /> : null}
       {error ? <Pressable onPress={analyze} style={{ backgroundColor: colors.lime, borderColor: colors.line, borderWidth: 1, padding: 15, alignItems: "center" }}><Text style={{ color: colors.ink, fontWeight: "900" }}>Try again</Text></Pressable> : null}
       {complete ? <Pressable onPress={done} style={{ backgroundColor: colors.ink, padding: 15, alignItems: "center" }}><Text style={{ color: "white", fontWeight: "900" }}>Done</Text></Pressable> : null}
-      {error ? <Pressable onPress={() => router.replace({ pathname: "/capture", params: { onboarding: onboarding ? "1" : undefined } })} style={{ alignItems: "center", padding: 10 }}><Text style={{ color: colors.muted, fontWeight: "800" }}>Return to camera</Text></Pressable> : null}
+      {error ? <Pressable onPress={() => router.replace({ pathname: "/capture", params: { intent, onboarding: onboarding ? "1" : undefined } })} style={{ alignItems: "center", padding: 10 }}><Text style={{ color: colors.muted, fontWeight: "800" }}>Return to camera</Text></Pressable> : null}
     </ScrollView>
   );
 }

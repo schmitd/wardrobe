@@ -49,3 +49,15 @@ Keep visual density intentional. Metadata and style tags are useful, but they sh
 ## Accessibility & Inclusion
 
 Target WCAG 2.2 AA. Maintain keyboard-accessible flows, visible focus states, readable contrast, meaningful image alt text for wardrobe items, and reduced-motion alternatives for any animation. No additional known user needs are currently specified.
+
+## Interaction and copy contract (September 26, 2026)
+
+User requests and later corrections outrank prior assistant proposals, generated renders and existing copy. See [the evidence and selected patterns](../../docs/design/add-action/README.md).
+
+- Add has two equal actions: **Add owned outfit** and **Try on outfit**. It asks intent once; image routing remains automatic. No preselected ownership action or option subtitle.
+- Reveal choices from their trigger with connected open/close motion. The + becomes × while open. Keyboard focus, dismissal, reduced motion and native safe areas are part of the interaction.
+- Show the photo or useful result first. Titles and controls should carry routine tasks without an explanatory subtitle. Copy must help someone decide, recover, or understand a real limitation; do not narrate AI/provider/embedding/matching internals.
+- Preparing an item photo is automatic. No original-photo switch or completed catalog-preview panel. Keep original evidence internally and fallback safely on failure.
+- One task has one loading status and one completion signal. Do not add routine confirmations for automatically saved work.
+- User-authored notes, useful styling advice, permissions, actual destructive consequences, and incomplete-data warnings are meaningful content and stay available.
+- Do not infer ownership, dislike, wear, or preference from a default selection or from silence.

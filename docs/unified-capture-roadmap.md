@@ -6,19 +6,19 @@ The capture entry point asks the user for intent and lets vision decide photo sc
 
 | User intent | Visual scope | Result |
 | --- | --- | --- |
-| My wardrobe | Single piece | Add and analyze one owned closet item |
-| My wardrobe | Full fit | Record the fit; auto-link only high-confidence existing garments |
-| Just trying | Single piece | Closet compatibility feedback; never add to the owned rack |
-| Just trying | Full fit | Outfit-level compatibility feedback; never add detected garments to the owned rack |
+| Add owned outfit | Single piece | Add and analyze one owned closet item |
+| Add owned outfit | Full fit | Record the fit; auto-link only high-confidence existing garments |
+| Try on outfit | Single piece | Closet compatibility feedback; never add to the owned rack |
+| Try on outfit | Full fit | Outfit-level compatibility feedback; never add detected garments to the owned rack |
 
-`Just trying` currently remains part of Fits history and Zep context, matching the existing try-on behavior, while staying outside the owned rack.
+`Try on outfit` currently remains part of Fits history and Zep context, matching the existing try-on behavior, while staying outside the owned rack.
 
-The user should not classify the image before capture. The router proceeds automatically above its confidence threshold. Below the threshold it asks only “One piece or full fit?” and then continues. Garment identity uses the existing policy: strong, unambiguous matches auto-link; lower-confidence candidates remain unresolved until the user nudges them in the fit review.
+The user does not classify the image before capture. The router proceeds automatically with the detected scope, following the correction shipped in #59. Do not restore the old “One piece or full fit?” confirmation. Garment identity uses the existing policy: strong, unambiguous matches auto-link; lower-confidence candidates remain unresolved until the user nudges them in the fit review.
 
 ## Phase 1: mobile-first web
 
 - A centered `+` is the only persistent capture action.
-- Tapping it exposes `My wardrobe` and `Just trying` without opening a modal.
+- Tapping it rotates + into × and reveals an anchored animated menu: **Add owned outfit** / **Try on outfit**, with equal neutral rows and no subtitles or default selection.
 - Choosing intent opens the system photo picker, which can offer camera and library sources on mobile.
 - A lightweight visual request routes `single_piece` versus `full_fit`.
 - Existing item processing, fit recording, garment matching, compatibility, history, and Zep flows remain the downstream systems of record.
@@ -46,7 +46,7 @@ app/
 ### Camera behavior
 
 - Eagerly request camera permission and lazily request photo-library permission.
-- Show `My wardrobe / Just trying` directly above the shutter, as selected in the Camera Intent design.
+- Choose **Add owned outfit** / **Try on outfit** from the global Add menu first. The native camera receives that choice; any selected camera control reflects that explicit choice and uses the same labels.
 - Provide gallery, shutter, flip-camera, and flash controls with platform-native symbols and haptics.
 - Preserve the selected intent through the upload and routing request.
 - Start with the last-used lens; first use defaults to the front camera during onboarding and the rear camera elsewhere.
@@ -89,5 +89,5 @@ The server should accept an idempotency key and return a durable `captureId`. Bo
 - Denied, limited, and revoked permissions recover without dead ends.
 - Every intent/scope quadrant reaches the correct downstream result.
 - Repeated upload retries do not duplicate items or fit history.
-- Low-confidence scope and garment identity can be corrected with at most one lightweight review step.
+- Routing remains automatic. Ask about unresolved garment identity only where a correction is needed; do not restore a routine scope-review screen.
 - Native capture and system-picker fallback produce equivalent server records.

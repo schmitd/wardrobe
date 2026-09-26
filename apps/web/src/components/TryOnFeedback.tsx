@@ -51,9 +51,8 @@ export default function TryOnFeedback({ result, previewUrl }: { result: Compatib
         <div className="space-y-3">
           {previewUrl && <Image src={previewUrl} alt={`Try-on candidate: ${result.candidate.category}`} width={640} height={800} unoptimized className="aspect-[4/5] w-full border border-[var(--rack-line)] bg-[var(--rack-wash)] object-cover shadow-[3px_3px_0_var(--rack-panel-shadow)]" />}
           <div className="border border-[var(--rack-line)] bg-white p-3">
-            <p className="text-xs font-extrabold uppercase tracking-[.14em] text-[#56345c]">Candidate · not in your Wardrobe</p>
+            <p className="text-xs font-extrabold uppercase tracking-[.14em] text-[#56345c]">Try-on</p>
             <p className="mt-2 text-sm font-semibold text-[#241426]">{result.candidate.description}</p>
-            <p className="mt-2 text-xs font-medium text-[#56345c]">Saved in your Fits history as a try-on.</p>
           </div>
         </div>
         <div className="space-y-4">
@@ -68,8 +67,6 @@ export default function TryOnFeedback({ result, previewUrl }: { result: Compatib
         </div>
       </div>
       <section className="border border-[var(--rack-line)] bg-[var(--rack-action-wash)] p-4 shadow-[3px_3px_0_var(--rack-panel-shadow)]">
-        <h4 className="text-sm font-extrabold text-[#241426]">Keep the idea, not the item</h4>
-        <p className="mt-1 text-sm font-medium text-[#56345c]">Save the useful direction to a collection without adding it to your Wardrobe.</p>
         {plans && plans.length > 0 ? <div className="mt-4 flex flex-wrap items-end gap-3"><div className="min-w-52"><Label htmlFor="try-on-plan">Collection</Label><select id="try-on-plan" value={activePlanId} onChange={(event) => setPlanId(event.target.value)} className="mt-2 h-10 w-full border border-[var(--rack-line)] bg-white px-3 text-sm font-semibold">{plans.map((plan) => <option key={String(plan._id)} value={String(plan._id)}>{plan.name}</option>)}</select></div><Button type="button" onClick={save} disabled={saveState === 'saving' || saveState === 'saved'} className="h-10 rounded-none border border-[var(--rack-line)] bg-[#DCE66E] text-[#241426]">{saveState === 'saved' ? <Check className="h-4 w-4" /> : <Save className="h-4 w-4" />}{saveState === 'saving' ? 'Saving…' : saveState === 'saved' ? 'Saved' : 'Save to collection'}</Button>{message && <p role={saveState === 'error' ? 'alert' : 'status'} className={`text-sm font-semibold ${saveState === 'error' ? 'text-[#B93267]' : 'text-[#3F7C5D]'}`}>{message}</p>}</div> : <div className="mt-4 flex items-center justify-between gap-3 border border-[var(--rack-line)] bg-white p-3"><p className="text-sm font-semibold">Create a collection before saving inspiration.</p><Button asChild variant="outline" className="rounded-none"><Link href="/#collections">Create collection</Link></Button></div>}
       </section>
     </div>
