@@ -58,7 +58,7 @@ export default function StyleNotes() {
             <span className="min-w-0">
               <span id="style-notes-title" className="block text-base font-extrabold text-[#241426]">Your style</span>
               <span data-private className="mt-1 line-clamp-2 text-sm font-medium leading-relaxed text-[#685e70]">
-                {notes || 'Add fit preferences, practical needs, and anything Wardrobe should remember.'}
+                {notes || 'Add style notes'}
               </span>
             </span>
           </span>
@@ -66,9 +66,6 @@ export default function StyleNotes() {
         </summary>
 
         <div className="mt-4 border-t border-[var(--rack-line)] pt-4">
-          <p className="max-w-3xl text-sm font-medium leading-relaxed text-[#56345c]">
-            One living note keeps your fit, color, comfort, and lifestyle context together. Wardrobe also learns from the pieces and fits you save.
-          </p>
           <Textarea
             data-private
             value={notes}

@@ -23,10 +23,10 @@ import { track, trackFailure } from "@/analytics";
 
 function IntentControl({ value, onChange }: { value: CaptureIntent; onChange: (intent: CaptureIntent) => void }) {
   return (
-    <View accessibilityRole="radiogroup" style={{ flexDirection: "row", alignSelf: "center", borderRadius: 24, padding: 4, backgroundColor: "rgba(36,20,38,.76)" }}>
-      {([["my_wardrobe", "I own this"], ["just_trying", "Just trying"]] as const).map(([intent, label]) => {
+    <View accessibilityRole="radiogroup" style={{ flexDirection: "row", alignSelf: "center", maxWidth: "100%", borderRadius: 24, padding: 4, backgroundColor: "rgba(36,20,38,.76)" }}>
+      {([["my_wardrobe", "Add owned outfit"], ["just_trying", "Try on outfit"]] as const).map(([intent, label]) => {
         const selected = intent === value;
-        return <Pressable key={intent} accessibilityRole="radio" accessibilityState={{ checked: selected }} onPress={() => onChange(intent)} style={{ borderRadius: 20, paddingVertical: 10, paddingHorizontal: 18, backgroundColor: selected ? colors.lime : "transparent" }}><Text style={{ color: selected ? colors.ink : "white", fontWeight: "900" }}>{label}</Text></Pressable>;
+        return <Pressable key={intent} accessibilityRole="radio" accessibilityState={{ checked: selected }} onPress={() => onChange(intent)} style={{ flexShrink: 1, minHeight: 48, justifyContent: "center", borderRadius: 20, paddingVertical: 10, paddingHorizontal: 12, backgroundColor: selected ? colors.lime : "transparent" }}><Text style={{ color: selected ? colors.ink : "white", fontWeight: "900" }}>{label}</Text></Pressable>;
       })}
     </View>
   );
@@ -34,14 +34,14 @@ function IntentControl({ value, onChange }: { value: CaptureIntent; onChange: (i
 
 export default function Capture() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ onboarding?: string }>();
+  const params = useLocalSearchParams<{ onboarding?: string; intent?: CaptureIntent }>();
   const onboarding = params.onboarding === "1";
   const camera = useRef<CameraView>(null);
   const operationLocked = useRef(false);
   const [permission, requestPermission] = useCameraPermissions();
   const [facing, setFacing] = useState<CameraType>(onboarding ? "front" : "back");
   const [lensPreferenceLoaded, setLensPreferenceLoaded] = useState(false);
-  const [intent, setIntent] = useState<CaptureIntent>("my_wardrobe");
+  const [intent, setIntent] = useState<CaptureIntent>(params.intent === "just_trying" ? "just_trying" : "my_wardrobe");
   const [cameraReady, setCameraReady] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,7 +146,7 @@ export default function Capture() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.paper, padding: 24, justifyContent: "center", gap: 18 }}>
         <Text selectable style={{ color: colors.ink, fontSize: 30, fontWeight: "900" }}>Let Wardrobe use your camera</Text>
-        <Text selectable style={{ color: colors.muted, fontSize: 16, lineHeight: 24 }}>Take one full-body photo or a close photo of a piece. You can also choose an existing photo without granting broad library access.</Text>
+        <Text selectable style={{ color: colors.muted, fontSize: 16, lineHeight: 24 }}>You can also choose a photo without camera access.</Text>
         <Pressable onPress={allowCamera} style={{ backgroundColor: colors.lime, borderColor: colors.line, borderWidth: 1, padding: 15, alignItems: "center" }}><Text style={{ color: colors.ink, fontWeight: "900" }}>{permission.canAskAgain ? "Allow camera" : "Open Settings"}</Text></Pressable>
         <Pressable disabled={busy} onPress={() => void choosePhoto()} style={{ borderColor: colors.line, borderWidth: 1, padding: 15, alignItems: "center", opacity: busy ? 0.6 : 1 }}><Text style={{ color: colors.ink, fontWeight: "900" }}>Choose a photo</Text></Pressable>
         {error ? <Text selectable style={{ color: colors.danger, lineHeight: 21 }}>{error}</Text> : null}
@@ -170,12 +170,12 @@ export default function Capture() {
       />
       </PostHogMaskView>
       <SafeAreaView pointerEvents="box-none" style={{ position: "absolute", inset: 0, justifyContent: "space-between" }}>
-        <View style={{ paddingHorizontal: 18, gap: 18 }}>
+        <View style={{ paddingHorizontal: 12, gap: 18 }}>
           <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
             <Pressable accessibilityLabel="Close camera" onPress={() => router.back()} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,.55)", alignItems: "center", justifyContent: "center" }}><MaterialCommunityIcons name="close" size={27} color="white" /></Pressable>
             <Pressable accessibilityLabel={`Use ${facing === "front" ? "rear" : "front"} camera`} disabled={busy} onPress={flipCamera} style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,.55)", alignItems: "center", justifyContent: "center", opacity: busy ? 0.6 : 1 }}><MaterialCommunityIcons name="camera-flip-outline" size={25} color="white" /></Pressable>
           </View>
-          <View style={{ alignSelf: "center", maxWidth: 330, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "rgba(0,0,0,.58)", borderRadius: 8 }}><Text selectable style={{ color: "white", fontSize: 14, lineHeight: 20, textAlign: "center", fontWeight: "700" }}>{onboarding ? "Keep your whole outfit in frame and wear something that feels quintessentially you." : "Keep your whole outfit in frame, or move close for one piece. Wardrobe will tell the difference."}</Text></View>
+          <View style={{ alignSelf: "center", maxWidth: 330, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: "rgba(0,0,0,.58)", borderRadius: 8 }}><Text selectable style={{ color: "white", fontSize: 14, lineHeight: 20, textAlign: "center", fontWeight: "700" }}>{onboarding ? "Keep your whole outfit in frame." : "Keep the outfit or piece in frame."}</Text></View>
         </View>
         <View style={{ paddingHorizontal: 24, paddingBottom: 20, gap: 14 }}>
           {error ? <View style={{ alignSelf: "center", maxWidth: 340, padding: 12, borderRadius: 8, backgroundColor: "rgba(0,0,0,.72)", gap: 8 }}><Text selectable style={{ color: "white", lineHeight: 20, textAlign: "center" }}>{error}</Text><Pressable onPress={() => void Linking.openSettings()}><Text style={{ color: colors.lime, fontWeight: "900", textAlign: "center" }}>Open Settings</Text></Pressable></View> : null}
@@ -185,7 +185,7 @@ export default function Capture() {
             <Pressable accessibilityLabel="Take photo. You can also use either volume button." disabled={busy || !cameraReady} onPress={() => void takePhoto()} style={{ width: 82, height: 82, borderRadius: 41, borderWidth: 5, borderColor: "white", alignItems: "center", justifyContent: "center", opacity: cameraReady ? 1 : 0.6 }}><View style={{ width: 62, height: 62, borderRadius: 31, backgroundColor: busy ? colors.washStrong : colors.lime }} /></Pressable>
             <View style={{ width: 52 }} />
           </View>
-          <Text selectable style={{ color: "rgba(255,255,255,.82)", fontSize: 12, fontWeight: "700", textAlign: "center" }}>Tap the shutter or press either volume button</Text>
+          <Text selectable style={{ color: "rgba(255,255,255,.82)", fontSize: 12, fontWeight: "700", textAlign: "center" }}>Volume buttons also take a photo</Text>
         </View>
       </SafeAreaView>
     </View>

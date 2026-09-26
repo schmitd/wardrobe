@@ -51,7 +51,6 @@ export default function GarmentObservationReview({ observations }: { observation
     <div className="mt-4 space-y-4 border-t border-[var(--rack-line)] pt-4">
       <div>
         <p className="text-xs font-extrabold uppercase tracking-[.14em] text-[#56345c]">Detected pieces</p>
-        <p className="mt-1 text-xs font-medium text-[#56345c]">Wardrobe asks only when a repeat match stays genuinely ambiguous.</p>
       </div>
       {error && <p role="alert" className="text-xs font-semibold text-[#B93267]">{error}</p>}
       <div className="space-y-3">

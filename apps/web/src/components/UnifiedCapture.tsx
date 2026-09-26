@@ -3,14 +3,11 @@
 import { uploadPhoto } from "@/services/photoUpload";
 
 import Link from 'next/link';
-import { ChangeEvent, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, createContext, useContext, useRef, useState, type ReactNode } from 'react';
 import {
   Check,
-  DoorClosed,
   ImagePlus,
   Loader2,
-  Plus,
-  ScanSearch,
   Sparkles,
   X,
 } from 'lucide-react';
@@ -24,22 +21,21 @@ import {
   routeCaptureAction,
 } from '@/app/actions/wardrobe';
 import TryOnFeedback from '@/components/TryOnFeedback';
-import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useCompatibilityCheck } from '@/hooks/useCompatibilityCheck';
-import { OPEN_CAPTURE_MENU_EVENT, openCaptureMenu } from '@/lib/captureEvents';
 import { Result, promiseEffect, runEffectResult } from '@/lib/effect-result';
 import { createTraceContext } from '@/lib/trace';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 import type { CaptureRoute, CaptureScope } from '@/server/captureRouter';
 
-type CaptureIntent = 'my_wardrobe' | 'just_trying';
+import { CaptureMenu, type CaptureIntent } from '@/components/CaptureMenu';
+
+const CaptureContext = createContext<{ pending: boolean; onOpen: () => void; chooseIntent: (intent: CaptureIntent) => void } | null>(null);
 
 type PendingCapture = {
   file: File;
@@ -63,23 +59,6 @@ type StreamEvent =
   | { type: 'status'; stage: string }
   | { type: 'complete' }
   | { type: 'error'; error?: string };
-
-const stageLabel = (stage: string) => {
-  switch (stage) {
-    case 'fetching_image':
-      return 'Preparing your piece…';
-    case 'analyzing_tags':
-      return 'Reading its visual language…';
-    case 'analyzing_description':
-      return 'Writing closet notes…';
-    case 'embedding':
-      return 'Connecting it to your wardrobe…';
-    case 'persisting':
-      return 'Putting it on the rack…';
-    default:
-      return 'Adding your piece…';
-  }
-};
 
 const uploadCapture = (file: File) => uploadPhoto(file, getUploadUrlAction);
 
@@ -143,38 +122,14 @@ const waitForWardrobeItem = (input: {
   });
 
 export function UnifiedCaptureTrigger({ variant }: { variant: 'mobile' | 'desktop' }) {
-  if (variant === 'mobile') {
-    return (
-      <button
-        type="button"
-        onClick={openCaptureMenu}
-        className="rack-capture-trigger rack-capture-trigger--mobile"
-        aria-label="Add a wardrobe photo"
-        aria-haspopup="menu"
-      >
-        <Plus className="h-8 w-8" strokeWidth={2.25} />
-      </button>
-    );
-  }
-
-  return (
-    <Button
-      type="button"
-      variant="outline"
-      onClick={openCaptureMenu}
-      aria-haspopup="menu"
-      className="min-h-11 rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-3 text-xs font-extrabold text-[var(--rack-ink)] shadow-[2px_2px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)]"
-    >
-      <Plus className="h-4 w-4" />
-      Add
-    </Button>
-  );
+  const capture = useContext(CaptureContext);
+  if (!capture) throw new Error('Capture trigger requires a capture controller');
+  return <CaptureMenu variant={variant} disabled={capture.pending} onSelect={capture.chooseIntent} onOpen={capture.onOpen} />;
 }
 
-export function UnifiedCaptureController() {
+export function UnifiedCaptureController({ children }: { children: ReactNode }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const selectedIntentRef = useRef<CaptureIntent>('my_wardrobe');
-  const [menuOpen, setMenuOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
@@ -182,40 +137,11 @@ export function UnifiedCaptureController() {
   const [tryOnPreview, setTryOnPreview] = useState<string | null>(null);
   const tryOn = useCompatibilityCheck();
 
-  useEffect(() => {
-    const open = () => {
-      setToast(null);
-      setMenuOpen((current) => !current);
-    };
-    window.addEventListener(OPEN_CAPTURE_MENU_EVENT, open);
-    return () => window.removeEventListener(OPEN_CAPTURE_MENU_EVENT, open);
-  }, []);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setMenuOpen(false);
-    };
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (target.closest('.rack-capture-intent, .rack-capture-trigger')) return;
-      setMenuOpen(false);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('pointerdown', onPointerDown);
-    return () => {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('pointerdown', onPointerDown);
-    };
-  }, [menuOpen]);
-
   const chooseIntent = (intent: CaptureIntent) => {
     if (pending) return;
     selectedIntentRef.current = intent;
-    setMenuOpen(false);
     setToast(null);
-    requestAnimationFrame(() => inputRef.current?.click());
+    inputRef.current?.click();
   };
 
   const completeCapture = async (capture: PendingCapture, scope: CaptureScope) => {
@@ -225,10 +151,10 @@ export function UnifiedCaptureController() {
       if (tryOnPreview) URL.revokeObjectURL(tryOnPreview);
       setTryOnPreview(capture.previewUrl);
       setTryOnOpen(true);
-      setStatus(scope === 'full_fit' ? 'Comparing this fit with your closet…' : 'Comparing this piece with your closet…');
+      setStatus(null);
       const result = await tryOn.runCompatibilityCheck(capture.storageId, {
         scope,
-        startMessage: 'Reading your wardrobe, then finding useful anchors…',
+        startMessage: 'Checking outfit…',
         fallbackErrorMessage: 'Try-on feedback failed.',
       });
       setPending(false);
@@ -245,12 +171,12 @@ export function UnifiedCaptureController() {
     const captureEffect: Effect.Effect<SavedCapture, Error> =
       scope === 'full_fit'
         ? promiseEffect(async (): Promise<SavedCapture> => {
-            setStatus('Recording your fit and recognizing familiar pieces…');
+            setStatus('Saving outfit…');
             const saved = await recordDailyFitCheckAction({ storageId: capture.storageId, ...trace });
             return { kind: 'fit' as const, id: String(saved.id) };
           })
         : Effect.gen(function* () {
-            setStatus('Adding one piece to your wardrobe…');
+            setStatus('Adding piece…');
             const created = yield* promiseEffect(() =>
               createWardrobeItemAction({
                 storageId: capture.storageId,
@@ -262,7 +188,7 @@ export function UnifiedCaptureController() {
             yield* waitForWardrobeItem({
               itemId: String(created.id),
               ...trace,
-              onStage: (stage) => setStatus(stageLabel(stage)),
+              onStage: () => setStatus('Adding piece…'),
             });
             return { kind: 'piece' as const, id: String(created.id) } satisfies SavedCapture;
           });
@@ -282,8 +208,8 @@ export function UnifiedCaptureController() {
     const saved = outcome.success;
     setToast(
       saved.kind === 'fit'
-        ? { message: 'Fit recorded. Familiar pieces were matched when confidence was high.', href: `/fits?view=diary#fit-${saved.id}` }
-        : { message: 'Piece added to your wardrobe.', href: '/' }
+        ? { message: 'Outfit saved.', href: `/fits?view=diary#fit-${saved.id}` }
+        : { message: 'Piece added.', href: '/' }
     );
     posthog.capture('unified_capture_completed', { intent: capture.intent, scope });
   };
@@ -299,7 +225,7 @@ export function UnifiedCaptureController() {
     }
 
     setPending(true);
-    setStatus('Reading the photo…');
+    setStatus('Adding photo…');
     const previewUrl = URL.createObjectURL(file);
     const trace = createTraceContext();
     const outcome = await runEffectResult(
@@ -331,30 +257,18 @@ export function UnifiedCaptureController() {
   };
 
   return (
-    <>
+    <CaptureContext.Provider value={{ pending, chooseIntent, onOpen: () => setToast(null) }}>
+      {children}
       <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
 
-      {menuOpen && (
-        <div className="rack-capture-intent" role="menu" aria-label="What should Wardrobe do with this photo?">
-          <button type="button" role="menuitem" onClick={() => chooseIntent('my_wardrobe')} className="rack-capture-intent-option rack-capture-intent-option--primary">
-            <DoorClosed className="h-5 w-5" />
-            <span><strong>My wardrobe</strong><small>I own or wore it</small></span>
-          </button>
-          <button type="button" role="menuitem" onClick={() => chooseIntent('just_trying')} className="rack-capture-intent-option">
-            <ScanSearch className="h-5 w-5" />
-            <span><strong>Just trying</strong><small>Feedback, not owned</small></span>
-          </button>
-        </div>
-      )}
-
-      {pending && status && (
+      {pending && (status || (!tryOnOpen && tryOn.isProcessing)) && (
         <div className="rack-capture-status" role="status" aria-live="polite">
           <Loader2 className="h-5 w-5 animate-spin" />
-          <span>{status}</span>
+          <span>{status ?? "Checking outfit…"}</span>
         </div>
       )}
 
-      {toast && (
+      {toast && !(tryOnOpen && tryOn.status && !tryOn.result) && (
         <div className={`rack-capture-toast ${toast.error ? 'rack-capture-toast--error' : ''}`} role={toast.error ? 'alert' : 'status'} aria-live="polite">
           {toast.error ? <ImagePlus className="h-5 w-5" /> : <Check className="h-5 w-5" />}
           {toast.href ? <Link href={toast.href} className="min-w-0 flex-1 font-extrabold underline decoration-2 underline-offset-4">{toast.message}</Link> : <span className="min-w-0 flex-1 font-semibold">{toast.message}</span>}
@@ -363,16 +277,15 @@ export function UnifiedCaptureController() {
       )}
 
       <Dialog open={tryOnOpen} onOpenChange={setTryOnOpen}>
-        <DialogContent className="max-h-[92dvh] max-w-5xl overflow-y-auto rounded-none border border-[var(--rack-line)] bg-[var(--rack-paper)] p-5 sm:p-7">
+        <DialogContent aria-describedby={undefined} className="max-h-[92dvh] max-w-5xl overflow-y-auto rounded-none border border-[var(--rack-line)] bg-[var(--rack-paper)] p-5 sm:p-7">
           <DialogHeader className="border-b border-[var(--rack-line)] pb-4 pr-8 text-left">
-            <DialogTitle className="flex items-center gap-2 text-2xl font-extrabold"><Sparkles className="h-5 w-5" />Try it with your closet</DialogTitle>
-            <DialogDescription>Compatibility feedback only. Nothing from this photo is added to your owned rack.</DialogDescription>
+            <DialogTitle className="flex items-center gap-2 text-2xl font-extrabold"><Sparkles className="h-5 w-5" />Try on outfit</DialogTitle>
           </DialogHeader>
           {tryOn.isProcessing && <div className="rack-panel rack-panel--shell flex min-h-64 flex-col items-center justify-center text-center"><Loader2 className="h-7 w-7 animate-spin" /><p className="mt-4 text-base font-extrabold">{tryOn.status}</p></div>}
           {!tryOn.isProcessing && tryOn.status && !tryOn.result && <p role="alert" className="border border-[#B93267] bg-[var(--rack-danger-wash)] p-4 text-sm font-semibold text-[#B93267]">{tryOn.status}</p>}
           {tryOn.result && <TryOnFeedback result={tryOn.result} previewUrl={tryOnPreview} />}
         </DialogContent>
       </Dialog>
-    </>
+    </CaptureContext.Provider>
   );
 }

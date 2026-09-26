@@ -54,7 +54,9 @@ If the guest demo hits its free limit, interrupt the flow with a clear blocking 
 
 The bottom rack action stack should float above content like app controls, but should not obscure the rack. It should feel like a tool dock, not a marketing CTA cluster.
 
-The central Add control opens the existing capture menu. Keep capture in that one global entry point.
+The central Add control opens a compact menu anchored to itself, above the FAB on phones and below Add on desktop. The + rotates into ×; opening and closing animate from the trigger origin (180ms open, 120ms close). Respect reduced motion. Use two equal neutral rows, **Add owned outfit** and **Try on outfit**, each with one icon and one label. No title, subtitle, selected/default row or extra confirmation. Citron belongs to the trigger; a neutral focus treatment belongs to whichever row the user actually focuses. Preserve native camera controls downstream and pass the explicitly chosen intent.
+
+Routine forms and dialogs use a title, fields and actions. Do not add descriptions that paraphrase the controls or explain how the backend works. Keep meaningful user content and consent/error/limitation information. A completed image needs no management panel or original-photo toggle. One operation has one status.
 
 ## Navigation And Hierarchy
 

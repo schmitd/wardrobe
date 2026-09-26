@@ -54,7 +54,6 @@ export function StyleMemory({ profile }: { profile: MobileBootstrap["profile"] }
 
       {editing ? (
         <View style={{ gap: 10 }}>
-          <Text selectable style={{ color: colors.muted, fontSize: 13, lineHeight: 19 }}>Add the fit preferences and context you want Wardrobe to remember.</Text>
           <TextInput
             accessibilityLabel="Style notes"
             multiline

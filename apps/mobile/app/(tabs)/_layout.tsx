@@ -2,10 +2,10 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { useAuth, useUser } from "@clerk/expo";
 import { Image } from "expo-image";
 import { Redirect, Tabs, useRouter } from "expo-router";
-import * as Haptics from "expo-haptics";
-import { Pressable, Text, View, type ColorValue } from "react-native";
+import { Pressable, View, type ColorValue } from "react-native";
 
 import { colors } from "@/theme";
+import { AddOutfitButton } from "@/add-outfit-button";
 
 const tabIcon = (name: keyof typeof MaterialCommunityIcons.glyphMap, focusedName: keyof typeof MaterialCommunityIcons.glyphMap) =>
   ({ focused, color }: { focused: boolean; color: ColorValue }) => (
@@ -61,30 +61,7 @@ export default function TabLayout() {
           tabBarIcon: () => null,
           tabBarButton: () => (
             <View style={{ flex: 1, alignItems: "center" }}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Capture a wardrobe photo"
-                onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/capture"); }}
-                style={({ pressed }) => ({
-                  width: 62,
-                  height: 62,
-                  marginTop: -22,
-                  borderRadius: 31,
-                  borderWidth: 2,
-                  borderColor: colors.line,
-                  backgroundColor: pressed ? "#CED95E" : colors.lime,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  shadowColor: colors.line,
-                  shadowOpacity: 0.24,
-                  shadowRadius: 4,
-                  shadowOffset: { width: 0, height: 3 },
-                  elevation: 6,
-                })}
-              >
-                <MaterialCommunityIcons name="plus" size={35} color={colors.ink} />
-              </Pressable>
-              <Text style={{ marginTop: 4, color: colors.muted, fontSize: 11, fontWeight: "800" }}>Capture</Text>
+              <AddOutfitButton onSelect={(intent) => router.push({ pathname: "/capture", params: { intent } })} />
             </View>
           ),
         }}

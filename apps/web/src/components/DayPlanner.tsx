@@ -25,7 +25,6 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import DayVoiceInput from "./DayVoiceInput";
 import GoogleCalendarConnect from "./GoogleCalendarConnect";
@@ -246,9 +245,6 @@ function WeekPlanner({ userId, historyDate }: { userId: string; historyDate?: st
       {!historyDate && <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold sm:text-xl">This week</h2>
-          <p className="mt-1 hidden text-sm text-[#685e70] sm:block">
-            Collections and style notes, matched to your day.
-          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" aria-label="Calendar" onClick={() => setModal("calendar")}>
@@ -513,7 +509,7 @@ function WeekPlanner({ userId, historyDate }: { userId: string; historyDate?: st
           if (!open && !busy) setModal(null);
         }}
       >
-        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+        <DialogContent aria-describedby={undefined} className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
           <DialogTitle>
             {modal === "describe"
               ? "Describe your week"
@@ -521,13 +517,6 @@ function WeekPlanner({ userId, historyDate }: { userId: string; historyDate?: st
                 ? "Google Calendar"
                 : "Planner options"}
           </DialogTitle>
-          <DialogDescription>
-            {modal === "describe"
-              ? "Say what is coming up. Review dates and activities before changing outfits."
-              : modal === "calendar"
-                ? "Your selected week and draft stay here while you connect."
-                : "Optional context, away from your weekly overview."}
-          </DialogDescription>
           {modal === "describe" && (
             <div className="space-y-4">
               <label className="block space-y-2 font-medium">
@@ -720,9 +709,7 @@ function WeekPlanner({ userId, historyDate }: { userId: string; historyDate?: st
                 />
                 Use Google Calendar for suggestions
               </label>
-              <p className="text-sm">Your activities and calendar bring relevant collections into the outfit plan. Your style notes guide the recommendations.</p>
               <p className="text-sm">
-                Suggestions use owned wardrobe pieces and saved preferences.
                 Weather is not checked; review the forecast.
               </p>
             </div>

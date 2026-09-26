@@ -56,7 +56,7 @@ function FitsContent() {
       {activeView === 'plan' ? <DayPlanner /> : <div id="fits-diary" className="space-y-6">
       <WornOutfits />
       <section className="rack-panel rounded-none">
-        <div className="flex flex-wrap items-end justify-between gap-4"><div><h2 className="text-xl font-extrabold text-[#241426]">Your recent rhythm</h2><p className="mt-1 text-sm font-medium text-[#56345c]">Each photo marks a day you checked in.</p></div><span className="text-xs font-semibold text-[#56345c]">Last 12 weeks</span></div>
+        <div className="flex flex-wrap items-end justify-between gap-4"><div><h2 className="text-xl font-extrabold text-[#241426]">Outfit diary</h2></div><span className="text-xs font-semibold text-[#56345c]">Last 12 weeks</span></div>
         <div className="mt-5 grid grid-cols-12 gap-1.5 sm:gap-2" aria-label="Daily fit calendar">
           {days.map((date) => {
             const key = dayKey(date);

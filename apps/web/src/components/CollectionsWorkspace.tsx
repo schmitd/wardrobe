@@ -15,7 +15,6 @@ import { Button } from "./ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogTitle,
 } from "./ui/dialog";
 import { createTraceContext } from "@/lib/trace";
@@ -199,10 +198,7 @@ export default function CollectionsWorkspace({
           ) : selectedId && pieces.results.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[#b6aabb] p-6">
               <p className="font-semibold">
-                Give this collection a starting point.
-              </p>
-              <p className="mt-1 text-sm text-[#685e70]">
-                Add pieces you own or switch to Inspiration to save an idea.
+                No pieces yet.
               </p>
             </div>
           ) : (
@@ -234,9 +230,6 @@ export default function CollectionsWorkspace({
               collectionName={selected?.name ?? "Collection"}
             />
           )}
-          <p className="text-sm text-[#685e70]">
-            Saved ideas and references. These aren’t treated as pieces you own.
-          </p>
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
             {inspirations.results.map((reference) => (
               <article
@@ -296,7 +289,7 @@ export default function CollectionsWorkspace({
           if (!open && !busy) setModal(null);
         }}
       >
-        <DialogContent className="ph-no-capture max-h-[85dvh] overflow-y-auto">
+        <DialogContent aria-describedby={undefined} className="ph-no-capture max-h-[85dvh] overflow-y-auto">
           <DialogTitle>
             {modal === "create"
               ? "New collection"
@@ -304,11 +297,6 @@ export default function CollectionsWorkspace({
                 ? "Edit collection"
                 : "Add from your wardrobe"}
           </DialogTitle>
-          <DialogDescription>
-            {modal !== "add"
-              ? "Collect pieces and inspiration around a mood, occasion, or everyday routine."
-              : "Choose pieces to include. Your whole wardrobe stays available."}
-          </DialogDescription>
           {modal !== "add" ? (
             <form
               className="space-y-4"
