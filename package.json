@@ -17,7 +17,7 @@
     "backend:watch": "bun run --bun confect dev",
     "observability:smoke": "bun run apps/web/scripts/observability-smoke.ts",
     "web-build": "turbo build --filter=@wardrobe/web",
-    "vercel-build": "bun run --bun confect codegen && bun run --bun convex deploy --cmd \"bun run web-build\"",
+    "vercel-build": "bun run --bun confect codegen && bun run --bun convex deploy --cmd-url-env-var-name NEXT_PUBLIC_CONVEX_URL --cmd \"bun run web-build\"",
     "validate": "bun run scripts/validate.ts",
     "debug": "bun run scripts/debug.ts",
     "probe:browser": "bun run --cwd apps/web scripts/probe-browser.ts",
