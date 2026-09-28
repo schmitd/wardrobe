@@ -206,8 +206,14 @@ const commit = FunctionImpl.make(
       )
         return false;
       const dates = sevenDays(dateInZone(row.autoPlanTimezone ?? "UTC"));
-      if (args.outfits.some((outfit) => !dates.includes(outfit.date)))
+      if (args.outfits.some((outfit) => !dates.includes(outfit.date))) {
+        // A run started before local midnight may now contain yesterday.
+        // Requeue transactionally; the old action's finish cannot defer this retry.
+        yield* Effect.promise(() =>
+          finishAutoPlan(ctx, userId, revision, "generation"),
+        );
         return false;
+      }
       yield* Effect.promise(() =>
         savePlanningWeek(
           ctx,

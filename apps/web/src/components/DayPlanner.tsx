@@ -147,17 +147,24 @@ function WeekPlanner({
       window.removeEventListener("focus", rollover);
     };
   }, [historyDate]);
+  const loadRevision = useRef(0);
   const refresh = useCallback(async () => {
+    const revision = ++loadRevision.current;
     const next = await planningRequest<PlanningData>({
       operation: "planning_load",
       week: draft.week,
     });
-    setData(next);
+    if (revision === loadRevision.current) setData(next);
   }, [draft.week]);
   useEffect(() => {
     void refresh().catch(() =>
       setError("Could not load planning. Please retry."),
     );
+    return () => {
+      // Invalidate the latest request counter, not a captured DOM reference.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      loadRevision.current++;
+    };
   }, [refresh]);
   const calendarKey = JSON.stringify(data?.calendarIds ?? []);
   useEffect(() => {
@@ -412,6 +419,7 @@ function WeekPlanner({
                   aria-label={`${dateLabel(date, true)}, ${suggestion?.status ?? "No suggestion"}`}
                   onClick={() => {
                     setSelected(date);
+                    setDraft((d) => ({ ...d, review: [], clarification: "" }));
                     setSwap(null);
                     setReason("");
                   }}

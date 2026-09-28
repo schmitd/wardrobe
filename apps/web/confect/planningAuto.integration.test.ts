@@ -3,7 +3,7 @@ import { convexTest } from "convex-test";
 import schema from "../convex/schema";
 import { api, internal } from "../convex/_generated/api";
 import { dateInZone, nextPlanningRun } from "../src/lib/planning-time";
-import { sevenDays } from "@wardrobe/shared";
+import { sevenDays, shiftDay } from "@wardrobe/shared";
 const directory = new URL("../convex/", import.meta.url).pathname;
 const modules = Object.fromEntries(
   [...new Bun.Glob("**/*.{ts,js}").scanSync(directory)].map((path) => [
@@ -213,4 +213,21 @@ test("daily scheduling follows local midnight across DST", () => {
       nextPlanningRun("America/New_York", new Date("2026-11-01T05:00:00Z")),
     ).toISOString(),
   ).toBe("2026-11-02T05:01:00.000Z");
+});
+
+test("a job crossing local midnight retries promptly and its old finish cannot defer the retry", async () => {
+  const f = await fixture();
+  await f.t.mutation(internal.planningAutoData.claim, f.args);
+  expect(
+    await f.commit(sevenDays(shiftDay(f.dates[0]!, -1)).map(f.outfit)),
+  ).toBe(false);
+  const retry = (await f.settings())!;
+  expect(retry.autoPlanRevision).toBeGreaterThan(f.args.revision);
+  expect(retry.autoPlanAttempt).toBe(1);
+  expect(retry.autoPlanNextAt! - Date.now()).toBeLessThanOrEqual(60000);
+  await f.t.mutation(internal.planningAutoData.finish, f.args);
+  expect((await f.settings())!.autoPlanRevision).toBe(retry.autoPlanRevision);
+  expect(
+    await f.t.run((ctx) => ctx.db.query("outfitSuggestions").collect()),
+  ).toEqual([]);
 });
