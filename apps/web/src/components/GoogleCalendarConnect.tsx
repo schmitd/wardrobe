@@ -151,8 +151,8 @@ export default function GoogleCalendarConnect({
       <details className="text-sm">
         <summary className="cursor-pointer py-2">How Calendar is used</summary>
         <p>
-          Opening a week reads event titles and times for display. Requested
-          outfit generation also uses locations. Attendees and event
+          Opening a week reads event titles and times for display. Automatic and
+          requested outfit generation also use locations. Attendees and event
           descriptions are not read. Calendar content never goes to product
           analytics. Disconnect deletes saved calendar-derived outfits,
           including planned and worn entries. You can also revoke permission in

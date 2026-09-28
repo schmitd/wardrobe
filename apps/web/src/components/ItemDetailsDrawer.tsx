@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronRight, Trash2 } from "lucide-react";
 import { deleteWardrobeItemAction } from "@/app/actions/wardrobe";
 import { userFacingErrorMessage } from "@/lib/userFacingError";
 import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
@@ -10,12 +10,7 @@ import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { WardrobeItem } from "@/types/wardrobe";
 import { Button } from "./ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "./ui/dialog";
+import TaskSheet from "./TaskSheet";
 import { createTraceContext } from "@/lib/trace";
 import posthog from "posthog-js";
 
@@ -82,12 +77,29 @@ export default function ItemDetailsDrawer({
   const preview = useQuery(api.garmentPreviewData.status, { itemId });
   const generatePreview = useMutation(api.garmentPreviewData.request);
   const [draft, setDraft] = useState<string | null>(null);
-  const [manage, setManage] = useState(false);
+  const [view, setView] = useState<
+    "overview" | "labels" | "collections" | "note" | "remove"
+  >("overview");
+  const detailHeading = useRef<HTMLHeadingElement>(null);
+  const returnTo = useRef<string | null>(null);
+  const visited = useRef(false);
+  useEffect(() => {
+    if (!visited.current) {
+      visited.current = true;
+      return;
+    }
+    if (view === "overview")
+      document
+        .querySelector<HTMLButtonElement>(
+          `[data-piece-detail="${returnTo.current}"]`,
+        )
+        ?.focus();
+    else detailHeading.current?.focus();
+  }, [view]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [confirmRemove, setConfirmRemove] = useState(false);
-  const [removeReason, setRemoveReason] = useState("Disliked item style");
+  const [removeReason, setRemoveReason] = useState("");
   const [removing, setRemoving] = useState(false);
   const note = draft ?? details?.note ?? item.note ?? "";
   const removeItem = async () => {
@@ -96,10 +108,19 @@ export default function ItemDetailsDrawer({
     setError("");
     setMessage("");
     try {
-      await deleteWardrobeItemAction({ itemId: item.id, reason: removeReason, ...createTraceContext() });
+      await deleteWardrobeItemAction({
+        itemId: item.id,
+        reason: removeReason,
+        ...createTraceContext(),
+      });
       onClose();
     } catch (cause) {
-      setError(userFacingErrorMessage(cause, "Could not remove this piece. Try again."));
+      setError(
+        userFacingErrorMessage(
+          cause,
+          "Could not remove this piece. Try again.",
+        ),
+      );
     } finally {
       setBusy(false);
       setRemoving(false);
@@ -118,210 +139,314 @@ export default function ItemDetailsDrawer({
       setBusy(false);
     }
   };
+  const labels = [
+    ...new Set([item.category, ...(item.styleTags ?? [])].filter(Boolean)),
+  ];
+  const collectionNames =
+    details === undefined
+      ? "Loading collections…"
+      : details?.collections.map((c) => c.name).join(" · ") ||
+        "Not in a collection yet";
+  const titles = {
+    overview: "Your piece",
+    labels: "Labels",
+    collections: "Collections",
+    note: "My note",
+    remove: "Remove piece",
+  };
+  const back = () => {
+    setView("overview");
+    setError("");
+    setMessage("");
+  };
+  const openDetail = (next: typeof view) => {
+    returnTo.current = next;
+    setView(next);
+    setMessage("");
+    setError("");
+  };
   return (
-    <Dialog
+    <TaskSheet
       open
       onOpenChange={(open) => {
         if (!open && !busy) onClose();
       }}
-    >
-      <DialogContent
-        className="item-details-drawer ph-no-capture"
-        onEscapeKeyDown={(event) => {
-          if (confirmRemove) {
-            event.preventDefault();
-            if (!busy) setConfirmRemove(false);
-          }
-        }}
-        onCloseAutoFocus={(event) => {
+      title={titles[view]}
+      className="ph-no-capture"
+      onEscapeKeyDown={(event) => {
+        if (view !== "overview" || busy) {
           event.preventDefault();
-          (
-            document.querySelector<HTMLButtonElement>(
-              `[data-piece-open="${item.id}"]`,
-            ) ??
-            document.querySelector<HTMLButtonElement>(
-              '[aria-label="Collections"] button[aria-pressed="true"]',
-            )
-          )?.focus();
-        }}
-      >
-        <div className="flex items-center gap-4 pr-6" data-private>
-          <div className="relative h-24 w-20 shrink-0 bg-[var(--rack-wash)]">
+          if (!busy) back();
+        }
+      }}
+      onCloseAutoFocus={(event) => {
+        event.preventDefault();
+        (
+          document.querySelector<HTMLButtonElement>(
+            `[data-piece-open="${item.id}"]`,
+          ) ??
+          document.querySelector<HTMLButtonElement>(
+            '[aria-label="Collections"] button[aria-pressed="true"]',
+          )
+        )?.focus();
+      }}
+      hero={
+        <div className="flex h-28 items-center gap-5" data-private>
+          <div className="relative h-28 w-24 shrink-0">
             <Image
               src={preview?.imageUrl ?? item.imageUrl}
-              alt=""
+              alt={item.category ?? "Your piece"}
               fill
-              sizes="80px"
+              sizes="96px"
               className="object-contain"
             />
           </div>
-          <div>
-            <DialogTitle>{item.category ?? "Your piece"}</DialogTitle>
-            <DialogDescription className="mt-2 line-clamp-3">
-              {item.description ||
-                "Keep the details that make this piece yours."}
-            </DialogDescription>
+          <div className="min-w-0">
+            <h3 className="font-semibold">{item.category ?? "Your piece"}</h3>
+            <p className="mt-2 line-clamp-3 text-sm text-[#685e70]">
+              {item.description}
+            </p>
           </div>
         </div>
-        {preview?.enabled && preview.status !== "ready" && (
-          <section aria-label="Photo status" className="space-y-2">
-            {preview.status === "queued" || preview.status === "processing" ? (
-              <p role="status" className="text-sm">Preparing photo…</p>
+      }
+      footer={
+        <>
+          <div className="task-sheet-status">
+            {error ? (
+              <p role="alert" className="text-[#B93267]">
+                {error}
+              </p>
             ) : (
-              <>
-                {preview.status === "skipped" && <p className="text-sm">Try a clearer photo of this piece.</p>}
-                {preview.status === "error" && <p className="text-sm">Couldn’t prepare this photo.</p>}
-                {preview.status !== "skipped" && <Button variant="outline" disabled={busy || item.analysisStatus !== "ready"} onClick={() => void run(async () => {
-                  const queued = await generatePreview({ itemId });
-                  if (!queued) throw new Error("Photo unavailable");
-                  posthog.capture("wardrobe_preview_changed", { operation: "requested", surface: "wardrobe" });
-                }, "")}>{preview.status === "error" ? "Try again" : "Prepare photo"}</Button>}
-              </>
+              <p role="status">{message}</p>
             )}
-          </section>
-        )}
-        <section aria-label="Item labels">
-          <h3 className="font-semibold">Labels</h3>
-          <div data-private className="mt-2 flex flex-wrap gap-2">
-            {[
-              ...new Set(
-                [item.category, ...(item.styleTags ?? [])].filter(Boolean),
-              ),
-            ].map((label) => (
-              <span
-                key={label}
-                className="border border-[#d8c9dc] bg-[#f7f3f5] px-3 py-1 text-sm"
+          </div>
+          {view === "note" ? (
+            <div className="flex gap-3">
+              <Button variant="outline" disabled={busy} onClick={back}>
+                Back
+              </Button>
+              <Button
+                className="rack-primary-action flex-1"
+                disabled={busy || !details || note === details.note}
+                onClick={() =>
+                  void run(async () => {
+                    await saveNote({ itemId, note });
+                    setDraft(note.trim());
+                    posthog.capture("wardrobe_item_note_saved", {
+                      character_count: note.length,
+                      surface: "wardrobe",
+                    });
+                  }, "Note saved.")
+                }
               >
-                {label}
-              </span>
-            ))}
-            {!item.category && !item.styleTags?.length && (
-              <p className="text-sm">Labels will appear after analysis.</p>
-            )}
-          </div>
-        </section>
-        <section aria-label="Item collections">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold">Collections</h3>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setManage(!manage)}
-            >
-              {manage ? "Done" : "Manage"}
-            </Button>
-          </div>
-          <p data-private className="text-sm text-[#685e70]">
-            {details === undefined
-              ? "Loading collections…"
-              : details?.collections.map((c) => c.name).join(" · ") ||
-                "Not in a collection yet"}
-          </p>
-          {details?.truncated && (
-            <p className="text-sm">Showing the first 100 memberships.</p>
-          )}
-          {manage && (
-            <div className="mt-3 max-h-48 space-y-1 overflow-y-auto rounded-lg border p-2">
-              {choices.results.map((collection) => {
-                return (
-                  <CollectionChoice
-                    key={collection._id}
-                    collection={collection}
-                    itemId={itemId}
-                    busy={busy}
-                    run={run}
-                  />
-                );
-              })}
-              {!choices.results.length && (
-                <p className="p-2 text-sm">
-                  Create a collection from the Wardrobe rail first.
-                </p>
-              )}
-              {choices.status === "CanLoadMore" && (
-                <Button variant="ghost" onClick={() => choices.loadMore(30)}>
-                  More collections
-                </Button>
-              )}
+                {busy ? "Saving…" : "Save note"}
+              </Button>
             </div>
-          )}
-        </section>
-        <label className="space-y-2 font-semibold">
-          My note
-          <textarea
-            aria-label="My note"
-            data-private
-            maxLength={2000}
-            rows={3}
-            className="w-full rounded-lg border border-[#b6aabb] bg-white p-3 text-sm font-normal"
-            placeholder="Sleeves run long. Great with the cream trousers…"
-            value={note}
-            disabled={busy || !details}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              setMessage("");
-            }}
-          />
-        </label>
-        <Button
-          className="rack-primary-action min-w-32 justify-self-end"
-          disabled={busy || !details || note === details.note}
-          onClick={() =>
-            void run(async () => {
-              await saveNote({ itemId, note });
-              setDraft(note.trim());
-              posthog.capture("wardrobe_item_note_saved", {
-                character_count: note.length,
-                surface: "wardrobe",
-              });
-            }, "Note saved.")
-          }
-        >
-          Save note
-        </Button>
-        {message && (
-          <p role="status" className="text-sm">
-            {message}
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="text-sm text-[#B93267]">
-            {error}
-          </p>
-        )}
-        <section aria-label="Remove piece" className="border-t border-[#d8c9dc] pt-4">
-          {confirmRemove ? (
-            <div className="space-y-3">
-              <h3 className="font-semibold">Remove this piece from your wardrobe?</h3>
-              <label className="block space-y-2 text-sm">
-                Reason for removing this piece
-                <select
-                  data-private
-                  value={removeReason}
-                  disabled={busy}
-                  onChange={(event) => setRemoveReason(event.target.value)}
-                  className="block min-h-11 w-full rounded-md border border-[#b6aabb] bg-white px-3"
-                >
-                  <option value="Disliked item style">Disliked style</option>
-                  <option value="Item damaged/lost">Damaged or lost</option>
-                  <option value="Poor fit">Poor fit</option>
-                  <option value="Other">Other</option>
-                </select>
-              </label>
-              <div className="flex justify-end gap-3">
-                <Button variant="outline" disabled={busy} onClick={() => setConfirmRemove(false)}>Cancel</Button>
-                <Button variant="destructive" disabled={busy} onClick={() => void removeItem()}>
-                  {removing ? "Removing…" : "Remove piece"}
-                </Button>
-              </div>
+          ) : view === "remove" ? (
+            <div className="flex gap-3">
+              <Button variant="outline" disabled={busy} onClick={back}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                variant="destructive"
+                disabled={busy || !removeReason}
+                onClick={() => void removeItem()}
+              >
+                {removing ? "Removing…" : "Remove piece"}
+              </Button>
             </div>
           ) : (
-            <Button variant="ghost" disabled={busy} className="text-[#B93267]" onClick={() => setConfirmRemove(true)}>
-              <Trash2 aria-hidden="true" className="size-4" /> Remove from wardrobe
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={busy}
+              onClick={view === "overview" ? onClose : back}
+            >
+              {view === "overview" ? "Done" : "Back to piece"}
             </Button>
           )}
+        </>
+      }
+    >
+      {view !== "overview" && (
+        <h3
+          ref={detailHeading}
+          tabIndex={-1}
+          className="mb-4 font-semibold outline-none"
+        >
+          {view === "collections"
+            ? "Keep this piece in"
+            : view === "remove"
+              ? "Remove this piece from your wardrobe?"
+              : titles[view]}
+        </h3>
+      )}
+      {view === "overview" && (
+        <>
+          {(
+            [
+              [
+                "labels",
+                "Labels",
+                labels.join(", ") || "Labels will appear after analysis.",
+              ],
+              ["collections", "Collections", collectionNames],
+              ["note", "My note", note || "Add a note"],
+            ] as const
+          ).map(([next, title, summary]) => (
+            <button
+              key={next}
+              type="button"
+              className="task-sheet-row"
+              data-piece-detail={next}
+              onClick={() => openDetail(next)}
+            >
+              <span>
+                <span className="font-semibold">{title}</span>
+                <small data-private className="line-clamp-2">
+                  {summary}
+                </small>
+              </span>
+              <ChevronRight className="size-5 shrink-0" aria-hidden="true" />
+            </button>
+          ))}
+          {preview?.enabled && preview.status !== "ready" && (
+            <section
+              aria-label="Photo status"
+              className="mt-5 space-y-2 text-sm"
+            >
+              {preview.status === "queued" ||
+              preview.status === "processing" ? (
+                <p role="status">Preparing photo…</p>
+              ) : (
+                <>
+                  {preview.status === "skipped" && (
+                    <p>Try a clearer photo of this piece.</p>
+                  )}
+                  {preview.status === "error" && (
+                    <p>Couldn’t prepare this photo.</p>
+                  )}
+                  {preview.status !== "skipped" && (
+                    <Button
+                      variant="outline"
+                      disabled={busy || item.analysisStatus !== "ready"}
+                      onClick={() =>
+                        void run(async () => {
+                          if (!(await generatePreview({ itemId })))
+                            throw new Error("Photo unavailable");
+                          posthog.capture("wardrobe_preview_changed", {
+                            operation: "requested",
+                            surface: "wardrobe",
+                          });
+                        }, "")
+                      }
+                    >
+                      {preview.status === "error"
+                        ? "Try again"
+                        : "Prepare photo"}
+                    </Button>
+                  )}
+                </>
+              )}
+            </section>
+          )}
+          <Button
+            variant="ghost"
+            className="mt-6 text-[#B93267]"
+            disabled={busy}
+            data-piece-detail="remove"
+            onClick={() => openDetail("remove")}
+          >
+            <Trash2 aria-hidden="true" className="size-4" />
+            Remove from wardrobe
+          </Button>
+        </>
+      )}
+      {view === "labels" && (
+        <section
+          aria-label="Item labels"
+          data-private
+          className="flex flex-wrap gap-2"
+        >
+          {labels.map((label) => (
+            <span
+              key={label}
+              className="border border-[#d8c9dc] bg-[#f7f3f5] px-3 py-2 text-sm"
+            >
+              {label}
+            </span>
+          ))}
+          {!labels.length && <p>Labels will appear after analysis.</p>}
         </section>
-      </DialogContent>
-    </Dialog>
+      )}
+      {view === "collections" && (
+        <section
+          aria-label="Item collections"
+          className="divide-y divide-[#eee6f0]"
+        >
+          {choices.results.map((collection) => (
+            <CollectionChoice
+              key={collection._id}
+              collection={collection}
+              itemId={itemId}
+              busy={busy}
+              run={run}
+            />
+          ))}
+          {!choices.results.length && (
+            <p className="py-3 text-sm">
+              {choices.status === "LoadingFirstPage"
+                ? "Loading collections…"
+                : "Create a collection from the Wardrobe rail first."}
+            </p>
+          )}
+          {choices.status === "CanLoadMore" && (
+            <Button variant="ghost" onClick={() => choices.loadMore(30)}>
+              More collections
+            </Button>
+          )}
+          {details?.truncated && (
+            <p className="text-sm">
+              The overview shows the first 100 memberships.
+            </p>
+          )}
+        </section>
+      )}
+      {view === "note" && (
+        <textarea
+          aria-label="My note"
+          data-private
+          maxLength={2000}
+          rows={6}
+          className="w-full resize-none rounded-lg border border-[#b6aabb] bg-white p-3 text-sm"
+          placeholder="Sleeves run long. Great with the cream trousers…"
+          value={note}
+          disabled={busy || !details}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setMessage("");
+          }}
+        />
+      )}
+      {view === "remove" && (
+        <label className="block space-y-2 text-sm">
+          Reason for removing this piece
+          <select
+            data-private
+            value={removeReason}
+            disabled={busy}
+            onChange={(event) => setRemoveReason(event.target.value)}
+            className="block min-h-11 w-full rounded-md border border-[#b6aabb] bg-white px-3"
+          >
+            <option value="">Choose a reason…</option>
+            <option value="Disliked item style">Disliked style</option>
+            <option value="Item damaged/lost">Damaged or lost</option>
+            <option value="Poor fit">Poor fit</option>
+            <option value="Other">Other</option>
+          </select>
+        </label>
+      )}
+    </TaskSheet>
   );
 }

@@ -23,7 +23,7 @@ const build = await Bun.build({
 });
 if (!build.success) throw new AggregateError(build.logs, "Gallery build failed");
 const bundle = build.outputs[0]!;
-type State = { previews: Record<string, string>; catalog: ReturnType<typeof collectionFixture>; data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean };
+type State = { previews: Record<string, string>; catalog: ReturnType<typeof collectionFixture>; data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean; scenarioCase: string | null };
 const states = new Map<string, State>();
 function fixture(url: URL): State {
   // Match the Playwright/probe browser even when the runner's local date is UTC.
@@ -31,7 +31,7 @@ function fixture(url: URL): State {
   return {
     previews: {}, catalog: collectionFixture(),
     data: { items: ["Shirt", "Trousers", "Coat"].map((category, i) => ({ id: `piece-${i}`, category, description: `Synthetic ${category.toLowerCase()}`, imageUrl: null })), plans: [], calendarEnabled: true, calendarIds: ["synthetic-calendar"], suggestions: [{ id: "outfit", date: url.searchParams.get("scenario") === "history" ? shiftDay(today, -1) : today, title: "Easy structure for your day", rationale: "Relaxed tailoring draws on Work edit; the cotton layers work together for your client meeting.", itemIds: ["piece-0", "piece-1"], missing: [], context: ["Collection: Work edit", "Style profile"], status: "planned", calendarDerived: false }] },
-    calls: [], stale: url.searchParams.get("case") === "stale", latency: boundedInteger(url.searchParams.get("latency") ?? undefined, 0, 0, 5000), scope: url.searchParams.get("scope") === "single_piece" ? "single_piece" : "full_fit", wrote: false,
+    calls: [], stale: url.searchParams.get("case") === "stale", latency: boundedInteger(url.searchParams.get("latency") ?? undefined, 0, 0, 5000), scenarioCase: url.searchParams.get("case"), scope: url.searchParams.get("scope") === "single_piece" ? "single_piece" : "full_fit", wrote: false,
   };
 }
 const cssPath = resolve(import.meta.dir, "../../src/app/globals.css");
@@ -113,8 +113,22 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
     case "planning_accept": state.data.suggestions[0]!.status = "planned"; return Response.json({ ok: true });
     case "planning_load": return state.stale && state.wrote ? Response.json({ error: "Synthetic refresh unavailable" }, { status: 503 }) : Response.json(state.data);
     case "planning_week": return Response.json({ days: [{ date: input.week, events: [{ title: "Synthetic meeting", start: "09:00" }], truncated: true }] });
-    case "planning_interpret": return Response.json({ days: sevenDays(String(input.week)).map(date => ({ date, description: "予定".repeat(600) })), clarification: "" });
-    case "planning_generate_week": state.wrote = true; return Response.json({ updated: 7, kept: 0 });
+    case "planning_interpret": if (state.scenarioCase === "clarify" && !String(input.description).includes("today")) return Response.json({ days: [], clarification: "Which day is the meeting?" }); return Response.json({ days: sevenDays(String(input.week)).map(date => ({ date, description: "予定".repeat(600) })), clarification: "" });
+    case "planning_generate_week": {
+      if (state.scenarioCase === "generation-error" && !state.wrote) { state.wrote = true; return Response.json({ error: "Synthetic generation failed. Try again." }, { status: 502 }); }
+      state.wrote = true;
+      let updated = 0, kept = 0;
+      for (const day of input.days as { date: string; description: string }[]) {
+        const existing = state.data.suggestions.find(outfit => outfit.date === day.date);
+        if (existing && ["planned", "worn"].includes(existing.status)) { kept++; continue; }
+        state.data.suggestions = state.data.suggestions.filter(outfit => outfit.date !== day.date);
+        state.data.suggestions.push({ id: `generated-${day.date}`, date: day.date, title: "Your updated outfit", rationale: "Synthetic generation result", itemIds: ["piece-0", "piece-2"], missing: [], context: ["Owned wardrobe"], status: "suggested", calendarDerived: Boolean(input.useCalendar) });
+        updated++;
+      }
+      return Response.json({ updated, kept });
+    }
+    case "planning_auto": state.data.autoPlan = { enabled: input.enabled === undefined ? state.data.autoPlan?.enabled ?? true : Boolean(input.enabled), state: input.enabled === false ? "paused" : "scheduled", timezone: String(input.timezone), nextAt: Date.now() + 86400000 }; return Response.json({ ok: true });
+    case "transcribe": return Response.json({ text: "Dinner today and a walk on Sunday." });
     case "planning_edit": state.data.suggestions[0]!.itemIds = input.itemIds as string[]; state.wrote = true; return Response.json({ ok: true });
     case "planning_worn": state.data.suggestions[0]!.status = "worn"; state.wrote = true; return Response.json({ ok: true });
     case "upload-url": return Response.json(`http://127.0.0.1:${port}/__fixture/upload`);

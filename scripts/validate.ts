@@ -11,7 +11,7 @@ if (positionals.length > 1) throw new Error("One suite at a time: core | storage
 const files: Record<string, string[]> = {
   core: ["confect/storage.integration.test.ts", "confect/readModels.integration.test.ts", "confect/legacy/planning.test.ts", "src/server/progressStream.test.ts"],
   storage: ["confect/storage.integration.test.ts"],
-  planning: ["confect/legacy/planning.test.ts", "src/lib/planning.test.ts"],
+  planning: ["confect/legacy/planning.test.ts", "confect/planningAuto.integration.test.ts", "src/server/inference/planning.test.ts", "src/lib/planning.test.ts"],
   reads: ["confect/readModels.integration.test.ts"],
   fuzz: ["validation/storage.fuzz.test.ts"],
 };

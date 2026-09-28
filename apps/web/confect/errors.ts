@@ -11,3 +11,7 @@ export class StorageNotOwned extends Schema.TaggedError<StorageNotOwned>()(
 export class InvalidUploadTicket extends Schema.TaggedError<InvalidUploadTicket>()(
   "InvalidUploadTicket", { message: Schema.String },
 ) {}
+
+export class InvalidPlanningInput extends Schema.TaggedError<InvalidPlanningInput>()(
+  "PlanningInput", { message: Schema.String },
+) {}

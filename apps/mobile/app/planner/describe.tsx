@@ -1,13 +1,13 @@
-import { router, Stack } from "expo-router";
-import { Button, Keyboard, TextInput, View } from "react-native";
+import { router, Stack, useLocalSearchParams } from "expo-router";
+import { useRef, useState } from "react";
+import { Button, Keyboard, Switch, TextInput, View } from "react-native";
 import {
-  outfitForDay,
+  localDate,
   sevenDays,
   type WeekInterpretation,
 } from "@wardrobe/shared";
 import { PostHogMaskView } from "posthog-react-native";
 import { usePlanner } from "@/planner-context";
-import { PlannerDate } from "@/planner-date";
 import { DayVoiceInput } from "@/day-voice-input";
 import {
   PlannerPage,
@@ -20,53 +20,75 @@ export default function Describe() {
   const p = usePlanner();
   const c = usePlannerColors();
   const d = p.draft;
+  const { date } = useLocalSearchParams<{ date?: string }>();
+  const selectedDate =
+    date && sevenDays(d.week).includes(date)
+      ? date
+      : sevenDays(d.week).includes(localDate())
+        ? localDate()
+        : d.week;
+  const [updating, setUpdating] = useState(false);
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const lock = useRef(false);
+  const busy = updating || p.busy;
   const setText = (description: string) =>
     p.setDraft((s) => ({ ...s, description, review: [], clarification: "" }));
-  const editable = d.review.filter(
-    (day) =>
-      !["planned", "worn"].includes(
-        outfitForDay(p.data?.suggestions ?? [], day.date)?.status ?? "",
-      ),
-  );
-  const interpret = async () => {
+  const submit = async () => {
+    if (lock.current || voiceBusy) return;
+    lock.current = true;
+    setUpdating(true);
     Keyboard.dismiss();
-    const result = await p.run<WeekInterpretation>({
-      operation: "planning_interpret",
-      description: d.description,
-      week: d.week,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    });
-    if (result)
-      p.setDraft((s) => ({
-        ...s,
-        review: result.days,
-        clarification: result.clarification,
-      }));
-  };
-  const generate = async () => {
-    Keyboard.dismiss();
-    const result = await p.run<{ updated: number; kept: number }>({
-      operation: "planning_generate_week",
-      week: d.week,
-      days: d.review,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      useCalendar: d.useCalendar && Boolean(p.data?.calendarEnabled),
-      ...(d.planId ? { planId: d.planId } : {}),
-    });
-    if (result) {
-      p.setMessage(
-        `${result.updated} days updated${result.kept ? ` · ${result.kept} planned or worn outfits kept` : ""}`,
-      );
-      router.back();
+    try {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      let days = d.review;
+      if (d.description.trim() && !days.length) {
+        const interpreted = await p.run<WeekInterpretation>({
+          operation: "planning_interpret",
+          description: d.description,
+          week: d.week,
+          anchorDate: selectedDate,
+          timezone,
+        });
+        if (!interpreted) return;
+        p.setDraft((s) => ({
+          ...s,
+          review: interpreted.clarification ? [] : interpreted.days,
+          clarification: interpreted.clarification,
+        }));
+        if (interpreted.clarification) return;
+        days = interpreted.days;
+      }
+      if (!d.description.trim())
+        days = [{ date: selectedDate, description: "" }];
+      const result = await p.run<{ updated: number; kept: number }>({
+        operation: "planning_generate_week",
+        week: d.week,
+        days,
+        timezone,
+        useCalendar: d.useCalendar && Boolean(p.data?.calendarEnabled),
+        ...(d.planId ? { planId: d.planId } : {}),
+      });
+      if (result) {
+        p.setDraft((s) => ({ ...s, review: [], clarification: "" }));
+        p.setMessage(
+          `${result.updated} days updated${result.kept ? ` · ${result.kept} chosen outfits kept` : ""}`,
+        );
+        router.back();
+      }
+    } finally {
+      lock.current = false;
+      setUpdating(false);
     }
   };
   return (
     <>
       <Stack.Screen
         options={{
+          title: "Your plans",
           headerRight: () => (
             <Button
               title="Calendar"
+              disabled={busy}
               onPress={() => {
                 Keyboard.dismiss();
                 router.push("/planner/calendar");
@@ -76,16 +98,31 @@ export default function Describe() {
         }}
       />
       <PlannerPage>
+        <DayVoiceInput
+          disabled={busy}
+          onBusyChange={setVoiceBusy}
+          onText={(text) =>
+            p.setDraft((s) => ({
+              ...s,
+              description: [s.description, text]
+                .filter(Boolean)
+                .join("\n")
+                .slice(0, 4000),
+              review: [],
+              clarification: "",
+            }))
+          }
+        />
         <PlannerGroup>
           <PostHogMaskView>
             <TextInput
-              accessibilityLabel="Describe your week"
+              accessibilityLabel="Describe your day or week"
               multiline
               maxLength={4000}
-              editable={!p.busy}
+              editable={!busy && !voiceBusy}
               value={d.description}
               onChangeText={setText}
-              placeholder="Wednesday is a meeting. Friday is dinner. Sunday we’re hiking…"
+              placeholder="What’s happening today or this week?"
               placeholderTextColor={c.muted}
               style={{
                 color: c.ink,
@@ -97,129 +134,43 @@ export default function Describe() {
             />
           </PostHogMaskView>
         </PlannerGroup>
-        <DayVoiceInput
-          disabled={p.busy}
-          onText={(text) =>
-            setText(
-              [d.description, text].filter(Boolean).join("\n").slice(0, 4000),
-            )
-          }
-        />
-        {!d.review.length ? (
-          <>
-            <PlannerButton
-              title={p.busy ? "Interpreting…" : "Review days"}
-              disabled={p.busy || !d.description.trim()}
-              onPress={() => void interpret()}
-            />
-            <PlannerButton
-              secondary
-              title="Use Calendar for this week"
-              disabled={p.busy || !p.data?.calendarEnabled}
-              onPress={() =>
-                p.setDraft((s) => ({
-                  ...s,
-                  useCalendar: true,
-                  review: sevenDays(s.week).map((date) => ({
-                    date,
-                    description: "",
-                  })),
-                  clarification: "",
-                }))
-              }
-            />
-          </>
-        ) : (
-          <>
-            <PlannerText title>Review your days</PlannerText>
-            <PlannerText>
-              Check the dates and activities. Remove any day you do not want to
-              update.
-            </PlannerText>
-            {d.review.map((day, index) => {
-              const kept = ["planned", "worn"].includes(
-                outfitForDay(p.data?.suggestions ?? [], day.date)?.status ?? "",
-              );
-              return (
-                <PlannerGroup key={index}>
-                  <View style={{ padding: 14, gap: 12 }}>
-                    <PlannerDate
-                      value={day.date}
-                      onChange={(date) =>
-                        p.setDraft((s) => ({
-                          ...s,
-                          review: s.review.map((row, i) =>
-                            i === index ? { ...row, date } : row,
-                          ),
-                        }))
-                      }
-                    />
-                    <PostHogMaskView>
-                      <TextInput
-                        accessibilityLabel={`Activities for ${day.date}`}
-                        multiline
-                        maxLength={1200}
-                        editable={!p.busy}
-                        value={day.description}
-                        placeholder="Activities for this day"
-                        placeholderTextColor={c.muted}
-                        onChangeText={(description) =>
-                          p.setDraft((s) => ({
-                            ...s,
-                            review: s.review.map((row, i) =>
-                              i === index ? { ...row, description } : row,
-                            ),
-                          }))
-                        }
-                        style={{ color: c.ink, fontSize: 17, minHeight: 60 }}
-                      />
-                    </PostHogMaskView>
-                    {kept ? (
-                      <PlannerText>
-                        Your planned or worn outfit will be kept.
-                      </PlannerText>
-                    ) : null}
-                    <PlannerButton
-                      secondary
-                      title="Remove day"
-                      disabled={p.busy}
-                      onPress={() =>
-                        p.setDraft((s) => ({
-                          ...s,
-                          review: s.review.filter((_, i) => i !== index),
-                        }))
-                      }
-                    />
-                  </View>
-                </PlannerGroup>
-              );
-            })}
-            <PlannerButton
-              title={
-                p.busy
-                  ? "Suggesting outfits…"
-                  : `Suggest outfits for ${editable.length} ${editable.length === 1 ? "day" : "days"}`
-              }
-              disabled={p.busy || !editable.length || Boolean(d.clarification)}
-              onPress={() => void generate()}
-            />
-          </>
-        )}
         {d.clarification ? (
-          <>
-            <PlannerText>{d.clarification}</PlannerText>
-            <PlannerButton
-              secondary
-              title="I corrected the dates above"
-              disabled={!d.review.length || p.busy}
-              onPress={() => p.setDraft((s) => ({ ...s, clarification: "" }))}
-            />
-          </>
+          <PlannerText>
+            {d.clarification} Edit your description, then update again.
+          </PlannerText>
         ) : null}
-        <PlannerText>
-          Other days stay unchanged. Suggestions use owned pieces; review any
-          missing items and the forecast.
-        </PlannerText>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <PlannerText>Auto-plan next 7 days</PlannerText>
+          <Switch
+            accessibilityLabel="Auto-plan next 7 days"
+            value={p.data?.autoPlan?.enabled ?? true}
+            disabled={busy}
+            onValueChange={(enabled) =>
+              void p.run({
+                operation: "planning_auto",
+                enabled,
+                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              })
+            }
+          />
+        </View>
+        <PlannerButton
+          title={
+            busy
+              ? "Updating outfits…"
+              : d.description.trim()
+                ? "Update outfits"
+                : "Suggest outfit"
+          }
+          disabled={busy || voiceBusy || !p.data?.items.length}
+          onPress={() => void submit()}
+        />
         {p.message ? <PlannerText>{p.message}</PlannerText> : null}
       </PlannerPage>
     </>

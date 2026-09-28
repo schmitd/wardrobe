@@ -2,7 +2,6 @@ import { useAuth } from "@clerk/expo";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   localDate,
-  shiftDay,
   type CalendarWeek,
   type PlanningData,
   type PlanningOperation,
@@ -53,9 +52,65 @@ function useController() {
   const query = useQuery({
     queryKey: ["day-planning", userId, draft.week],
     queryFn: () =>
-      planningRequest<PlanningData>(getToken, { operation: "planning_load", week: draft.week }),
+      planningRequest<PlanningData>(getToken, {
+        operation: "planning_load",
+        week: draft.week,
+      }),
     enabled: Boolean(isSignedIn),
+    refetchInterval: plannerVisible
+      ? (query) =>
+          query.state.data?.autoPlan?.enabled &&
+          (query.state.data.autoPlan.state === "running" ||
+            query.state.data.autoPlan.nextAt <= Date.now())
+            ? 3000
+            : 60000
+      : false,
   });
+  const configured = useRef("");
+  useEffect(() => {
+    if (!plannerVisible || !restored || !userId || !query.data) return;
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const key = `${userId}:${draft.week}:${timezone}`;
+    if (configured.current === key) return;
+    configured.current = key;
+    void planningRequest(getToken, { operation: "planning_auto", timezone })
+      .then(() =>
+        client.invalidateQueries({ queryKey: ["day-planning", userId] }),
+      )
+      .catch(() =>
+        setMessage(
+          "Automatic planning could not start. Describe your plans to request outfits.",
+        ),
+      );
+  }, [
+    plannerVisible,
+    restored,
+    userId,
+    query.data,
+    draft.week,
+    getToken,
+    client,
+  ]);
+  const lastToday = useRef(localDate());
+  useEffect(() => {
+    if (!plannerVisible) return;
+    const rollover = () => {
+      const today = localDate(),
+        previous = lastToday.current;
+      if (today !== previous) {
+        lastToday.current = today;
+        setDraft((d) => ({
+          ...d,
+          week: d.week === previous ? today : d.week,
+          review: [],
+          clarification: "",
+        }));
+      }
+    };
+    rollover();
+    const timer = setInterval(rollover, 60000);
+    return () => clearInterval(timer);
+  }, [plannerVisible]);
   const calendar = useQuery({
     queryKey: [
       "planning-week",
@@ -88,7 +143,7 @@ function useController() {
         const saved = JSON.parse(raw);
         if (
           saved.expires > Date.now() &&
-          saved.draft?.week >= shiftDay(localDate(), -366) &&
+          saved.draft?.week === localDate() &&
           /^\d{4}-\d{2}-\d{2}$/.test(saved.draft.week) &&
           typeof saved.draft.description === "string" &&
           Array.isArray(saved.draft.review)
@@ -126,7 +181,11 @@ function useController() {
         operation.operation !== "planning_interpret" &&
         operation.operation !== "calendar_list"
       ) {
-        try { await refresh(); } catch { setRefreshWarning("Saved. Pull to refresh to see your change."); }
+        try {
+          await refresh();
+        } catch {
+          setRefreshWarning("Saved. Pull to refresh to see your change.");
+        }
       }
       return result;
     } catch (e) {

@@ -66,7 +66,7 @@ const getImageAverageColor = async (imageUrl: string) => {
   if (count === 0) return fallbackAccent;
 
   const soften = (channel: number) =>
-    Math.round(channel / count + (255 - channel / count) * 0.34);
+    Math.round(channel / count + (255 - channel / count) * 0.18);
 
   return `rgb(${soften(red)} ${soften(green)} ${soften(blue)})`;
 };
