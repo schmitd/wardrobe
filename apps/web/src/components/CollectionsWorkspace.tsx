@@ -12,11 +12,7 @@ import WardrobeGrid, { type WardrobeGridProps } from "./WardrobeGrid";
 import ItemDetailsDrawer from "./ItemDetailsDrawer";
 import InspirationIntake from "./InspirationIntake";
 import { Button } from "./ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "./ui/dialog";
+import TaskSheet from "./TaskSheet";
 import { createTraceContext } from "@/lib/trace";
 import posthog from "posthog-js";
 
@@ -129,77 +125,67 @@ export default function CollectionsWorkspace({
           )}
         </nav>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-bold" data-private>
-              {selected?.name ?? (selectedId ? "Collection" : "All pieces")}
-            </h2>
-            {selected && (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Edit collection"
-                onClick={() => {
-                  setName(selected.name);
-                  setDescription(selected.description ?? "");
-                  setError("");
-                  setModal("edit");
-                }}
-              >
-                <Pencil className="size-4" />
-              </Button>
-            )}
-          </div>
-          {selected?.description && (
-            <p
-              data-private
-              className="mt-1 line-clamp-2 text-sm text-[#685e70]"
-            >
-              {selected.description}
-            </p>
-          )}
-        </div>
-        {selectedId && (
-          <Button
-            variant="outline"
-            onClick={() => {
-              setModal("add");
+      <div className="collection-heading">
+        <h2 className="truncate text-2xl font-bold" data-private>
+          {selected?.name ?? (selectedId ? "Collection" : "All pieces")}
+        </h2>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Edit collection"
+          className={selected ? "" : "invisible"}
+          tabIndex={selected ? 0 : -1}
+          onClick={() => {
+            if (selected) {
+              setName(selected.name);
+              setDescription(selected.description ?? "");
               setError("");
-            }}
-          >
-            <Plus />
-            Add from wardrobe
-          </Button>
-        )}
-      </div>
-      {selectedId && (
-        <div
-          className="flex border-b border-[#d8c9dc]"
-          aria-label="Collection views"
+              setModal("edit");
+            }
+          }}
         >
-          {(["pieces", "inspiration"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              aria-pressed={tab === t}
-              onClick={() => setTab(t)}
-              className={`min-h-11 border-b-2 px-5 text-sm font-semibold capitalize ${tab === t ? "border-[#241426] text-[#241426]" : "border-transparent text-[#685e70]"}`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-      )}
+          <Pencil className="size-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          aria-label="Add from wardrobe"
+          className={selectedId ? "" : "invisible"}
+          tabIndex={selectedId ? 0 : -1}
+          onClick={() => {
+            setModal("add");
+            setError("");
+          }}
+        >
+          <Plus />
+        </Button>
+      </div>
+      <div
+        className="flex h-11 border-b border-[#d8c9dc]"
+        aria-label="Collection views"
+      >
+        {(["pieces", "inspiration"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            aria-pressed={tab === t}
+            onClick={() => setTab(t)}
+            className={`min-h-11 border-b-2 px-5 text-sm font-semibold capitalize ${t === "inspiration" && !selectedId ? "invisible" : ""} ${tab === t ? "border-[#241426] text-[#241426]" : "border-transparent text-[#685e70]"}`}
+            tabIndex={t === "inspiration" && !selectedId ? -1 : 0}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
       {tab === "pieces" ? (
         <>
           {(selectedId ? pieces.status === "LoadingFirstPage" : loading) ? (
-            <p role="status">Loading pieces…</p>
+            <p role="status" className="min-h-64">
+              Loading pieces…
+            </p>
           ) : selectedId && pieces.results.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[#b6aabb] p-6">
-              <p className="font-semibold">
-                No pieces yet.
-              </p>
+              <p className="font-semibold">No pieces yet.</p>
             </div>
           ) : (
             <WardrobeGrid
@@ -283,155 +269,175 @@ export default function CollectionsWorkspace({
           onClose={() => setItem(null)}
         />
       )}
-      <Dialog
+      <TaskSheet
         open={modal !== null}
         onOpenChange={(open) => {
           if (!open && !busy) setModal(null);
         }}
-      >
-        <DialogContent aria-describedby={undefined} className="ph-no-capture max-h-[85dvh] overflow-y-auto">
-          <DialogTitle>
-            {modal === "create"
-              ? "New collection"
-              : modal === "edit"
-                ? "Edit collection"
-                : "Add from your wardrobe"}
-          </DialogTitle>
-          {modal !== "add" ? (
-            <form
-              className="space-y-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void run(async () => {
-                  if (modal === "edit" && selectedId)
-                    await update({
-                      wardrobeId: selectedId,
-                      name: name.trim(),
-                      description: description.trim(),
-                      ...createTraceContext(),
-                    });
-                  else {
-                    const result = await create({
-                      name: name.trim(),
-                      description: description.trim(),
-                      kind: "locus",
-                      ...createTraceContext(),
-                    });
-                    setSelectedId(result.id);
-                  }
-                  posthog.capture("wardrobe_collection_changed", {
-                    operation: modal === "edit" ? "updated" : "created",
-                    surface: "wardrobe",
-                  });
-                  setTab("pieces");
-                  setName("");
-                  setDescription("");
-                  setModal(null);
-                });
-              }}
+        title={
+          modal === "create"
+            ? "New collection"
+            : modal === "edit"
+              ? "Edit collection"
+              : "Add from your wardrobe"
+        }
+        footer={
+          <>
+            <div
+              className="task-sheet-status"
+              role={error ? "alert" : "status"}
             >
-              <label className="block space-y-2">
-                Collection name
-                <input
-                  aria-label="Collection name"
-                  data-private
-                  required
-                  maxLength={100}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Work edit"
-                  className="w-full rounded-lg border p-3"
-                />
-              </label>
-              <label className="block space-y-2">
-                What belongs here?
-                <textarea
-                  aria-label="What belongs here?"
-                  data-private
-                  maxLength={1000}
-                  rows={2}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Relaxed tailoring for client meetings"
-                  className="w-full rounded-lg border p-3"
-                />
-              </label>
-              <Button className="rack-primary-action" disabled={busy || !name.trim()} type="submit">
+              {error || (busy ? "Saving…" : "")}
+            </div>
+            {modal !== "add" ? (
+              <Button
+                form="collection-editor"
+                className="rack-primary-action w-full"
+                disabled={busy || !name.trim()}
+                type="submit"
+              >
                 {busy
                   ? "Saving…"
                   : modal === "edit"
                     ? "Save collection"
                     : "Create collection"}
               </Button>
-            </form>
-          ) : (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                {grid.items.map((piece) => (
-                  <button
-                    type="button"
-                    key={piece.id}
-                    disabled={
-                      busy ||
-                      pieces.results.some((member) => member.id === piece.id)
-                    }
-                    onClick={() =>
-                      void run(async () => {
-                        if (selectedId) {
-                          await add({
-                            wardrobeId: selectedId,
-                            itemId: piece.id as Id<"wardrobeItems">,
-                            membershipKind: "owned",
-                            ...createTraceContext(),
-                          });
-                          posthog.capture("wardrobe_collection_changed", {
-                            operation: "piece_added",
-                            surface: "wardrobe",
-                          });
-                        }
-                        setModal(null);
-                      })
-                    }
-                    className="rounded-lg border p-2 text-left hover:bg-[#f1eaf4] disabled:opacity-50"
-                    aria-label={`Add ${piece.category ?? "piece"} to collection`}
-                    data-private
-                  >
-                    <div className="relative h-32">
-                      <Image
-                        src={piece.imageUrl}
-                        alt=""
-                        fill
-                        sizes="160px"
-                        className="object-contain"
-                      />
-                    </div>
-                    <span className="block p-2 text-sm font-semibold">
-                      {piece.category ?? "Piece"}
-                      {pieces.results.some(
-                        (member) => member.id === piece.id,
-                      ) && (
-                        <span className="block text-xs font-normal">
-                          Already included
-                        </span>
-                      )}
-                    </span>
-                  </button>
-                ))}
-              </div>
-              {loadMore && (
-                <Button variant="outline" onClick={loadMore}>
-                  Load more wardrobe pieces
-                </Button>
-              )}
-            </>
-          )}
-          {error && (
-            <p role="alert" className="text-sm text-[#B93267]">
-              {error}
-            </p>
-          )}
-        </DialogContent>
-      </Dialog>
+            ) : (
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={busy}
+                onClick={() => setModal(null)}
+              >
+                Done
+              </Button>
+            )}
+          </>
+        }
+      >
+        {modal !== "add" ? (
+          <form
+            id="collection-editor"
+            className="space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void run(async () => {
+                if (modal === "edit" && selectedId)
+                  await update({
+                    wardrobeId: selectedId,
+                    name: name.trim(),
+                    description: description.trim(),
+                    ...createTraceContext(),
+                  });
+                else {
+                  const result = await create({
+                    name: name.trim(),
+                    description: description.trim(),
+                    kind: "locus",
+                    ...createTraceContext(),
+                  });
+                  setSelectedId(result.id);
+                }
+                posthog.capture("wardrobe_collection_changed", {
+                  operation: modal === "edit" ? "updated" : "created",
+                  surface: "wardrobe",
+                });
+                setTab("pieces");
+                setName("");
+                setDescription("");
+                setModal(null);
+              });
+            }}
+          >
+            <label className="block space-y-2">
+              Collection name
+              <input
+                aria-label="Collection name"
+                data-private
+                required
+                maxLength={100}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Work edit"
+                className="w-full rounded-lg border p-3"
+              />
+            </label>
+            <label className="block space-y-2">
+              What belongs here?
+              <textarea
+                aria-label="What belongs here?"
+                data-private
+                maxLength={1000}
+                rows={2}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Relaxed tailoring for client meetings"
+                className="w-full rounded-lg border p-3"
+              />
+            </label>
+          </form>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              {grid.items.map((piece) => (
+                <button
+                  type="button"
+                  key={piece.id}
+                  disabled={
+                    busy ||
+                    pieces.results.some((member) => member.id === piece.id)
+                  }
+                  onClick={() =>
+                    void run(async () => {
+                      if (selectedId) {
+                        await add({
+                          wardrobeId: selectedId,
+                          itemId: piece.id as Id<"wardrobeItems">,
+                          membershipKind: "owned",
+                          ...createTraceContext(),
+                        });
+                        posthog.capture("wardrobe_collection_changed", {
+                          operation: "piece_added",
+                          surface: "wardrobe",
+                        });
+                      }
+                      setModal(null);
+                    })
+                  }
+                  className="rounded-lg border p-2 text-left hover:bg-[#f1eaf4] disabled:opacity-50"
+                  aria-label={`Add ${piece.category ?? "piece"} to collection`}
+                  data-private
+                >
+                  <div className="relative h-32">
+                    <Image
+                      src={piece.imageUrl}
+                      alt=""
+                      fill
+                      sizes="160px"
+                      className="object-contain"
+                    />
+                  </div>
+                  <span className="block p-2 text-sm font-semibold">
+                    {piece.category ?? "Piece"}
+                    {pieces.results.some(
+                      (member) => member.id === piece.id,
+                    ) && (
+                      <span className="block text-xs font-normal">
+                        Already included
+                      </span>
+                    )}
+                  </span>
+                </button>
+              ))}
+            </div>
+            {loadMore && (
+              <Button variant="outline" onClick={loadMore}>
+                Load more wardrobe pieces
+              </Button>
+            )}
+          </>
+        )}
+      </TaskSheet>
     </section>
   );
 }

@@ -125,7 +125,7 @@ export default function Calendar() {
       )}
       <PlannerText>
         When you open a week, event titles and times are read for display.
-        Requested outfit generation also uses locations. These details never go
+        Automatic and requested outfit generation also use locations. These details never go
         to product analytics. Disconnecting deletes calendar-derived outfits,
         including planned and worn entries.
       </PlannerText>

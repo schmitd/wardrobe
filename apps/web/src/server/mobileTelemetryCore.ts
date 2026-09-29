@@ -18,6 +18,7 @@ const operations = new Set([
 
 for (const operation of [
   "planning_load",
+  "planning_auto",
   "planning_generate",
   "planning_interpret",
   "planning_week",

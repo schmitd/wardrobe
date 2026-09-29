@@ -151,10 +151,10 @@ export default function Day() {
             onPress={() => {
               p.setDraft((d) => ({
                 ...d,
-                review: [{ date, description: "" }],
+                review: [],
                 clarification: "",
               }));
-              router.push("/planner/describe");
+              router.push({ pathname: "/planner/describe", params: { date } });
             }}
           />
         </>

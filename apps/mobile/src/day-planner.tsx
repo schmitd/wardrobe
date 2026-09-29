@@ -161,7 +161,7 @@ export function DayPlanner() {
         </PlannerGroup>
       )}
       <PlannerButton
-        title="Describe your week"
+        title="Describe your day or week"
         disabled={p.loading || !p.data}
         onPress={() => router.push("/planner/describe")}
       />
@@ -191,6 +191,10 @@ export function DayPlanner() {
           Calendar or continue with dictation.
         </PlannerText>
       ) : null}
+      {p.data?.autoPlan?.state === "error" && <>
+        <PlannerText>{p.data.autoPlan.error === "calendar" ? "Automatic outfits could not read Calendar. Reconnect it or disconnect Calendar to continue without it." : "Automatic outfits could not finish. Your existing outfits are unchanged."}</PlannerText>
+        <PlannerButton secondary title="Retry auto-plan" disabled={p.busy} onPress={() => void p.run({ operation: "planning_auto", timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, retry: true })} />
+      </>}
       {p.message ? (
         <Text accessibilityLiveRegion="polite" style={{ color: c.accent }}>
           {p.message}

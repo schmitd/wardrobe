@@ -1,4 +1,8 @@
-import { ownedStorageUrl } from "../storageAccess";
+import { queueAutoPlan } from "../planningAutoQueue";
+import { wardrobeDisplayUrl } from "../previewQueue";
+import type { MutationCtx, QueryCtx } from "../../convex/_generated/server";
+import type { Id } from "../../convex/_generated/dataModel";
+import type { Infer } from "convex/values";
 import { ConvexError, v } from "convex/values";
 import { mutation, query, internalMutation } from "../../convex/_generated/server";
 import { internal } from "../../convex/_generated/api";
@@ -37,10 +41,17 @@ export const load = query({
     calendarIds: v.array(v.string()),
     calendarRevision: v.number(),
     inventoryTruncated: v.boolean(),
+    autoPlan: v.optional(v.object({ enabled: v.boolean(), timezone: v.string(), state: v.union(v.literal("scheduled"), v.literal("running"), v.literal("error"), v.literal("paused")), nextAt: v.number(), error: v.optional(v.union(v.literal("calendar"), v.literal("generation"))) })),
   }),
-  handler: async (ctx, { week, planId, context }) => {
+  handler: async (ctx, args) => {
     const userId = await getAuthenticatedUserId(ctx);
     if (!userId) throw new ConvexError({ _tag: "NotAuthenticated", message: "Sign in to plan an outfit." });
+    return loadPlanningData(ctx, userId, args);
+  },
+});
+
+// Internal jobs supply an identity only after checking the durable account/job guard.
+export async function loadPlanningData(ctx: QueryCtx, userId: string, { week, planId, context }: { week?: string; planId?: Id<"wardrobes">; context?: string }) {
     if (week && (!/^\d{4}-\d{2}-\d{2}$/.test(week) || !Number.isFinite(Date.parse(`${week}T12:00:00Z`)))) throw new ConvexError({ _tag: "PlanningInput", message: "Choose a valid week." });
     const [items, plans, history, profile, suggestions, settings] =
       await Promise.all([
@@ -96,7 +107,7 @@ export const load = query({
           category: i.category ?? "Piece",
           description: i.description ?? "Un-described piece",
           note: (i.note ?? "").slice(0, 500),
-          imageUrl: await ownedStorageUrl(ctx, userId, i.storageId),
+          imageUrl: await wardrobeDisplayUrl(ctx, userId, i),
         })),
       ),
       plans: plans.map((p) => ({
@@ -114,9 +125,13 @@ export const load = query({
       calendarIds: settings?.calendarIds ?? [],
       calendarRevision: settings?.calendarRevision ?? 0,
       inventoryTruncated: items.length > 300,
+      ...(settings?.autoPlanEnabled === undefined ? {} : { autoPlan: {
+        enabled: settings.autoPlanEnabled, timezone: settings.autoPlanTimezone ?? "UTC",
+        state: settings.autoPlanState ?? "paused", nextAt: settings.autoPlanNextAt ?? 0,
+        ...(settings.autoPlanError ? { error: settings.autoPlanError } : {}),
+      } }),
     };
-  },
-});
+}
 
 export const reserveGeneration = mutation({
   args: {
@@ -265,8 +280,7 @@ export const update = mutation({
 });
 
 // One transaction for a reviewed week: a concurrent accept/worn action always wins.
-export const saveWeek = mutation({
-  args: {
+export const saveWeekArgs = {
     outfits: v.array(
       v.object({
         date: v.string(),
@@ -279,11 +293,19 @@ export const saveWeek = mutation({
     ),
     calendarDerived: v.boolean(),
     calendarRevision: v.optional(v.number()),
-  },
+  };
+const saveWeekValidator = v.object(saveWeekArgs);
+export type SaveWeekArgs = Infer<typeof saveWeekValidator>;
+export const saveWeek = mutation({
+  args: saveWeekValidator,
   returns: v.object({ updated: v.number(), kept: v.number() }),
   handler: async (ctx, args) => {
     const userId = await getAuthenticatedUserId(ctx);
     if (!userId) throw new ConvexError({ _tag: "NotAuthenticated", message: "Unauthorized" });
+    return savePlanningWeek(ctx, userId, args);
+  },
+});
+export async function savePlanningWeek(ctx: MutationCtx, userId: string, args: SaveWeekArgs, onlyMissing = false) {
     if (
       !args.outfits.length ||
       args.outfits.length > 7 ||
@@ -327,7 +349,7 @@ export const saveWeek = mutation({
         )
         .order("desc")
         .take(100);
-      if (existing.some((o) => o.status === "planned" || o.status === "worn")) {
+      if ((onlyMissing && existing.length > 0) || existing.some((o) => o.status === "planned" || o.status === "worn")) {
         kept++;
         continue;
       }
@@ -375,8 +397,7 @@ export const saveWeek = mutation({
       updated++;
     }
     return { updated, kept };
-  },
-});
+}
 
 export const calendar = mutation({
   args: { enabled: v.boolean(), calendarIds: v.array(v.string()) },
@@ -407,6 +428,7 @@ export const calendar = mutation({
         ...values,
         lastGenerationAt: 0,
       });
+    if (row?.autoPlanEnabled) await queueAutoPlan(ctx, { ...row, ...values }, Math.max(Date.now(), (row.autoPlanLastRunAt ?? 0) + 30000));
     if (!args.enabled) {
       const suggestions = await ctx.db
         .query("outfitSuggestions")

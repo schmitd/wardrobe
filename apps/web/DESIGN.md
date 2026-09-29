@@ -83,3 +83,9 @@ The approved design permits rounded rails, day selectors, and drawer corners whe
 ## Accessibility
 
 Maintain WCAG 2.2 AA contrast. Body text should use ink or a dark hue-specific shade, never gray on colored backgrounds. Motion should be functional and respect reduced motion.
+
+## Task drawers and garment color
+
+Use `TaskSheet` for planning, item details, collection editing, and style notes. On phones it anchors to the bottom; on desktop it is a 440px side sheet. The header, garment summary and footer have stable geometry. Detail navigation replaces one scrolling body; do not expand an accordion that resizes the sheet. At short viewport heights, compact the summary and use the available height. Restore focus on Back and close, honor reduced motion, and reserve feedback space beside the action.
+
+Keep the shirt silhouette and complete garment photo. Derive a stronger accent from the garment for the card fill and outline; leave the hanger neutral. Do not flatten every card to the same lilac.

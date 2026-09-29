@@ -17,6 +17,8 @@ import type * as garmentPreviewData from "../garmentPreviewData.js";
 import type * as http from "../http.js";
 import type * as mobile from "../mobile.js";
 import type * as planning from "../planning.js";
+import type * as planningAuto from "../planningAuto.js";
+import type * as planningAutoData from "../planningAutoData.js";
 import type * as profile from "../profile.js";
 import type * as storage from "../storage.js";
 import type * as storageMigration from "../storageMigration.js";
@@ -43,6 +45,8 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   mobile: typeof mobile;
   planning: typeof planning;
+  planningAuto: typeof planningAuto;
+  planningAutoData: typeof planningAutoData;
   profile: typeof profile;
   storage: typeof storage;
   storageMigration: typeof storageMigration;

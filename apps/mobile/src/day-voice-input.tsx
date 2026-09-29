@@ -4,7 +4,6 @@ import {
   RecordingPresets,
   setAudioModeAsync,
   useAudioRecorder,
-  useAudioRecorderState,
 } from "expo-audio";
 import { File } from "expo-file-system";
 import { useEffect, useRef, useState } from "react";
@@ -15,179 +14,184 @@ import { colors } from "@/theme";
 export function DayVoiceInput({
   onText,
   disabled = false,
+  onBusyChange,
 }: {
   onText: (text: string) => void;
   disabled?: boolean;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   const { getToken } = useAuth();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const state = useAudioRecorderState(recorder);
-  const [uri, setUri] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [phase, setPhase] = useState<
+    "idle" | "starting" | "recording" | "transcribing"
+  >("idle");
   const [message, setMessage] = useState("");
-  const active = useRef(true);
-  const currentUri = useRef<string | null>(null);
+  const attempt = useRef(0);
+  const starting = useRef(false);
+  const request = useRef<AbortController | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const erase = (value: string | null) => {
-    if (value) {
+  const currentUri = useRef<string | null>(null);
+  const erase = (uri: string | null) => {
+    if (uri)
       try {
-        new File(value).delete();
+        new File(uri).delete();
       } catch {
-        /* Already gone */
+        /* Already gone. */
       }
-    }
   };
-  const stop = async (discard = false) => {
+  useEffect(() => {
+    onBusyChange?.(phase !== "idle");
+  }, [phase, onBusyChange]);
+  const discard = async () => {
+    attempt.current++;
+    request.current?.abort();
     if (timer.current) clearTimeout(timer.current);
     try {
       await recorder.stop();
-      const file = recorder.uri;
-      currentUri.current = file;
-      if (discard || !active.current) {
-        erase(file);
-        currentUri.current = null;
-      } else setUri(file);
-    } finally {
-      await setAudioModeAsync({ allowsRecording: false });
+    } catch {
+      /* Recording may already be stopped. */
     }
+    erase(recorder.uri);
+    erase(currentUri.current);
+    currentUri.current = null;
+    await setAudioModeAsync({ allowsRecording: false });
   };
   useEffect(() => {
-    active.current = true;
     const subscription = AppState.addEventListener("change", (next) => {
       if (next !== "active") {
-        void stop(true).catch(() => {});
-        erase(currentUri.current);
-        currentUri.current = null;
-        setUri(null);
+        void discard().catch(() => {});
+        setPhase("idle");
       }
     });
     return () => {
-      active.current = false;
       subscription.remove();
-      if (timer.current) clearTimeout(timer.current);
-      erase(currentUri.current);
-      void recorder
-        .stop()
-        .then(() => erase(recorder.uri))
-        .catch(() => {});
-      void setAudioModeAsync({ allowsRecording: false });
+      void discard().catch(() => {});
+      onBusyChange?.(false);
     };
-  }, [recorder]);
+  }, [recorder, onBusyChange]);
+  const finish = async (id: number) => {
+    if (id !== attempt.current) return;
+    if (timer.current) clearTimeout(timer.current);
+    setPhase("transcribing");
+    let uri: string | null = null;
+    try {
+      await recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false });
+      uri = recorder.uri;
+      currentUri.current = uri;
+      if (id !== attempt.current || !uri) return;
+      const file = new File(uri);
+      if (!file.size || file.size > 2100000) throw Error("Invalid recording");
+      const audio = await file.base64();
+      if (id !== attempt.current) return;
+      const controller = new AbortController();
+      request.current = controller;
+      const timeout = setTimeout(() => controller.abort(), 65000);
+      let result: { text: string };
+      try {
+        result = await transcribeDay(getToken, audio, controller.signal);
+      } finally {
+        clearTimeout(timeout);
+        if (request.current === controller) request.current = null;
+      }
+      if (id === attempt.current) onText(result.text);
+    } catch {
+      if (id === attempt.current)
+        setMessage(
+          "Could not transcribe. Try a shorter note or type your plans.",
+        );
+    } finally {
+      erase(uri);
+      currentUri.current = null;
+      if (id === attempt.current) setPhase("idle");
+    }
+  };
   const start = async () => {
-    if (disabled) return;
-    setBusy(true);
+    if (disabled || phase !== "idle" || starting.current) return;
+    starting.current = true;
+    const id = ++attempt.current;
+    setPhase("starting");
     setMessage("");
     try {
       const permission = await AudioModule.requestRecordingPermissionsAsync();
-      if (!permission.granted) {
-        setMessage(
-          "Microphone access was denied. You can still type or use keyboard dictation.",
-        );
-        return;
-      }
-      if (!active.current || AppState.currentState !== "active") return;
+      if (id !== attempt.current || AppState.currentState !== "active") return;
+      if (!permission.granted) throw Error("Denied");
       await setAudioModeAsync({
         allowsRecording: true,
         playsInSilentMode: true,
       });
       await recorder.prepareToRecordAsync();
+      if (id !== attempt.current || AppState.currentState !== "active") {
+        await discard();
+        return;
+      }
       recorder.record();
-      timer.current = setTimeout(
-        () =>
-          void stop().catch(() => setMessage("Could not finish recording.")),
-        60000,
-      );
+      setPhase("recording");
+      timer.current = setTimeout(() => void finish(id), 60000);
     } catch {
-      setMessage("Microphone unavailable. Type your day instead.");
+      if (id === attempt.current) {
+        setMessage("Microphone unavailable. Allow access or type your plans.");
+        setPhase("idle");
+      }
+      await setAudioModeAsync({ allowsRecording: false });
     } finally {
-      setBusy(false);
+      starting.current = false;
+      if (id !== attempt.current) setPhase("idle");
     }
   };
-  const transcribe = async () => {
-    if (!uri || disabled) return;
-    setBusy(true);
-    setMessage("");
-    try {
-      const file = new File(uri);
-      if (file.size > 2100000) throw new Error("Too large");
-      const result = await transcribeDay(getToken, await file.base64());
-      if (active.current) {
-        onText(result.text);
-        setMessage(
-          "Review and edit the transcript before requesting an outfit.",
-        );
-      }
-    } catch {
-      if (active.current)
-        setMessage(
-          "Could not transcribe. Try a shorter note or type your day.",
-        );
-    } finally {
-      erase(uri);
-      currentUri.current = null;
-      if (active.current) {
-        setUri(null);
-        setBusy(false);
-      }
-    }
-  };
-  const button = (label: string, onPress: () => void) => (
-    <Pressable
-      disabled={busy || (disabled && !state.isRecording)}
-      onPress={onPress}
-      accessibilityRole="button"
-      style={{
-        minHeight: 44,
-        borderWidth: 1,
-        borderColor: colors.line,
-        padding: 12,
-        opacity: busy ? 0.5 : 1,
-      }}
-    >
-      <Text style={{ color: colors.ink, fontWeight: "800" }}>{label}</Text>
-    </Pressable>
-  );
+  const label =
+    phase === "starting"
+      ? "Opening microphone…"
+      : phase === "recording"
+        ? "Tap to finish"
+        : phase === "transcribing"
+          ? "Transcribing…"
+          : "Tap to dictate";
   return (
-    <View style={{ gap: 10 }}>
-      <Text style={{ color: colors.muted, lineHeight: 20 }}>
-        Record up to 60 seconds. Transcribe sends audio to our AI provider;
-        Wardrobe does not store it. Review the text before requesting an outfit.
+    <View style={{ gap: 10, alignItems: "center" }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        disabled={
+          phase === "starting" ||
+          phase === "transcribing" ||
+          (disabled && phase === "idle")
+        }
+        onPress={() =>
+          phase === "recording" ? void finish(attempt.current) : void start()
+        }
+        style={{
+          minHeight: 64,
+          minWidth: 180,
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: 32,
+          backgroundColor: "#DCE66E",
+          padding: 16,
+        }}
+      >
+        <Text style={{ color: colors.ink, fontWeight: "800" }}>{label}</Text>
+      </Pressable>
+      <Text
+        style={{ color: colors.muted, textAlign: "center", lineHeight: 20 }}
+      >
+        Finishing sends audio for transcription. Audio isn’t saved. Up to 60
+        seconds.
       </Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        {!state.isRecording && !uri
-          ? button("Dictate your day", () => void start())
-          : null}
-        {state.isRecording
-          ? button(
-              "Stop recording",
-              () =>
-                void stop().catch(() =>
-                  setMessage("Could not finish recording."),
-                ),
-            )
-          : null}
-        {uri
-          ? button(
-              busy ? "Transcribing…" : "Transcribe recording",
-              () => void transcribe(),
-            )
-          : null}
-        {state.isRecording || uri
-          ? button("Discard recording", () => {
-              erase(uri);
-              currentUri.current = null;
-              setUri(null);
-              if (state.isRecording) void stop(true).catch(() => {});
-            })
-          : null}
-      </View>
-      {state.isRecording ? (
-        <Text accessibilityLiveRegion="polite" style={{ color: colors.danger }}>
-          Recording… {Math.floor(state.durationMillis / 1000)}s
-        </Text>
-      ) : null}
+      {phase !== "idle" && (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            void discard().catch(() => {});
+            setPhase("idle");
+          }}
+          style={{ minHeight: 44, padding: 12 }}
+        >
+          <Text style={{ color: colors.ink }}>Cancel dictation</Text>
+        </Pressable>
+      )}
       {message ? (
-        <Text accessibilityLiveRegion="polite" style={{ color: colors.muted }}>
+        <Text accessibilityLiveRegion="polite" style={{ color: colors.danger }}>
           {message}
         </Text>
       ) : null}

@@ -2,7 +2,7 @@
 
 This is the durable operating contract for production feedback and product decisions. It applies to `main`, Vercel production deployments, and every preview deployment.
 
-Week-planner release operations add `planning_interpret`, `planning_week`, and `planning_generate_week` to bounded operation dimensions. Preserve consent-gated web/native session correlation. Photos, reviewed transcripts, calendar titles/IDs, and generated outfit details are masked in the week board, details, selectors, and worn-outfit diary. Draft persistence is product state, never an analytics property. This release does not enable native replay without the existing platform masking gate.
+Week-planner release operations add `planning_interpret`, `planning_week`, and `planning_generate_week`, and `planning_auto` to bounded operation dimensions. Preserve consent-gated web/native session correlation. Photos, reviewed transcripts, calendar titles/IDs, and generated outfit details are masked in the week board, details, selectors, and worn-outfit diary. Draft persistence is product state, never an analytics property. This release does not enable native replay without the existing platform masking gate.
 
 ## Ownership boundary
 
@@ -92,3 +92,5 @@ The web app proxies `/ingest/*` to PostHog, which keeps browser analytics first-
 Last dashboard and connection verification: 2026-07-15. Production smoke `9e965e17-a5bc-4702-96f4-f1c8f3b6a6a2` was accepted by both PostHog and Axiom for commit `466213e2a7c4d7a3ead952a244e123101c5ab116`.
 
 Catalog previews emit Axiom-only `garment_preview.finished` with model, item ID, available source trace ID, duration and bounded outcome (`ready`, `skipped`, `error`, `stale`), never prompts, images, storage URLs or raw provider failures. Native operation allowlists include `request_preview` and `restore_preview`. See [rollout checks](GARMENT_PREVIEWS.md).
+
+Automatic planning logs `planning_auto.finished` to Axiom with operation, bounded outcome (`ready`, `stale`, `calendar`, `generation`) and duration. It contains no transcript, Calendar content, prompt or generated outfit text. Configuration requests retain the existing consent-gated `planning_operation_finished` event with operation `planning_auto`. Automatic generation runs in Convex Node and requires its existing inference configuration plus `CLERK_SECRET_KEY` for connected Calendar reads; Next.js-only environment variables are not available to that action. Verify these on the intended deployment before release.

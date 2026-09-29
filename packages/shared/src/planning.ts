@@ -20,7 +20,9 @@ export type OutfitSuggestion = {
   status: OutfitStatus;
   calendarDerived: boolean;
 };
+export type AutoPlanningState = { enabled: boolean; timezone: string; state: "scheduled" | "running" | "error" | "paused"; nextAt: number; error?: "calendar" | "generation" };
 export type PlanningData = {
+  autoPlan?: AutoPlanningState;
   items: PlanningItem[];
   plans: { id: string; name: string; description: string }[];
   suggestions: OutfitSuggestion[];
@@ -32,6 +34,7 @@ export type PlanningOperation =
   | { operation: "planning_load"; week?: string }
   | {
       operation: "planning_interpret";
+      anchorDate?: string;
       week: string;
       timezone: string;
       description: string;
@@ -63,6 +66,7 @@ export type PlanningOperation =
       itemIds?: string[];
       reason?: string;
     }
+  | { operation: "planning_auto"; timezone: string; enabled?: boolean; retry?: boolean }
   | { operation: "calendar_list" }
   | { operation: "calendar_connect"; calendarIds: string[] }
   | { operation: "calendar_disconnect" };
