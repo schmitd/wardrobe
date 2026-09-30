@@ -35,7 +35,7 @@ function fixture(url: URL): State {
   };
 }
 const cssPath = resolve(import.meta.dir, "../../src/app/globals.css");
-const css = await postcss([tailwind()]).process(await Bun.file(cssPath).text(), { from: cssPath });
+const css = await postcss([tailwind({ optimize: { minify: true } })]).process(await Bun.file(cssPath).text(), { from: cssPath });
 const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Wardrobe review gallery</title><link rel="stylesheet" href="/gallery.css"><style>body{font-family:Arial,sans-serif}.fixture-banner{padding:5px 12px;background:#241426;color:#eee5f0;font-size:11px;text-align:center}</style><div id="root"></div><script type="module" src="/gallery.js"></script></html>`;
 Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
   const url = new URL(request.url);
