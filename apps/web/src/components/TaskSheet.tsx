@@ -28,6 +28,7 @@ export default function TaskSheet({
       <DialogContent
         aria-describedby={undefined}
         {...contentProps}
+        presentation="sheet"
         className={`task-sheet ${className}`}
         onOpenAutoFocus={(event) => {
           opener.current =
