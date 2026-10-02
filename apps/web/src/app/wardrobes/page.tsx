@@ -1,12 +1,13 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
+import Image from 'next/image';
+import { useMemo, useState, type FormEvent } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Layers3, Plus } from 'lucide-react';
+import { ExternalLink, Layers3, Plus } from 'lucide-react';
+import InspirationIntake from '@/components/InspirationIntake';
 import { createTraceContext } from '@/lib/trace';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,7 @@ const wardrobeKinds = ['style_locus', 'capsule', 'mood', 'season', 'trip', 'work
 export default function WardrobesPage() {
   const { isLoaded, isSignedIn } = useUser();
   const wardrobes = useQuery(api.wardrobes.listWardrobes, isLoaded && isSignedIn ? {} : 'skip');
+  const inspirations = useQuery(api.candidates.listInspiration, isLoaded && isSignedIn ? {} : 'skip');
   const createWardrobe = useMutation(api.wardrobes.createWardrobe);
 
   const [name, setName] = useState('');
@@ -28,178 +30,122 @@ export default function WardrobesPage() {
   const [error, setError] = useState('');
 
   const normalizedWardrobes = useMemo(() => wardrobes ?? [], [wardrobes]);
+  const inspirationByWardrobe = useMemo(() => {
+    const grouped = new Map<string, NonNullable<typeof inspirations>>();
+    for (const item of inspirations ?? []) {
+      const key = String(item.wardrobeId);
+      grouped.set(key, [...(grouped.get(key) ?? []), item]);
+    }
+    return grouped;
+  }, [inspirations]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!name.trim()) return;
     setStatus('saving');
     setError('');
-
     try {
-      const trace = createTraceContext();
       await createWardrobe({
         name: name.trim(),
         kind,
         ...(description.trim() ? { description: description.trim() } : {}),
-        moodWords: moodWords
-          .split(',')
-          .map((word) => word.trim())
-          .filter(Boolean)
-          .slice(0, 12),
-        ...trace,
+        moodWords: moodWords.split(',').map((word) => word.trim()).filter(Boolean).slice(0, 12),
+        ...createTraceContext(),
       });
       setName('');
       setDescription('');
       setMoodWords('');
       setStatus('success');
-      setTimeout(() => setStatus('idle'), 2500);
     } catch (caught) {
-      console.error('wardrobe_locus.create.failed', caught);
       setError(caught instanceof Error ? caught.message : 'Could not create wardrobe');
       setStatus('error');
     }
   };
 
-  if (!isLoaded) {
-    return <div className="p-8 text-sm font-semibold uppercase tracking-wide">Loading wardrobes...</div>;
-  }
+  if (!isLoaded) return <div className="p-8 text-sm font-semibold text-[var(--rack-ink)]">Loading wardrobes…</div>;
 
   if (!isSignedIn) {
     return (
       <main className="mx-auto w-full max-w-[1320px] px-4 py-8 lg:px-8">
-        <Card className="rack-panel rounded-none py-0">
-          <CardContent className="px-0">
-            <h1 className="text-4xl font-black uppercase tracking-tight text-[#310A31]">Wardrobes</h1>
-            <p className="mt-3 text-sm font-medium text-slate-700">Sign in to manage wardrobe loci.</p>
-          </CardContent>
-        </Card>
+        <Card className="rack-panel rounded-none py-0"><CardContent className="px-0"><h1 className="text-4xl font-extrabold text-[var(--rack-ink)]">Wardrobes</h1><p className="mt-3 text-sm font-medium text-[var(--rack-ink-soft)]">Sign in to manage wardrobe loci and inspiration.</p></CardContent></Card>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto grid w-full max-w-[1320px] gap-6 px-4 py-8 lg:grid-cols-[420px_1fr] lg:px-8">
-      <section className="space-y-6">
-        <Card className="rack-panel rounded-none py-0">
-          <CardContent className="px-0">
-            <Badge variant="outline" className="rounded-none border-2 border-black bg-white px-2 py-0 text-[10px] font-bold tracking-[0.2em] text-[#9C92A3]">
-              Closet Loci
-            </Badge>
-            <h1 className="mt-3 text-4xl font-black uppercase tracking-tight text-[#310A31]">Wardrobes</h1>
-          </CardContent>
-        </Card>
-
-        <Card className="rack-panel rounded-none py-0">
-          <CardContent className="px-0">
-            <div className="mb-4 flex items-center gap-2 text-[#310A31]">
-              <Plus className="h-4 w-4" />
-              <h2 className="text-lg font-black uppercase tracking-wide">New locus</h2>
-            </div>
-            <form className="space-y-4" onSubmit={submit}>
-              <div>
-                <Label className="text-xs font-black uppercase tracking-[0.16em] text-[#310A31]">Name</Label>
-                <Input
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  className="mt-2 rounded-none border-4 border-black bg-white"
-                  placeholder="Winter work capsule"
-                />
-              </div>
-
-              <div>
-                <Label className="text-xs font-black uppercase tracking-[0.16em] text-[#310A31]">Kind</Label>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {wardrobeKinds.map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => setKind(option)}
-                      className={`border-2 border-black px-3 py-2 text-[10px] font-black uppercase tracking-wide shadow-[3px_3px_0_#000] ${
-                        kind === option ? 'bg-[#310A31] text-white' : 'bg-white text-[#310A31]'
-                      }`}
-                    >
-                      {option.replace('_', ' ')}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-xs font-black uppercase tracking-[0.16em] text-[#310A31]">Mood words</Label>
-                <Input
-                  value={moodWords}
-                  onChange={(event) => setMoodWords(event.target.value)}
-                  className="mt-2 rounded-none border-4 border-black bg-white"
-                  placeholder="tailored, warm, graphic"
-                />
-              </div>
-
-              <div>
-                <Label className="text-xs font-black uppercase tracking-[0.16em] text-[#310A31]">Intent</Label>
-                <Textarea
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  className="mt-2 h-28 rounded-none border-4 border-black bg-white"
-                  placeholder="A compact set for cold office days..."
-                />
-              </div>
-
-              {status === 'error' && (
-                <p className="border-2 border-black bg-rose-100 p-3 text-sm font-semibold text-rose-700">{error}</p>
-              )}
-              {status === 'success' && (
-                <p className="border-2 border-black bg-emerald-100 p-3 text-sm font-semibold text-emerald-900">Wardrobe saved.</p>
-              )}
-
-              <Button
-                type="submit"
-                disabled={status === 'saving' || !name.trim()}
-                className="h-auto rounded-none border-4 border-black bg-[#310A31] px-5 py-3 text-xs font-black uppercase tracking-wide text-white shadow-[6px_6px_0_#000]"
-              >
-                {status === 'saving' ? 'Saving...' : 'Create wardrobe'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="text-2xl font-black uppercase tracking-tight text-[#310A31]">Active loci</h2>
-        <div className="grid gap-4 xl:grid-cols-2">
-          {normalizedWardrobes.map((wardrobe) => (
-            <article key={String(wardrobe._id)} className="border-4 border-black bg-white p-5 shadow-[6px_6px_0_#000]">
-              <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-[#310A31]">
-                    <Layers3 className="h-4 w-4 shrink-0" />
-                    <h3 className="truncate text-lg font-black uppercase tracking-wide">{wardrobe.name}</h3>
-                  </div>
-                  <Badge variant="outline" className="mt-3 rounded-none border-2 border-black bg-[#f3eef6]">
-                    {wardrobe.kind.replace('_', ' ')}
-                  </Badge>
-                </div>
-                <Badge variant="outline" className="rounded-none border-2 border-black bg-white">
-                  {wardrobe.status}
-                </Badge>
-              </div>
-
-              {wardrobe.description && (
-                <p className="mt-4 text-sm font-semibold leading-relaxed text-slate-800">{wardrobe.description}</p>
-              )}
-
-              {wardrobe.moodWords && wardrobe.moodWords.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {wardrobe.moodWords.map((word) => (
-                    <Badge key={word} variant="outline" className="rounded-none border-2 border-black bg-white text-[10px]">
-                      {word}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </article>
-          ))}
+    <main className="mx-auto w-full max-w-[1320px] space-y-6 px-4 py-8 lg:px-8">
+      <header className="rack-panel rack-panel--shell flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+        <div>
+          <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[var(--rack-ink-soft)]">Closet loci</p>
+          <h1 className="mt-2 text-4xl font-extrabold text-[var(--rack-ink)]">Wardrobes</h1>
+          <p className="mt-3 max-w-2xl text-sm font-medium leading-relaxed text-[var(--rack-ink-soft)]">
+            Loci hold a direction: owned pieces can belong here, and online references can inspire it without pretending they are in your closet.
+          </p>
         </div>
-      </section>
+        <InspirationIntake wardrobes={normalizedWardrobes} />
+      </header>
+
+      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+        <section className="rack-panel h-fit">
+          <div className="flex items-center gap-2 text-[var(--rack-ink)]"><Plus className="h-4 w-4" /><h2 className="text-lg font-extrabold">New locus</h2></div>
+          <form className="mt-5 space-y-4" onSubmit={submit}>
+            <div><Label htmlFor="locus-name" className="text-xs font-extrabold uppercase tracking-[0.12em] text-[var(--rack-ink)]">Name</Label><Input id="locus-name" value={name} onChange={(event) => setName(event.target.value)} className="mt-2 rounded-none border-[var(--rack-line)] bg-white" placeholder="Winter work capsule" /></div>
+            <div>
+              <Label htmlFor="locus-kind" className="text-xs font-extrabold uppercase tracking-[0.12em] text-[var(--rack-ink)]">Kind</Label>
+              <select id="locus-kind" value={kind} onChange={(event) => setKind(event.target.value as typeof kind)} className="mt-2 h-10 w-full border border-[var(--rack-line)] bg-white px-3 text-sm font-semibold text-[var(--rack-ink)]">
+                {wardrobeKinds.map((option) => <option key={option} value={option}>{option.replace('_', ' ')}</option>)}
+              </select>
+            </div>
+            <div><Label htmlFor="locus-mood" className="text-xs font-extrabold uppercase tracking-[0.12em] text-[var(--rack-ink)]">Mood words</Label><Input id="locus-mood" value={moodWords} onChange={(event) => setMoodWords(event.target.value)} className="mt-2 rounded-none border-[var(--rack-line)] bg-white" placeholder="tailored, warm, graphic" /></div>
+            <div><Label htmlFor="locus-intent" className="text-xs font-extrabold uppercase tracking-[0.12em] text-[var(--rack-ink)]">Intent</Label><Textarea id="locus-intent" value={description} onChange={(event) => setDescription(event.target.value)} className="mt-2 min-h-28 rounded-none border-[var(--rack-line)] bg-white" placeholder="A compact set for cold office days…" /></div>
+            {status === 'error' && <p className="border border-[var(--rack-line)] bg-[var(--rack-danger-wash)] p-3 text-sm font-semibold text-[var(--rack-danger)]">{error}</p>}
+            {status === 'success' && <p className="border border-[var(--rack-line)] bg-[var(--rack-success-wash)] p-3 text-sm font-semibold text-[var(--rack-success)]">Locus saved.</p>}
+            <Button type="submit" disabled={status === 'saving' || !name.trim()} className="rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] text-[var(--rack-ink)] shadow-[2px_2px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)]">{status === 'saving' ? 'Saving…' : 'Create locus'}</Button>
+          </form>
+        </section>
+
+        <section className="space-y-4">
+          <h2 className="text-2xl font-extrabold text-[var(--rack-ink)]">Active loci</h2>
+          {normalizedWardrobes.length === 0 ? (
+            <div className="rack-empty-state"><h3 className="text-lg font-extrabold text-[var(--rack-ink)]">Make your first locus</h3><p className="mt-2 text-sm font-medium text-[var(--rack-ink-soft)]">A locus can be a capsule, mood, trip, season, or any style direction you want Zep to remember.</p></div>
+          ) : (
+            <div className="space-y-5">
+              {normalizedWardrobes.map((wardrobe) => {
+                const locusInspiration = inspirationByWardrobe.get(String(wardrobe._id)) ?? [];
+                return (
+                  <article key={String(wardrobe._id)} className="border border-[var(--rack-line)] bg-white p-5 shadow-[3px_3px_0_var(--rack-panel-shadow)]">
+                    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+                      <div>
+                        <div className="flex items-center gap-2 text-[var(--rack-ink)]"><Layers3 className="h-4 w-4" /><h3 className="text-xl font-extrabold">{wardrobe.name}</h3></div>
+                        <p className="mt-2 text-xs font-extrabold uppercase tracking-[0.12em] text-[var(--rack-ink-soft)]">{wardrobe.kind.replace('_', ' ')} / {wardrobe.status}</p>
+                      </div>
+                      <InspirationIntake wardrobes={normalizedWardrobes} defaultWardrobeId={String(wardrobe._id)} />
+                    </div>
+                    {wardrobe.description && <p className="mt-4 max-w-2xl text-sm font-medium leading-relaxed text-[var(--rack-ink)]">{wardrobe.description}</p>}
+                    {wardrobe.moodWords && wardrobe.moodWords.length > 0 && <p className="mt-3 text-xs font-bold uppercase tracking-[0.1em] text-[var(--rack-ink-soft)]">{wardrobe.moodWords.join(' / ')}</p>}
+
+                    <div className="mt-5 border-t border-[var(--rack-line)] pt-4">
+                      <div className="flex items-center justify-between gap-3"><h4 className="text-sm font-extrabold text-[var(--rack-ink)]">Inspiration</h4><span className="text-xs font-bold text-[var(--rack-ink-soft)]">{locusInspiration.length} saved</span></div>
+                      {locusInspiration.length > 0 ? (
+                        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                          {locusInspiration.map((item) => (
+                            <div key={String(item._id)} className="border border-[var(--rack-line)] bg-[var(--rack-action-wash)] p-2">
+                              {item.imageUrl ? <Image src={item.imageUrl} alt={item.description ?? item.category ?? 'Saved inspiration'} width={360} height={300} className="aspect-[4/3] w-full object-cover" /> : <div className="grid aspect-[4/3] place-items-center bg-[var(--rack-wash)] text-sm font-semibold text-[var(--rack-ink-soft)]"><ExternalLink className="h-5 w-5" /></div>}
+                              <p className="mt-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-[var(--rack-ink-soft)]">Inspiration · not owned</p>
+                              <p className="mt-1 line-clamp-2 text-sm font-semibold text-[var(--rack-ink)]">{item.description ?? item.category ?? item.sourceUrl ?? 'Online reference'}</p>
+                              {item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-[var(--rack-ink)] underline underline-offset-4">View source <ExternalLink className="h-3 w-3" /></a>}
+                            </div>
+                          ))}
+                        </div>
+                      ) : <p className="mt-3 text-sm font-medium text-[var(--rack-ink-soft)]">No inspiration saved yet. Add a photo or source URL to make this direction concrete.</p>}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </div>
     </main>
   );
 }

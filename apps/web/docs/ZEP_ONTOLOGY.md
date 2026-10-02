@@ -2,7 +2,7 @@
 
 This ontology is intentionally flexible. Zep recommends starting with a small number of generic custom entity and edge types, then expanding after observing extraction and retrieval quality. Zep also classifies each node or edge as at most one type, limits custom ontology size, and `setOntology` overwrites the previous custom ontology for the selected project, users, or graphs.
 
-The source definitions live in `apps/web/convex/zepOntology.ts`. `setWardrobeOntology` in `apps/web/convex/zep.ts` applies them when explicitly invoked; it is not run automatically during normal app requests.
+The source definitions live in `apps/web/convex/zepOntology.ts`. Graph writes and searches ensure the project ontology and summary instructions are configured before use; `setWardrobeOntology` remains available for explicit targeted updates.
 
 ## Entity Types
 
@@ -86,6 +86,27 @@ Intent: early fall office capsule
 Mood words: crisp, polished, relaxed
 Constraints: walkable shoes, variable weather, business casual
 ```
+
+Online inspiration:
+
+```text
+I saved an online inspiration candidate to a wardrobe locus.
+Candidate id: <Convex candidateItems id>
+Source URL: <original product or post URL>
+Description: cropped rust suede jacket with a boxy line
+Style concepts: warm neutral, cropped layer, soft structure
+Collection: quiet structure
+Membership kind: inspiration
+Ownership state: not owned
+```
+
+## Product Flow Invariants
+
+- `Add piece` is the only acquisition flow that creates a `WardrobeItem` directly.
+- A try-on is stored as a non-owning `CandidateItem` comparison plus an idempotent `try_on` fit check. Retrying the same uploaded photo must not create duplicate fit-check history.
+- Try-on evaluation retrieves relevant Zep graph context before using vector similarity to surface concrete owned closet anchors.
+- Saving inspiration creates a `CandidateItem` and a `MEMBER_OF_WARDROBE` edge with `membership_kind: inspiration`; it does not add the candidate to owned rack inventory.
+- Daily fit checks may create an owned item from an unmatched garment because they describe what the user actually wore. Try-ons must never do so.
 
 ## Design Notes
 

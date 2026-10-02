@@ -152,6 +152,7 @@ const evaluateCompatibility = (input: {
   candidate: { category: string; description: string; style_tags: string[] };
   similarItems: { category: string | null; description: string | null; similarity: number }[];
   dissimilarItems: { category: string | null; description: string | null; similarity: number }[];
+  memoryContext: Array<{ fact: string; relation: string; relevance: number | null }>;
 }) =>
   Effect.gen(function* () {
     const gemini = yield* GeminiService;
@@ -176,6 +177,11 @@ const evaluateCompatibility = (input: {
 
 CANDIDATE ITEM:
 ${JSON.stringify(input.candidate)}
+
+WARDROBE MEMORY (Zep graph; preferences, loci, prior comparisons):
+${input.memoryContext.length > 0
+  ? input.memoryContext.map((entry) => `- [${entry.relation}] ${entry.fact}`).join("\n")
+  : "No relevant long-term wardrobe memory found."}
 
 WARDROBE ITEMS (Most Compatible):
 ${input.similarItems.length > 0
@@ -295,7 +301,7 @@ type DetectedFitCheckItem = {
 
 type RecordFitCheckItemInput = {
   wardrobeItemId?: Id<"wardrobeItems">;
-  source: "matched_existing" | "created_from_fit_check";
+  source: "matched_existing" | "created_from_fit_check" | "transcribed_only";
   category: string;
   description: string;
   styleTags: string[];
@@ -682,6 +688,22 @@ export const checkCompatibilityForAuth = async (
     )
   );
 
+  let memoryContext: Array<{ fact: string; relation: string; relevance: number | null }> = [];
+  try {
+    memoryContext = await fetchAction(
+      api.zepSync.searchStyleContext,
+      { query: styleQuery, traceId, traceparent },
+      { token }
+    );
+  } catch (error) {
+    console.warn("zep.search.style_context.failed", {
+      traceId,
+      traceparent,
+      userId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   const embedding = await runServerAction(
     embedText(styleQuery).pipe(Effect.provide(GeminiLive))
   );
@@ -749,41 +771,70 @@ export const checkCompatibilityForAuth = async (
     .map(hydrate)
     .filter((item): item is NonNullable<typeof item> => item !== null);
 
-  if (hydratedSimilar.length === 0 && hydratedDissimilar.length === 0) {
-    try {
-      await fetchAction(
-        api.zepSync.syncCandidateComparison,
-        {
-          candidate: {
+  const rememberTryOn = async (description: string) => {
+    const recorded = await fetchMutation(
+      api.fitChecks.recordFitCheck,
+      {
+        storageId: input.storageId as Id<"_storage">,
+        type: "try_on" as const,
+        description,
+        transcription: candidate.description,
+        items: [
+          {
+            source: "transcribed_only" as const,
             category: candidate.category,
             description: candidate.description,
             styleTags: candidate.style_tags,
           },
-          storageId: input.storageId,
-          evaluation: null,
-          similarItems: [],
-          dissimilarItems: [],
-          traceId,
-          traceparent,
-        },
-        { token }
-      );
-    } catch (error) {
-      console.warn("zep.sync.candidate_comparison.enqueue_failed", {
+        ],
         traceId,
         traceparent,
-        userId,
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
+      },
+      { token }
+    );
+    return recorded;
+  };
 
+  if (hydratedSimilar.length === 0 && hydratedDissimilar.length === 0) {
+    const message =
+      "The item does not relate to any pieces in your wardrobe, but it also does not clash with existing items.";
+    const fitCheck = await rememberTryOn(message);
+    if (fitCheck.created) {
+      try {
+        await fetchAction(
+          api.zepSync.syncCandidateComparison,
+          {
+            candidate: {
+              category: candidate.category,
+              description: candidate.description,
+              styleTags: candidate.style_tags,
+            },
+            storageId: input.storageId,
+            evaluation: null,
+            similarItems: [],
+            dissimilarItems: [],
+            traceId,
+            traceparent,
+          },
+          { token }
+        );
+      } catch (error) {
+        console.warn("zep.sync.candidate_comparison.enqueue_failed", {
+          traceId,
+          traceparent,
+          userId,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
     return {
+      storageId: input.storageId,
+      fitCheckId: fitCheck.id,
       candidate,
       similarItems: [],
       dissimilarItems: [],
       evaluation: null,
-      message:
-        "The item does not relate to any pieces in your wardrobe, but it also does not clash with existing items.",
+      message,
     };
   }
 
@@ -800,47 +851,53 @@ export const checkCompatibilityForAuth = async (
         description: entry.description,
         similarity: entry.similarity,
       })),
+      memoryContext,
     }).pipe(Effect.provide(GeminiLive))
   );
 
-  try {
-    await fetchAction(
-      api.zepSync.syncCandidateComparison,
-      {
-        candidate: {
-          category: candidate.category,
-          description: candidate.description,
-          styleTags: candidate.style_tags,
+  const fitCheck = await rememberTryOn(evaluation.explanation);
+  if (fitCheck.created) {
+    try {
+      await fetchAction(
+        api.zepSync.syncCandidateComparison,
+        {
+          candidate: {
+            category: candidate.category,
+            description: candidate.description,
+            styleTags: candidate.style_tags,
+          },
+          storageId: input.storageId,
+          evaluation,
+          similarItems: hydratedSimilar.map((item) => ({
+            itemId: item.id,
+            category: item.category,
+            description: item.description,
+            styleTags: item.styleTags,
+          })),
+          dissimilarItems: hydratedDissimilar.map((item) => ({
+            itemId: item.id,
+            category: item.category,
+            description: item.description,
+            styleTags: item.styleTags,
+          })),
+          traceId,
+          traceparent,
         },
-        storageId: input.storageId,
-        evaluation,
-        similarItems: hydratedSimilar.map((item) => ({
-          itemId: item.id,
-          category: item.category,
-          description: item.description,
-          styleTags: item.styleTags,
-        })),
-        dissimilarItems: hydratedDissimilar.map((item) => ({
-          itemId: item.id,
-          category: item.category,
-          description: item.description,
-          styleTags: item.styleTags,
-        })),
+        { token }
+      );
+    } catch (error) {
+      console.warn("zep.sync.candidate_comparison.enqueue_failed", {
         traceId,
         traceparent,
-      },
-      { token }
-    );
-  } catch (error) {
-    console.warn("zep.sync.candidate_comparison.enqueue_failed", {
-      traceId,
-      traceparent,
-      userId,
-      message: error instanceof Error ? error.message : String(error),
-    });
+        userId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   return {
+    storageId: input.storageId,
+    fitCheckId: fitCheck.id,
     candidate,
     similarItems: hydratedSimilar,
     dissimilarItems: hydratedDissimilar,
@@ -853,6 +910,95 @@ export const checkCompatibilityAction = async (input: {
   traceId?: string;
   traceparent?: string;
 }) => checkCompatibilityForAuth(await getConvexAuth(), input);
+
+const normalizeSourceUrl = (value?: string) => {
+  const trimmed = value?.trim();
+  if (!trimmed) return undefined;
+  const url = new URL(trimmed);
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error("Source URL must use http or https");
+  }
+  return url.toString();
+};
+
+export const saveInspirationForAuth = async (
+  authContext: ConvexAuthContext,
+  input: {
+    wardrobeId: string;
+    storageId?: string;
+    sourceUrl?: string;
+    sourceLabel?: string;
+    note?: string;
+    candidate?: { category: string; description: string; style_tags: string[] };
+    traceId?: string;
+    traceparent?: string;
+  }
+) => {
+  const { userId, token, tier } = authContext;
+  const { traceId, traceparent } = ensureTraceContext(input);
+  const sourceUrl = normalizeSourceUrl(input.sourceUrl);
+  if (!input.storageId && !sourceUrl) throw new Error("Add an image or source URL");
+
+  let candidate = input.candidate;
+  if (input.storageId) {
+    await fetchMutation(
+      api.storage.registerUpload,
+      { storageId: input.storageId as Id<"_storage">, purpose: "inspiration" },
+      { token }
+    );
+    if (!candidate) {
+      await enforceAuthenticatedProtection({ scope: "inference", tier, userId });
+      const imageUrl = await fetchQuery(
+        api.storage.getStorageUrl,
+        { storageId: input.storageId as Id<"_storage"> },
+        { token }
+      );
+      if (!imageUrl) throw new Error("Uploaded file missing");
+      const base64 = await fetchImageBase64(imageUrl);
+      candidate = await runServerAction(
+        analyzeImageFull(base64).pipe(Effect.provide(GeminiLive))
+      );
+    }
+  }
+
+  const description = input.note?.trim() || candidate?.description || sourceUrl || "Online inspiration";
+  const category = candidate?.category || "Online inspiration";
+  const styleTags = candidate?.style_tags ?? [];
+  const embedding = await runServerAction(
+    embedText(`${category} ${description} ${styleTags.join(" ")}`.trim()).pipe(
+      Effect.provide(GeminiLive)
+    )
+  );
+
+  const saved = await fetchMutation(
+    api.candidates.createInspiration,
+    {
+      wardrobeId: input.wardrobeId as Id<"wardrobes">,
+      ...(input.storageId ? { storageId: input.storageId as Id<"_storage"> } : {}),
+      ...(sourceUrl ? { sourceUrl } : {}),
+      ...(input.sourceLabel?.trim() ? { sourceLabel: input.sourceLabel.trim() } : {}),
+      category,
+      description,
+      styleTags,
+      embedding,
+      traceId,
+      traceparent,
+    },
+    { token }
+  );
+
+  console.info("inspiration.save.complete", {
+    traceId,
+    traceparent,
+    userId,
+    candidateItemId: saved.id,
+    wardrobeId: input.wardrobeId,
+  });
+  return saved;
+};
+
+export const saveInspirationAction = async (input: Parameters<typeof saveInspirationForAuth>[1]) =>
+  saveInspirationForAuth(await getConvexAuth(), input);
 
 export const analyzeSelfieForAuth = async (
   authContext: Pick<ConvexAuthContext, "userId" | "token">,
@@ -963,15 +1109,21 @@ export const recordFitCheckForAuth = async (
     const bestMatch = matches[0];
     const matchedExisting = bestMatch && bestMatch._score >= 0.78;
 
+    const source = matchedExisting
+      ? ("matched_existing" as const)
+      : input.type === "try_on"
+        ? ("transcribed_only" as const)
+        : ("created_from_fit_check" as const);
+
     items.push({
-      source: matchedExisting ? ("matched_existing" as const) : ("created_from_fit_check" as const),
+      source,
       category: item.category,
       description: item.description,
       styleTags: item.style_tags,
       ...(matchedExisting ? { wardrobeItemId: bestMatch._id } : {}),
       ...(item.bounding_box ? { boundingBox: item.bounding_box } : {}),
       ...(item.confidence !== undefined ? { confidence: item.confidence } : {}),
-      ...(matchedExisting ? {} : { embedding }),
+      ...(!matchedExisting && source === "created_from_fit_check" ? { embedding } : {}),
     });
   }
 

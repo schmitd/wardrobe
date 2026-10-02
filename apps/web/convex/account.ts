@@ -8,6 +8,7 @@ export const deleteUserData = internalMutation({
   handler: async (ctx, { userId }) => {
     const [
       wardrobeItems,
+      candidateItems,
       profiles,
       wardrobes,
       wardrobeMemberships,
@@ -18,6 +19,10 @@ export const deleteUserData = internalMutation({
     ] = await Promise.all([
       ctx.db
         .query("wardrobeItems")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .collect(),
+      ctx.db
+        .query("candidateItems")
         .withIndex("by_user", (q) => q.eq("userId", userId))
         .collect(),
       ctx.db
@@ -52,12 +57,14 @@ export const deleteUserData = internalMutation({
 
     const storageIds = new Set([
       ...wardrobeItems.map((item) => item.storageId),
+      ...candidateItems.flatMap((item) => (item.storageId ? [item.storageId] : [])),
       ...fitChecks.map((fitCheck) => fitCheck.storageId),
       ...uploads.map((upload) => upload.storageId),
     ]);
 
     await Promise.all([...storageIds].map((storageId) => ctx.storage.delete(storageId)));
     await Promise.all(wardrobeItems.map((item) => ctx.db.delete(item._id)));
+    await Promise.all(candidateItems.map((item) => ctx.db.delete(item._id)));
     await Promise.all(profiles.map((profile) => ctx.db.delete(profile._id)));
     await Promise.all(wardrobes.map((wardrobe) => ctx.db.delete(wardrobe._id)));
     await Promise.all(wardrobeMemberships.map((membership) => ctx.db.delete(membership._id)));
@@ -68,6 +75,7 @@ export const deleteUserData = internalMutation({
 
     return {
       wardrobeItems: wardrobeItems.length,
+      candidateItems: candidateItems.length,
       profiles: profiles.length,
       wardrobes: wardrobes.length,
       wardrobeMemberships: wardrobeMemberships.length,

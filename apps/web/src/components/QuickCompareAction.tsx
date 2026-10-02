@@ -1,11 +1,17 @@
 'use client';
 
-import Image from 'next/image';
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
-import { Loader2, Sparkles, Ticket } from 'lucide-react';
+import { Loader2, RotateCcw, Sparkles } from 'lucide-react';
 import { getUploadUrlAction } from '@/app/actions/wardrobe';
-import { Card, CardContent } from '@/components/ui/card';
+import TryOnFeedback from '@/components/TryOnFeedback';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useCompatibilityCheck } from '@/hooks/useCompatibilityCheck';
 import { userFacingErrorMessage } from '@/lib/userFacingError';
 
@@ -17,21 +23,16 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
   const previewUrlRef = useRef<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [lastStorageId, setLastStorageId] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const { result, isProcessing, status, setStatus, reset, runCompatibilityCheck } =
     useCompatibilityCheck();
 
-  useEffect(() => {
-    return () => {
-      if (previewUrlRef.current) {
-        URL.revokeObjectURL(previewUrlRef.current);
-      }
-    };
+  useEffect(() => () => {
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
   }, []);
 
   const updatePreview = (url: string | null) => {
-    if (previewUrlRef.current) {
-      URL.revokeObjectURL(previewUrlRef.current);
-    }
+    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
     previewUrlRef.current = url;
     setPreviewUrl(url);
   };
@@ -43,49 +44,38 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
 
     reset();
     setLastStorageId(null);
+    setOpen(true);
 
     if (!file.type.startsWith('image/')) {
-      setStatus('Only image files are supported for quick compare.');
+      setStatus('Choose an image to try on against your closet.');
       return;
     }
 
     updatePreview(URL.createObjectURL(file));
-
     try {
       const uploadUrl = await getUploadUrlAction();
-      const uploadResponse = await fetch(uploadUrl, {
-        method: 'POST',
-        body: file,
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error(`Upload failed: ${uploadResponse.statusText}`);
-      }
-
+      const uploadResponse = await fetch(uploadUrl, { method: 'POST', body: file });
+      if (!uploadResponse.ok) throw new Error(`Upload failed: ${uploadResponse.statusText}`);
       const payload = await uploadResponse.json();
-      if (!payload.storageId) {
-        throw new Error('Upload response missing storageId.');
-      }
+      if (!payload.storageId) throw new Error('Upload response missing storageId.');
 
       setLastStorageId(payload.storageId);
       await runCompatibilityCheck(payload.storageId, {
-        startMessage: 'Comparing this piece with your closet...',
-        fallbackErrorMessage: 'Quick compare failed.',
+        startMessage: 'Reading your loci, then finding closet anchors…',
+        fallbackErrorMessage: 'Try-on feedback failed.',
       });
     } catch (error) {
-      setStatus(userFacingErrorMessage(error, 'Quick compare failed'));
+      setStatus(userFacingErrorMessage(error, 'Try-on feedback failed'));
     }
   };
 
   const retryLastCompare = async () => {
     if (!lastStorageId) return;
     await runCompatibilityCheck(lastStorageId, {
-      startMessage: 'Comparing this piece with your closet again...',
-      fallbackErrorMessage: 'Quick compare failed.',
+      startMessage: 'Rechecking your closet context…',
+      fallbackErrorMessage: 'Try-on feedback failed.',
     });
   };
-
-  const showPanel = isProcessing || Boolean(status) || Boolean(result);
 
   return (
     <>
@@ -98,84 +88,48 @@ export default function QuickCompareAction({ inputId }: QuickCompareActionProps)
         onChange={handleFileChange}
       />
 
-      {showPanel && (
-        <Card id="rack-compare-result" className="rack-panel rack-panel--shell rounded-none py-0">
-          <CardContent className="px-0">
-          <div className="flex items-center gap-2 text-[#241426]">
-            <Sparkles className="h-4 w-4" />
-            <h3 className="text-base font-extrabold">Quick compare result</h3>
-          </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[92dvh] max-w-5xl overflow-y-auto rounded-none border border-[var(--rack-line)] bg-[var(--rack-paper)] p-5 shadow-[4px_4px_0_var(--rack-panel-shadow)] sm:p-7">
+          <DialogHeader className="border-b border-[var(--rack-line)] pb-4 pr-8">
+            <div className="flex items-center gap-2 text-[var(--rack-ink)]">
+              <Sparkles className="h-4 w-4" />
+              <DialogTitle className="text-2xl font-extrabold">Try it with your closet</DialogTitle>
+            </div>
+            <DialogDescription className="text-sm font-medium text-[var(--rack-ink-soft)]">
+              Feedback only. This photo is evaluated as a candidate and is not added to your rack.
+            </DialogDescription>
+          </DialogHeader>
 
           {isProcessing && (
-            <div className="mt-4 flex items-center gap-2 text-sm font-semibold text-[#241426]">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>{status}</span>
+            <div className="rack-panel rack-panel--shell flex min-h-64 flex-col items-center justify-center text-center">
+              <Loader2 className="h-7 w-7 animate-spin text-[var(--rack-ink)]" />
+              <p className="mt-4 text-base font-extrabold text-[var(--rack-ink)]">{status}</p>
+              <p className="mt-2 max-w-md text-sm font-medium text-[var(--rack-ink-soft)]">
+                We’re checking the directions you’ve saved, then grounding the result in pieces you already own.
+              </p>
             </div>
           )}
 
-          {!isProcessing && status && (
-            <div className="mt-4 grid gap-4 md:grid-cols-[180px_1fr]">
-              {previewUrl && (
-                <Image
-                  src={previewUrl}
-                  alt="Candidate item"
-                  width={360}
-                  height={360}
-                  unoptimized
-                  className="h-44 w-full border border-[var(--rack-line)] object-cover"
-                />
+          {!isProcessing && status && !result && (
+            <div role="alert" className="border border-[var(--rack-line)] bg-[var(--rack-danger-wash)] p-4 text-sm font-semibold text-[var(--rack-danger)]">
+              <p>{status}</p>
+              {lastStorageId && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={retryLastCompare}
+                  className="mt-3 rounded-none border-[var(--rack-line)] bg-white text-[var(--rack-ink)]"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Try again
+                </Button>
               )}
-              <div className="border border-[var(--rack-line)] bg-[#f8e6ee] p-3 text-sm font-semibold text-[#b93267]">
-                <p>{status}</p>
-                {lastStorageId && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={retryLastCompare}
-                    className="mt-3 h-auto rounded-none border border-[var(--rack-line)] bg-white px-3 py-2 text-sm font-semibold text-[#241426]"
-                  >
-                    Try compare again
-                  </Button>
-                )}
-              </div>
             </div>
           )}
 
-          {result && (
-            <div className="mt-4 grid gap-4 md:grid-cols-[220px_1fr]">
-              {previewUrl && (
-                <Image
-                  src={previewUrl}
-                  alt="Candidate item"
-                  width={440}
-                  height={440}
-                  unoptimized
-                  className="h-56 w-full border border-[var(--rack-line)] object-cover"
-                />
-              )}
-              <div className="space-y-3">
-                {result.evaluation ? (
-                  <>
-                    <p className="text-sm font-semibold text-[#56345c]">
-                      Compatibility score
-                    </p>
-                    <p className="text-5xl font-black text-[#241426]">{result.evaluation.score}%</p>
-                    <p className="border border-[var(--rack-line)] bg-white p-3 text-sm font-medium text-slate-800">
-                      {result.evaluation.explanation}
-                    </p>
-                  </>
-                ) : (
-                  <div className="flex items-center gap-2 border border-[var(--rack-line)] bg-white p-3 text-sm font-semibold text-[#241426]">
-                    <Ticket className="h-4 w-4" />
-                    <span>{userFacingErrorMessage(result.message, 'Quick compare failed')}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          </CardContent>
-        </Card>
-      )}
+          {result && <TryOnFeedback result={result} previewUrl={previewUrl} />}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

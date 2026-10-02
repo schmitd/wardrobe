@@ -73,10 +73,35 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_user_updatedAt", ["userId", "updatedAt"]),
 
+  candidateItems: defineTable({
+    userId: v.string(),
+    storageId: v.optional(v.id("_storage")),
+    sourceUrl: v.optional(v.string()),
+    sourceLabel: v.optional(v.string()),
+    kind: v.string(),
+    status: v.string(),
+    category: v.optional(v.string()),
+    description: v.optional(v.string()),
+    styleTags: v.optional(v.array(v.string())),
+    embedding: v.optional(v.array(v.float64())),
+    traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_createdAt", ["userId", "createdAt"])
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 768,
+      filterFields: ["userId", "kind", "status"],
+    }),
+
   wardrobeMemberships: defineTable({
     userId: v.string(),
     wardrobeId: v.id("wardrobes"),
-    itemId: v.id("wardrobeItems"),
+    itemId: v.optional(v.id("wardrobeItems")),
+    candidateItemId: v.optional(v.id("candidateItems")),
     membershipKind: v.string(),
     rationale: v.optional(v.string()),
     createdAt: v.number(),
@@ -85,6 +110,7 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_wardrobe", ["wardrobeId"])
     .index("by_item", ["itemId"])
+    .index("by_candidate", ["candidateItemId"])
     .index("by_wardrobe_item", ["wardrobeId", "itemId"]),
 
   fitChecks: defineTable({
@@ -99,6 +125,7 @@ export default defineSchema({
     traceparent: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
+    .index("by_user_storage_type", ["userId", "storageId", "type"])
     .index("by_user_type_createdAt", ["userId", "type", "createdAt"]),
 
   fitCheckItems: defineTable({

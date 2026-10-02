@@ -7,6 +7,7 @@ import { ensureTraceContext } from "./trace";
 import { getAuthenticatedUser } from "./authIdentity";
 import {
   addCandidateComparisonMemory,
+  addCandidateInspirationMemory,
   addFitCheckMemory,
   addWardrobeCollectionMemory,
   addWardrobeItemCreatedMemory,
@@ -14,6 +15,7 @@ import {
   deleteUserMemory,
   deleteWardrobeItemMemory,
   ensureWardrobeZepProject,
+  searchWardrobeStyleMemory,
   updateProfileMemory,
 } from "./zep";
 
@@ -327,6 +329,80 @@ export const syncCandidateComparison = action({
       similarItems: args.similarItems,
       dissimilarItems: args.dissimilarItems,
     }, user);
+  },
+});
+
+export const searchStyleContext = action({
+  args: {
+    query: v.string(),
+    traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await getAuthenticatedUser(ctx);
+    if (!user) throw new Error("Unauthorized");
+    const { traceId, traceparent } = ensureTraceContext(args);
+    console.info("zep.search.style_context", {
+      traceId,
+      traceparent,
+      userId: redactUserId(user.userId),
+    });
+    return searchWardrobeStyleMemory(user.userId, args.query, user);
+  },
+});
+
+export const syncCandidateInspiration = internalAction({
+  args: {
+    userId: v.string(),
+    user: zepUser,
+    candidateItemId: v.id("candidateItems"),
+    wardrobeId: v.id("wardrobes"),
+    wardrobeName: v.string(),
+    wardrobeKind: v.string(),
+    wardrobeStatus: v.string(),
+    wardrobeDescription: v.optional(v.string()),
+    wardrobeMoodWords: v.array(v.string()),
+    storageId: v.optional(v.id("_storage")),
+    sourceUrl: v.optional(v.string()),
+    sourceLabel: v.optional(v.string()),
+    category: v.optional(v.string()),
+    description: v.optional(v.string()),
+    styleTags: v.optional(v.array(v.string())),
+    traceId: v.optional(v.string()),
+    traceparent: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const { traceId, traceparent } = ensureTraceContext(args);
+    console.info("zep.sync.candidate_inspiration", {
+      traceId,
+      traceparent,
+      userId: redactUserId(args.userId),
+      candidateItemId: args.candidateItemId,
+      wardrobeId: args.wardrobeId,
+    });
+    await addCandidateInspirationMemory(
+      args.userId,
+      {
+        candidate: {
+          itemId: args.candidateItemId,
+          category: args.category ?? null,
+          description: args.description ?? null,
+          styleTags: args.styleTags ?? null,
+          sourceUrl: args.sourceUrl ?? null,
+          sourceLabel: args.sourceLabel ?? null,
+        },
+        storageId: args.storageId ?? null,
+        collection: {
+          wardrobeId: args.wardrobeId,
+          name: args.wardrobeName,
+          kind: args.wardrobeKind,
+          description: args.wardrobeDescription ?? null,
+          status: args.wardrobeStatus,
+          moodWords: args.wardrobeMoodWords,
+        },
+      },
+      args.user
+    );
   },
 });
 

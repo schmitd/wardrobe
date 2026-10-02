@@ -286,7 +286,7 @@ export default function Home() {
               className="rack-action-button rounded-none border border-[var(--rack-line)]"
             >
               <Sparkles className="h-4 w-4" />
-              <span>Check fit</span>
+              <span>Try on</span>
             </Button>
           </div>
         </nav>

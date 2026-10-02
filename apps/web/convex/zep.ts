@@ -32,6 +32,15 @@ type CandidateComparisonMemory = {
   dissimilarItems: WardrobeItemMemory[];
 };
 
+type CandidateInspirationMemory = {
+  candidate: WardrobeItemMemory & {
+    sourceUrl?: string | null;
+    sourceLabel?: string | null;
+  };
+  storageId?: string | null;
+  collection: Omit<WardrobeCollectionMemory, "item" | "membershipKind" | "rationale">;
+};
+
 type WardrobeCollectionMemory = {
   wardrobeId: string;
   name: string;
@@ -866,6 +875,93 @@ export const addCandidateComparisonMemory = async (
   );
 };
 
+export const addCandidateInspirationMemory = async (
+  userId: string,
+  inspiration: CandidateInspirationMemory,
+  user?: AuthenticatedUser | null
+) => {
+  if (!apiKey) return;
+
+  const client = ensureClient();
+  const createdAt = Date.now();
+  const candidateNode = itemNodeName(inspiration.candidate, "Candidate");
+  const candidateSummary = itemSummary(inspiration.candidate);
+  const collectionNode = collectionNodeName(inspiration.collection);
+
+  await addGraphEpisode(client, userId, user, {
+    sourceDescription: "Online inspiration saved to wardrobe locus",
+    createdAt,
+    data: {
+      event: "candidate_inspiration_saved",
+      ontology_hints: {
+        entities: ["CandidateItem", "WardrobeCollection", "StyleConcept"],
+        edges: ["MEMBER_OF_WARDROBE", "HAS_STYLE_CONCEPT"],
+      },
+      user: userMetadata(user),
+      candidate: inspiration.candidate,
+      storageId: inspiration.storageId ?? null,
+      collection: inspiration.collection,
+      membershipKind: "inspiration",
+    },
+  });
+
+  await addFactTriple(client, userId, user, {
+    factName: "MEMBER_OF_WARDROBE",
+    fact: `${cleanText(inspiration.candidate.description, inspiration.candidate.category ?? "Online inspiration")} inspires wardrobe locus ${inspiration.collection.name}.`,
+    sourceNodeName: candidateNode,
+    sourceNodeSummary: candidateSummary,
+    sourceNodeAttributes: {
+      ...itemAttributes(inspiration.candidate),
+      purchase_context: inspiration.candidate.sourceLabel ?? "online inspiration",
+      source_ref:
+        inspiration.candidate.sourceUrl ?? inspiration.storageId ?? inspiration.candidate.itemId ?? null,
+    },
+    targetNodeName: collectionNode,
+    targetNodeSummary: collectionSummary(inspiration.collection),
+    targetNodeAttributes: {
+      collection_kind: inspiration.collection.kind,
+      intent: inspiration.collection.description ?? null,
+      source_ref: inspiration.collection.wardrobeId,
+    },
+    edgeAttributes: {
+      membership_kind: "inspiration",
+      rationale: inspiration.candidate.description ?? null,
+    },
+    createdAt,
+  });
+
+  await addStyleConceptFacts(
+    client,
+    userId,
+    user,
+    inspiration.candidate,
+    candidateNode,
+    candidateSummary,
+    createdAt
+  );
+};
+
+export const searchWardrobeStyleMemory = async (
+  userId: string,
+  query: string,
+  user?: AuthenticatedUser | null
+) => {
+  if (!apiKey) return [];
+  const client = ensureClient();
+  await ensureUser(client, userId, user);
+  const results = await client.graph.search({
+    userId,
+    query: truncate(query, 500),
+    limit: 8,
+    scope: "edges",
+  });
+  return (results.edges ?? []).map((edge) => ({
+    fact: edge.fact,
+    relation: edge.name,
+    relevance: edge.relevance ?? edge.score ?? null,
+  }));
+};
+
 export const addFitCheckMemory = async (
   userId: string,
   fitCheck: FitCheckMemory,
@@ -908,7 +1004,12 @@ export const addFitCheckMemory = async (
       itemId: item.wardrobeItemId ?? item.itemId ?? null,
       sourceFitCheckId: fitCheck.fitCheckId,
     };
-    const itemNode = itemNodeName(wardrobeItem, "Wardrobe item");
+    const itemNode = itemNodeName(
+      wardrobeItem,
+      fitCheck.type === "try_on" && item.source === "transcribed_only"
+        ? "Candidate"
+        : "Wardrobe item"
+    );
     const itemNodeSummary = itemSummary(wardrobeItem);
 
     await addFactTriple(client, userId, user, {

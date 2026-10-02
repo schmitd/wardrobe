@@ -30,6 +30,13 @@ const apiMock = {
   },
   zepSync: {
     syncCandidateComparison: {},
+    searchStyleContext: {},
+  },
+  candidates: {
+    createInspiration: {},
+  },
+  fitChecks: {
+    recordFitCheck: {},
   },
 };
 
@@ -203,9 +210,20 @@ describe("wardrobe server actions", () => {
   });
 
   it("checks compatibility using generated embeddings", async () => {
-    fetchActionMock.mockResolvedValue([
-      { _id: "item_1", _score: 0.98 },
-    ]);
+    fetchMutationMock.mockImplementation(async (mutation) =>
+      mutation === api.fitChecks.recordFitCheck
+        ? { id: "fit_compatibility", created: true, items: [] }
+        : { success: true }
+    );
+    fetchActionMock.mockImplementation(async (action) => {
+      if (action === api.zepSync.searchStyleContext) {
+        return [{ fact: "User favors quiet tailoring", relation: "HAS_STYLE_CONCEPT", relevance: 0.9 }];
+      }
+      if (action === api.wardrobe.searchSimilarItems) {
+        return [{ _id: "item_1", _score: 0.98 }];
+      }
+      return undefined;
+    });
 
     fetchQueryMock.mockImplementation(async (query) => {
       if (query === api.storage.getStorageUrl) {
@@ -269,7 +287,13 @@ describe("wardrobe server actions", () => {
     const result = await actions.checkCompatibilityAction({ storageId: "storage_1" });
 
     expect(result.candidate.description).toBe("Blue shirt");
+    expect(String(result.fitCheckId)).toBe("fit_compatibility");
     expect(result.evaluation?.score).toBe(80);
+    expect(fetchActionMock).toHaveBeenCalledWith(
+      api.zepSync.searchStyleContext,
+      expect.objectContaining({ query: "blue shirt casual" }),
+      expect.objectContaining({ token: "token_123" })
+    );
     expect(fetchActionMock).toHaveBeenCalledWith(
       api.wardrobe.searchSimilarItems,
       expect.objectContaining({
@@ -280,6 +304,76 @@ describe("wardrobe server actions", () => {
     );
     expect(result.similarItems.length).toBeGreaterThan(0);
     expect(result.dissimilarItems.length).toBeGreaterThan(0);
+    expect(fetchMutationMock).toHaveBeenCalledWith(
+      api.fitChecks.recordFitCheck,
+      expect.objectContaining({
+        type: "try_on",
+        items: [
+          expect.objectContaining({
+            source: "transcribed_only",
+            category: "Shirt",
+          }),
+        ],
+      }),
+      expect.objectContaining({ token: "token_123" })
+    );
+  });
+
+  it("records unmatched try-on pieces without adding them to the owned rack", async () => {
+    fetchQueryMock.mockResolvedValue("https://example.com/try-on.jpg");
+    fetchActionMock.mockResolvedValue([]);
+    queueRunServerAction(
+      {
+        transcription: "Trying a cropped rust jacket.",
+        items: [{
+          category: "Jacket",
+          description: "Cropped rust jacket",
+          style_tags: ["warm", "cropped"],
+        }],
+      },
+      [0.1, 0.2, 0.3]
+    );
+    fetchMutationMock.mockImplementation(async (mutation, args) => {
+      if (mutation === api.fitChecks.recordFitCheck) {
+        return { id: "fit_1", created: true, items: args.items };
+      }
+      return { success: true };
+    });
+
+    await actions.recordTryOnFitCheckAction({ storageId: "storage_1" });
+
+    const recordCall = fetchMutationMock.mock.calls.find(
+      ([mutation]) => mutation === api.fitChecks.recordFitCheck
+    );
+    expect(recordCall).toBeDefined();
+    expect(recordCall?.[1].type).toBe("try_on");
+    expect(recordCall?.[1].items[0].source).toBe("transcribed_only");
+    expect(recordCall?.[1].items[0].embedding).toBeUndefined();
+  });
+
+  it("saves URL inspiration as a candidate in a locus", async () => {
+    runServerActionMock.mockResolvedValue([0.2, 0.3, 0.4]);
+    fetchMutationMock.mockResolvedValue({ id: "candidate_1" });
+
+    const result = await actions.saveInspirationAction({
+      wardrobeId: "wardrobe_1",
+      sourceUrl: "https://shop.example/item",
+      sourceLabel: "Shop example",
+      note: "Long line and warm neutral.",
+    });
+
+    expect(String(result.id)).toBe("candidate_1");
+    expect(fetchMutationMock).toHaveBeenCalledWith(
+      api.candidates.createInspiration,
+      expect.objectContaining({
+        wardrobeId: "wardrobe_1",
+        sourceUrl: "https://shop.example/item",
+        category: "Online inspiration",
+        description: "Long line and warm neutral.",
+        embedding: [0.2, 0.3, 0.4],
+      }),
+      expect.objectContaining({ token: "token_123" })
+    );
   });
 
   it("analyzes selfie and syncs profile", async () => {
@@ -348,6 +442,7 @@ describe("wardrobe server actions", () => {
     });
 
     expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") throw new Error("Expected successful guest analysis");
     expect(result.limit).toBe(4);
     expect(result.capped).toBe(true);
     expect(result.items).toHaveLength(4);

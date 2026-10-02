@@ -10,6 +10,7 @@
 
 import type * as account from "../account.js";
 import type * as authIdentity from "../authIdentity.js";
+import type * as candidates from "../candidates.js";
 import type * as fitChecks from "../fitChecks.js";
 import type * as http from "../http.js";
 import type * as profile from "../profile.js";
@@ -31,6 +32,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   account: typeof account;
   authIdentity: typeof authIdentity;
+  candidates: typeof candidates;
   fitChecks: typeof fitChecks;
   http: typeof http;
   profile: typeof profile;
