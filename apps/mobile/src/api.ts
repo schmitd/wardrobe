@@ -5,7 +5,7 @@ import { analyticsHeaders, track } from "@/analytics";
 import { createTraceId } from "@/trace";
 import type { PlanningOperation } from "@wardrobe/shared";
 
-const baseUrl = (process.env.EXPO_PUBLIC_WARDROBE_API_URL ?? "https://wardrobe.davidcschmitt.com").replace(/\/$/, "");
+const baseUrl = (process.env.EXPO_PUBLIC_WARDROBE_API_URL ?? "https://lint.fit").replace(/\/$/, "");
 type GetToken = () => Promise<string | null>;
 
 export class ApiError extends Error {

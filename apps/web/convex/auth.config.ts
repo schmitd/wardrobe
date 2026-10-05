@@ -1,6 +1,6 @@
 import type { AuthConfig } from "convex/server";
 
-const productionClerkIssuer = "https://clerk.wardrobe.davidcschmitt.com";
+const productionClerkIssuer = "https://clerk.lint.fit";
 const developmentClerkIssuer = "https://beloved-guppy-95.clerk.accounts.dev";
 const clerkAudience = "convex";
 const clerkIssuers = [productionClerkIssuer, developmentClerkIssuer]

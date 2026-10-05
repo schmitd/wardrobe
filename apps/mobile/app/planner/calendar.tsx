@@ -37,7 +37,7 @@ export default function Calendar() {
     setOpening(true);
     try {
       const result = await WebBrowser.openAuthSessionAsync(
-        `${process.env.EXPO_PUBLIC_WARDROBE_API_URL || "https://wardrobe.davidcschmitt.com"}/fits?view=plans&calendar=connect&returnTo=mobile`,
+        `${process.env.EXPO_PUBLIC_WARDROBE_API_URL || "https://lint.fit"}/fits?view=plans&calendar=connect&returnTo=mobile`,
         "wardrobe://fits",
       );
       if (result.type !== "success") return;
