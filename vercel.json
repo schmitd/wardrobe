@@ -1,5 +1,10 @@
 {
   "installCommand": "bun install --frozen-lockfile",
   "buildCommand": "bun run vercel-build",
-  "outputDirectory": "apps/web/.next"
+  "outputDirectory": "apps/web/.next",
+  "git": {
+    "deploymentEnabled": {
+      "codex/lint-fit-clerk-readiness": false
+    }
+  }
 }

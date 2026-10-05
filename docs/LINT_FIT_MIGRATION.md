@@ -74,6 +74,14 @@ passkeys. Do not introduce wildcard origins or redirect URLs.
 
 ## Deployment capabilities and hold
 
+The migration branch `codex/lint-fit-clerk-readiness` has automatic Vercel Git
+deployments disabled with an exact branch-specific `git.deploymentEnabled`
+entry in its source `vercel.json`. This prevents publication from starting a
+preview before coordinated Clerk/public-key cutover. Other branches remain at
+their existing default. The pinned Convex CLI also rejects a production deploy
+key in a Vercel preview environment; this guard is not disabled. A deliberate
+existing-project production deployment of the candidate remains a parent action.
+
 Read-only Vercel deployment/project/domain lookups succeed. Environment-variable
 metadata lookup fails with 403. This shell exposes no `CONVEX_DEPLOY_KEY`,
 `VERCEL_TOKEN`, or `EXPO_TOKEN`, and no application `.env` files. The only matching
