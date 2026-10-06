@@ -63,7 +63,8 @@ const foreground = await sharp({ create: { width: 1024, height: 1024, channels: 
 await Bun.write(resolve(native, "adaptive-icon.png"), foreground);
 await Bun.write(resolve(native, "monochrome-icon.png"), foreground);
 await sharp(appIcon).resize(180, 180).toFile(resolve(root, "apps/web/src/app/apple-icon.png"));
-const favicon = await sharp(appIcon).resize(48, 48).png().toBuffer();
+// Next's ICO decoder requires an RGBA PNG even when every pixel is opaque.
+const favicon = await sharp(appIcon).resize(48, 48).ensureAlpha().png().toBuffer();
 const ico = Buffer.alloc(22);
 ico.writeUInt16LE(1, 2); ico.writeUInt16LE(1, 4);
 ico[6] = 48; ico[7] = 48;
