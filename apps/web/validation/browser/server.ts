@@ -39,6 +39,9 @@ const css = await postcss([tailwind({ optimize: { minify: true } })]).process(aw
 const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Wardrobe review gallery</title><link rel="stylesheet" href="/gallery.css"><style>body{font-family:Arial,sans-serif}.fixture-banner{padding:5px 12px;background:#241426;color:#eee5f0;font-size:11px;text-align:center}</style><div id="root"></div><script type="module" src="/gallery.js"></script></html>`;
 Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
   const url = new URL(request.url);
+  if (url.pathname === "/brand/lint-round-tuft-lockup.png" || url.pathname === "/brand/lint-round-tuft-mark.png") {
+    return new Response(Bun.file(resolve(import.meta.dir, "../../public", url.pathname.slice(1))));
+  }
   if (url.pathname === "/favicon.ico") return new Response(null, { status: 204 });
   if (url.pathname === "/health") return new Response(process.env.PROBE_TOKEN ?? "ok");
   if (url.pathname === "/gallery.js") return new Response(bundle, { headers: { "Content-Type": "application/javascript" } });

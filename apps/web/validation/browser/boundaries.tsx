@@ -30,7 +30,7 @@ export function usePaginatedQuery(query: string, args: object | "skip", _options
 export const useMutation = (name: string) => async (args: unknown) => { const result = await action("mutation", { name, args }); invalidate(); return result; };
 export const analytics = { capture() {}, captureException() {}, has_opted_out_capturing: () => true };
 export const Link = ({ href, children, ...props }: React.ComponentProps<"a">) => <a href={href} {...props}>{children}</a>;
-export const Image = ({ fill, unoptimized: _unoptimized, style, ...props }: React.ComponentProps<"img"> & { fill?: boolean; unoptimized?: boolean }) => <img alt={props.alt ?? ""} style={{ ...(fill ? { position: "absolute", inset: 0, width: "100%", height: "100%" } : {}), ...style }} {...props} />; // eslint-disable-line @next/next/no-img-element, @typescript-eslint/no-unused-vars
+export const Image = ({ fill, unoptimized: _unoptimized, priority: _priority, style, ...props }: React.ComponentProps<"img"> & { fill?: boolean; unoptimized?: boolean; priority?: boolean }) => <img alt={props.alt ?? ""} style={{ ...(fill ? { position: "absolute", inset: 0, width: "100%", height: "100%" } : {}), ...style }} {...props} />; // eslint-disable-line @next/next/no-img-element, @typescript-eslint/no-unused-vars
 
 async function action(name: string, input?: unknown) {
   const response = await fetch(`/__fixture/action/${name}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input ?? {}) });

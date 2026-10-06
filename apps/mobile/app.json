@@ -34,7 +34,9 @@
         "android.permission.READ_MEDIA_VIDEO"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#f6f1f8"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "monochromeImage": "./assets/monochrome-icon.png",
+        "backgroundColor": "#DCE66E"
       }
     },
     "plugins": [

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
 import { Sparkles, Shirt } from 'lucide-react';
@@ -33,11 +34,8 @@ export default function Navbar() {
     <UnifiedCaptureController>
       <nav className="sticky top-0 z-40 border-b border-[var(--rack-line)] bg-[#D8C9DC]/95 backdrop-blur-sm">
         <div className="mx-auto flex min-h-16 w-full max-w-[1320px] items-center justify-between gap-4 px-4 py-2 lg:px-8">
-          <Link href="/" className="inline-flex min-h-11 items-center gap-2" aria-label="Wardrobe home">
-            <span className="grid h-10 w-10 place-items-center border border-[var(--rack-line)] bg-[#DCE66E] text-[#241426] shadow-[2px_2px_0_var(--rack-panel-shadow)]">
-              <Shirt className="h-4 w-4" />
-            </span>
-            <span className="text-sm font-extrabold text-[#241426]">Wardrobe</span>
+          <Link href="/" className="inline-flex min-h-11 shrink-0 items-center" aria-label="Lint home">
+            <Image src="/brand/lint-round-tuft-lockup.png" alt="" width={240} height={90} className="h-11 w-auto" priority />
           </Link>
 
           <div className="hidden flex-1 items-center justify-end gap-2 md:flex">
