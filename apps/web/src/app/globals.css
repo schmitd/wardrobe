@@ -830,3 +830,16 @@ h4 {
   .lint-camera-controls-spacer { height:48px; }
   .lint-camera-header { right:112px; padding-bottom:16px; }
 }
+
+/* Clerk custom account links use separate classes from built-in actions. */
+.cl-userButtonPopoverCustomItemButton,
+.cl-userButtonPopoverCustomItemButton :is(span, div, svg) {
+  color: #241426 !important;
+  opacity: 1 !important;
+}
+.cl-userButtonPopoverCustomItemButton:focus-visible {
+  outline: 2px solid #241426 !important;
+  outline-offset: -3px !important;
+  box-shadow: none !important;
+}
+/* End Clerk custom account links. */

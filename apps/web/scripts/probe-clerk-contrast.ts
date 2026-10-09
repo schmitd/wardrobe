@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 import { clerkAppearance, clerkColors as c } from '../src/lib/clerk-appearance';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
 
 // Synthetic local fixture: exercises the shared appearance rules without an
 // auth session or calls to Clerk/Google. This is not a live Clerk DOM assertion.
@@ -13,12 +13,16 @@ const css = (style: Record<string, unknown>, selector: string): string => {
   return `${selector}{${declarations}}${nested}`;
 };
 const styles = Object.entries(clerkAppearance.elements).map(([name, value]) => css(value, `.${name}`)).join('\n');
+const globalStyles = await readFile(new URL('../src/app/globals.css', import.meta.url), 'utf8');
+const customMenuStyles = globalStyles.slice(globalStyles.indexOf('/* Clerk custom account links'), globalStyles.indexOf('/* End Clerk custom account links. */'));
+if (!customMenuStyles) throw Error('Missing custom account-link styles');
 const markup = `<!doctype html><html><head><style>
-body{font:14px Arial;color:${c.ink};background:${c.paper};padding:24px}section{margin:20px 0;padding:20px;background:${c.lavender};max-width:480px}button,a,input{padding:10px;margin:6px;font:inherit}a{display:inline-block}svg{width:16px;height:16px} ${styles}
+body{font:14px Arial;color:${c.ink};background:${c.paper};padding:24px}section{margin:20px 0;padding:20px;background:${c.lavender};max-width:480px}button,a,input{padding:10px;margin:6px;font:inherit}a{display:inline-block}svg{width:16px;height:16px} ${styles} ${customMenuStyles}
 </style></head><body>
 <section class="userButtonPopoverCard" aria-label="Account menu">
 <p class="userPreviewMainIdentifier">Sample account</p><p class="userPreviewSecondaryIdentifier">sample@example.test</p>
-${['Manage account','Sign out','Privacy'].map(label => `<button class="userButtonPopoverActionButton"><svg class="userButtonPopoverActionButtonIcon" fill="currentColor" viewBox="0 0 16 16"><rect width="16" height="16" /></svg><span class="userButtonPopoverActionButtonText">${label}</span></button>`).join('')}
+${['Manage account','Sign out'].map(label => `<button class="userButtonPopoverActionButton"><svg class="userButtonPopoverActionButtonIcon" fill="currentColor" viewBox="0 0 16 16"><rect width="16" height="16" /></svg><span class="userButtonPopoverActionButtonText">${label}</span></button>`).join('')}
+<button class="cl-userButtonPopoverCustomItemButton" style="color:color(srgb .141176 .0784314 .14902 / .62)"><span class="cl-userButtonPopoverCustomItemButtonIconBox"><div class="cl-userButtonPopoverActionItemButtonIcon"><svg class="lucide lucide-shield" stroke="currentColor" fill="none" viewBox="0 0 16 16"><path d="M1 1h14v14H1z" /></svg></div></span>Privacy</button>
 </section>
 ${['Manage account','Sign in','Sign up'].map(title => `<section class="card" aria-label="${title}"><h2 class="headerTitle">${title}</h2><p class="headerSubtitle">Synthetic account information</p><button class="navbarButton"><span class="navbarButtonText">Profile</span></button><label class="formFieldLabel">Email<input class="formFieldInput" value="sample@example.test" /></label><input class="formFieldInput" placeholder="Email" /><p class="formFieldErrorText">Enter a valid email address</p><button class="socialButtonsBlockButton"><span class="socialButtonsBlockButtonText">Continue with Google</span></button><button class="formButtonPrimary">Continue</button><button class="formButtonPrimary" disabled>Unavailable</button><input class="formFieldInput" disabled value="Unavailable" /><a class="footerPagesLink" href="#privacy">Privacy</a></section>`).join('')}
 </body></html>`;
@@ -43,9 +47,12 @@ await page.keyboard.press('Tab');
 await page.locator('.userButtonPopoverActionButton').first().focus();
 const focus = await page.locator('.userButtonPopoverActionButton').first().evaluate(el => ({outline:getComputedStyle(el).outline,offset:getComputedStyle(el).outlineOffset}));
 if(!focus.outline.includes('2px') || !focus.outline.includes('solid')) throw Error('Missing focus indicator');
+await page.locator('.cl-userButtonPopoverCustomItemButton').focus();
+const custom = await page.locator('.cl-userButtonPopoverCustomItemButton').evaluate(el => ({foreground:getComputedStyle(el).color,icon:getComputedStyle(el.querySelector('svg')!).color,outline:getComputedStyle(el).outline,focusVisible:el.matches(':focus-visible')}));
+if (custom.foreground !== 'rgb(36, 20, 38)' || custom.icon !== custom.foreground || !custom.focusVisible || !(custom.outline.includes('2px') && custom.outline.includes('solid'))) throw Error(JSON.stringify(custom));
 const out = new URL('../../../output/playwright/',import.meta.url);
 await mkdir(out,{recursive:true});
-await writeFile(new URL('clerk-contrast.json',out),JSON.stringify({scope:'Synthetic rendering of shared appearance rules; not live Clerk DOM',measurements,hover,focus},null,2));
+await writeFile(new URL('clerk-contrast.json',out),JSON.stringify({scope:'Synthetic rendering of shared appearance rules; not live Clerk DOM',measurements,hover,focus,custom},null,2));
 await page.screenshot({path:new URL('clerk-contrast.png',out).pathname,fullPage:true});
-console.log(JSON.stringify({checks:measurements.length,minimumTextRatio:Math.min(...measurements.filter(e=>e.target===4.5).map(e=>e.ratio)),hover,focus}));
+console.log(JSON.stringify({checks:measurements.length,minimumTextRatio:Math.min(...measurements.filter(e=>e.target===4.5).map(e=>e.ratio)),hover,focus,custom}));
 await browser.close();
