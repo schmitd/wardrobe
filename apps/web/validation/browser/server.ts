@@ -23,14 +23,14 @@ const build = await Bun.build({
 });
 if (!build.success) throw new AggregateError(build.logs, "Gallery build failed");
 const bundle = build.outputs[0]!;
-type State = { previews: Record<string, string>; catalog: ReturnType<typeof collectionFixture>; data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean; scenarioCase: string | null };
+type State = { fixtureKey: string; previews: Record<string, string>; catalog: ReturnType<typeof collectionFixture>; data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean; scenarioCase: string | null };
 const states = new Map<string, State>();
 function fixture(url: URL): State {
   // Match the Playwright/probe browser even when the runner's local date is UTC.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   return {
-    previews: {}, catalog: collectionFixture(),
-    data: { items: ["Shirt", "Trousers", "Coat"].map((category, i) => ({ id: `piece-${i}`, category, description: `Synthetic ${category.toLowerCase()}`, imageUrl: null })), plans: [], calendarEnabled: true, calendarIds: ["synthetic-calendar"], suggestions: [{ id: "outfit", date: url.searchParams.get("scenario") === "history" ? shiftDay(today, -1) : today, title: "Easy structure for your day", rationale: "Relaxed tailoring draws on Work edit; the cotton layers work together for your client meeting.", itemIds: ["piece-0", "piece-1"], missing: [], context: ["Collection: Work edit", "Style profile"], status: "planned", calendarDerived: false }] },
+    fixtureKey: url.search, previews: {}, catalog: collectionFixture(),
+    data: { items: ["Shirt", "Trousers", "Coat"].map((category, i) => ({ id: `piece-${i}`, category, description: `Synthetic ${category.toLowerCase()}`, imageUrl: `/__fixture/piece-${i}.svg` })), plans: [], calendarEnabled: true, calendarIds: ["synthetic-calendar"], suggestions: [{ id: "outfit", date: url.searchParams.get("scenario") === "history" ? shiftDay(today, -1) : today, title: "Easy structure for your day", rationale: "Relaxed tailoring draws on Work edit; the cotton layers work together for your client meeting.", itemIds: ["piece-0", "piece-1"], missing: [], context: ["Collection: Work edit", "Style profile"], status: "planned", calendarDerived: false }] },
     calls: [], stale: url.searchParams.get("case") === "stale", latency: boundedInteger(url.searchParams.get("latency") ?? undefined, 0, 0, 5000), scenarioCase: url.searchParams.get("case"), scope: url.searchParams.get("scope") === "single_piece" ? "single_piece" : "full_fit", wrote: false,
   };
 }
@@ -48,6 +48,8 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
   if (url.pathname === "/gallery.css") return new Response(css.css, { headers: { "Content-Type": "text/css" } });
   if (/^\/__fixture\/piece-\d\.svg$/.test(url.pathname)) return new Response(pieceSvg(Number(url.pathname.match(/piece-(\d)/)?.[1])), { headers: { "Content-Type": "image/svg+xml" } });
   if (url.pathname === "/" || url.pathname === "/fits") {
+    const previousSession = request.headers.get("cookie")?.match(/(?:^|;\s*)probe_session=([^;]+)/)?.[1];
+    if (previousSession && states.get(previousSession)?.fixtureKey === url.search) return new Response(html, { headers: { "Content-Type": "text/html" } });
     const session = crypto.randomUUID();
     if (states.size > 100) states.delete(states.keys().next().value!);
     const next = fixture(url);
@@ -80,7 +82,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
       case "wardrobe.pageWardrobeItems": return Response.json(c.items);
       case "wardrobe.pagePieces": return Response.json(c.items.filter(i => c.memberships.some(m => m.wardrobeId === args.wardrobeId && m.itemId === i.id)));
       case "garmentPreviewData.status": return Response.json({ status: state.previews[args.itemId!] ?? "original", enabled: true, imageUrl: c.items.find(i => i.id === args.itemId)?.imageUrl ?? null });
-      case "wardrobe.itemDetails": return Response.json({ category: c.items.find(i => i.id === args.itemId)?.category ?? "", styleTags: c.items.find(i => i.id === args.itemId)?.styleTags ?? [], wearPolicy: "check", note: c.items.find(i => i.id === args.itemId)?.note ?? "", collections: c.collections.filter(collection => c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === collection._id)).map(collection => ({ id: collection._id, name: collection.name })), truncated: false });
+      case "wardrobe.itemDetails": return Response.json({ category: c.items.find(i => i.id === args.itemId)?.category ?? "", styleTags: c.items.find(i => i.id === args.itemId)?.styleTags ?? [], wearPolicy: c.items.find(i => i.id === args.itemId)?.wearPolicy ?? "check", note: c.items.find(i => i.id === args.itemId)?.note ?? "", collections: c.collections.filter(collection => !collection.archived && c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === collection._id)).map(collection => ({ id: collection._id, name: collection.name })), truncated: false });
       case "wardrobe.itemCollectionMembership": return Response.json(c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === args.wardrobeId));
       case "profile.getProfile": return Response.json({ bio: c.bio });
       case "planning.load": return Response.json(state.data);
@@ -99,7 +101,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
       if (input.name === "garmentPreviewData.restore") { state.previews[args.itemId!] = "original"; return Response.json(null); }
       if (input.name === "wardrobe.getUploadUrl") return Response.json(`http://127.0.0.1:${port}/__fixture/upload`);
       if (input.name === "candidates.createInspiration") { const id = `reference-${c.inspirations.length}`; c.inspirations.unshift({ _id: id, wardrobeId: args.wardrobeId!, category: args.category!, description: args.description!, imageUrl: "/__fixture/piece-0.svg" }); return Response.json({ id }); }
-      if (input.name === "wardrobe.saveLabels") { const item = c.items.find(i => i.id === args.itemId); if (item) { item.category = args.category; item.styleTags = (input.args as {styleTags: string[]}).styleTags; } }
+      if (input.name === "wardrobe.saveLabels") { const item = c.items.find(i => i.id === args.itemId); if (item) { item.category = args.category.trim(); item.styleTags = [...new Set((input.args as {styleTags: string[]}).styleTags.map(tag => tag.trim()).filter(Boolean))]; item.wearPolicy = (input.args as {wearPolicy: "check" | "rewear" | "after_each_wear"}).wearPolicy; } }
       else if (input.name === "wardrobe.archiveCollection") { const collection = c.collections.find(collection => collection._id === args.wardrobeId); if (collection) collection.archived = Boolean((input.args as {archived:boolean}).archived); }
       else if (input.name === "wardrobe.saveNote") { const item = c.items.find(i => i.id === args.itemId); if (item) item.note = args.note.trim(); }
       else if (input.name === "wardrobes.addItemToWardrobe") { if (!c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === args.wardrobeId)) c.memberships.push({ itemId: args.itemId!, wardrobeId: args.wardrobeId! }); }
@@ -115,6 +117,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
     }
     case "enrich-inspiration": return Response.json({ success: true });
     case "update-bio": state.catalog.bio = String(input.bio); return Response.json({ success: true });
+    case "planning_dismiss": { const outfit = state.data.suggestions.find(outfit => outfit.id === input.id); if (!outfit) return Response.json({ error: "Unknown synthetic outfit" }, { status: 404 }); outfit.status = "dismissed"; state.wrote = true; return Response.json({ ok: true }); }
     case "planning_accept": state.data.suggestions[0]!.status = "planned"; return Response.json({ ok: true });
     case "planning_load": return state.stale && state.wrote ? Response.json({ error: "Synthetic refresh unavailable" }, { status: 503 }) : Response.json(state.data);
     case "planning_week": return Response.json({ days: sevenDays(String(input.week)).map((date, index) => ({ date, events: index === 0 ? [{ title: "Synthetic meeting", start: "09:00" }] : [], truncated: index === 0 })) });

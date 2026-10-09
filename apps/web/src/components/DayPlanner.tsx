@@ -758,15 +758,15 @@ function WeekPlanner({
               />
               Use Calendar for this update
             </label>
-            <label className="block space-y-2 text-sm">
-              City for weather (optional)
+            <div className="space-y-2 text-sm">
+              <label htmlFor="weather-city">City for weather (optional)</label>
               <Button type="button" variant="outline" disabled={busy || locating} onClick={async () => { setLocating(true); setLocationMessage(""); try { const city = await requestWeatherCity(navigator.geolocation); if (city) { setDraft(current => ({ ...current, weatherCity: city.id })); setLocationMessage(`Nearby supported city: ${city.label}. You can change it below.`); } else setLocationMessage("No supported city nearby. Choose a city or skip weather."); } catch { setLocationMessage("Location unavailable or access declined. Choose a city instead."); } finally { setLocating(false); } }}>{locating ? "Finding nearby city…" : "Use my location"}</Button>
               {locationMessage && <p role="status" className="text-sm">{locationMessage}</p>}
-              <select aria-label="City for weather (optional)" data-private className={input} value={draft.weatherCity} disabled={busy} onChange={event => setDraft(current => ({ ...current, weatherCity: event.target.value }))}>
+              <select id="weather-city" aria-label="City for weather (optional)" data-private className={input} value={draft.weatherCity} disabled={busy} onChange={event => setDraft(current => ({ ...current, weatherCity: event.target.value }))}>
                 <option value="">Skip weather</option>
                 {weatherCities.map(city => <option key={city.id} value={city.id}>{city.label}</option>)}
               </select>
-            </label>
+            </div>
             <p className="text-sm">Optional forecast uses approximate city coordinates. Location stays on this device; you can choose a city or skip weather.</p>
             <p className="text-xs"><a className="underline" href="https://api.met.no/">Data from MET Norway</a> and <a className="underline" href="https://www.geonames.org/">GeoNames city data</a>, <a className="underline" href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Coordinates rounded; forecast periods summarized into city-local days.</p>
             {data?.inventoryTruncated && (

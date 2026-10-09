@@ -56,7 +56,7 @@ test("capture: a delayed full-fit try-on retains intent without adding owned pie
   await page.getByRole("menuitem", { name: "Try on outfit", exact: true }).click();
   await page.getByRole("button", { name: "Choose photos", exact: true }).click();
   await (await chooser).setFiles(photo);
-  await expect(page.getByRole("button", { name: "Add outfit", exact: true })).toBeDisabled();
+  await expect(page.locator("button[aria-haspopup=\"menu\"]")).toBeDisabled();
   await expect(page.getByRole("heading", { name: "Strong closet fit", exact: true })).toBeVisible();
   const state = await page.request.get("/__fixture/state").then(r => r.json());
   expect(state.calls.find((call: { operation: string }) => call.operation === "try-on").input.scope).toBe("full_fit");

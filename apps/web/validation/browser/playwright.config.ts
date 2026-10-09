@@ -8,5 +8,5 @@ export default defineConfig({
   outputDir: resolve("../../output/playwright/results"),
   reporter: [["list"], ["json", { outputFile: resolve("../../output/playwright/results.json") }]],
   use: { baseURL: `http://127.0.0.1:${port}`, viewport: { width: 1100, height: 800 }, locale: "en-US", timezoneId: "America/New_York", trace: "retain-on-failure", screenshot: "only-on-failure", serviceWorkers: "block", ...(process.env.PLAYWRIGHT_EXECUTABLE_PATH ? { launchOptions: { executablePath: process.env.PLAYWRIGHT_EXECUTABLE_PATH } } : {}), ...(process.env.PLAYWRIGHT_CHANNEL ? { channel: process.env.PLAYWRIGHT_CHANNEL } : {}) },
-  webServer: { command: "bun run validation/browser/server.ts", cwd: process.cwd(), url: `http://127.0.0.1:${port}/health`, reuseExistingServer: false, timeout: 45_000 },
+  webServer: { command: "bun run validation/browser/server.ts", cwd: process.cwd(), url: `http://127.0.0.1:${port}/health`, reuseExistingServer: process.env.PROBE_REUSE_SERVER === "1", timeout: 45_000 },
 });

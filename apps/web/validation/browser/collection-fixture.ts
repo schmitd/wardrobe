@@ -33,7 +33,7 @@ export function collectionFixture() {
       imageUrl: `/__fixture/piece-${i}.svg`,
       analysisStatus: "ready",
       createdAt: i,
-    })) as WardrobeItem[],
+    })) as (WardrobeItem & { wearPolicy?: "check" | "rewear" | "after_each_wear" })[],
     collections: [
       {
         _id: "work",

@@ -4,7 +4,7 @@ import { InferenceService } from "../../services/InferenceService";
 import { everydayOutfits } from "../planningFallback";
 import { forecastAdvice, type CityForecast } from "../../services/PlanningWeatherService";
 import { RequestFailure } from "../errors";
-import { needsPreparation, wearPolicy } from "../wearPlanning";
+import { clothingSlot, needsPreparation, wearPolicy } from "../wearPlanning";
 import { outfitText } from "../../lib/outfitText";
 
 export type PlanningSource = {
@@ -134,8 +134,12 @@ export const recommendWeek = ({
             if (needsPreparation(piece, data.wearHistory ?? []) || (wearPolicy(piece) === "after_each_wear" && weekUse.has(id))) throw new Error("Piece needs user preparation");
             weekUse.add(id);
           }
-          const signature = [...outfit.itemIds].sort().join("|");
-          if (signatures.has(signature) && data.items.length > outfit.itemIds.length) throw new Error("Repeated outfit despite alternatives");
+          const clothing = data.items.filter(piece => outfit.itemIds.includes(piece.id) && clothingSlot(piece.category));
+          const signature = clothing.map(piece => piece.id).sort().join("|");
+          const eligibleAlternative = data.items.some(piece =>
+            !outfit.itemIds.includes(piece.id) && clothing.some(selected => clothingSlot(selected.category) === clothingSlot(piece.category)) &&
+            !needsPreparation(piece, data.wearHistory ?? []) && (wearPolicy(piece) !== "after_each_wear" || !weekUse.has(piece.id)));
+          if (signature && signatures.has(signature) && eligibleAlternative) throw new Error("Repeated clothing despite available alternatives");
           signatures.add(signature);
           return {
             ...outfit,

@@ -4,7 +4,7 @@ import { recommendWeek } from "./planning";
 import { InferenceService } from "../../services/InferenceService";
 const days = [{ date: "2026-09-28", description: "", calendar: null }, { date: "2026-09-29", description: "Client meeting", calendar: null }];
 const data = { items: [{ id: "own", category: "Shirt", description: "Cotton", note: "" }], plans: [], bio: "", history: [], suggestions: [], inventoryTruncated: false };
-const outfit = (date: string) => ({ date, title: "Everyday", rationale: "A cotton layer", itemIds: ["own"], missing: ["Bottom"] });
+const outfit = (date: string) => ({ date, title: "Everyday", rationale: "A cotton layer", itemIds: ["piece_1"], missing: ["Bottom"] });
 const run = (outfits: unknown) => Effect.runPromise(recommendWeek({ data, days, timezone: "UTC" }).pipe(Effect.provideService(InferenceService, {
   generateContent: () => Effect.succeed({ response: { text: () => JSON.stringify({ outfits }) } }),
   embedContent: () => Effect.die("Unexpected embedding"), batchEmbedContents: () => Effect.die("Unexpected embedding"), transcribe: () => Effect.die("Unexpected transcription"),
