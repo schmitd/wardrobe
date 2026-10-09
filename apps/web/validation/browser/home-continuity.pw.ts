@@ -65,16 +65,20 @@ test("an interrupted guest import is partitioned by account and resumes only for
 
 test("delayed auth has guest escape; account switch clears private Home state before next account loads", async ({ page }) => {
   await page.addInitScript(() => { window.fixtureAuth = {isLoaded:false,isSignedIn:false,userId:null}; });
+  await page.clock.install();
   await page.goto("/?scenario=home-continuity");
-  await expect(page.getByText("Restoring your session…", { exact: true })).toBeVisible();
+  await expect(page.locator("[data-home-shell]")).toBeVisible();
   await expect(page.locator("[data-wardrobe-item-id]")).toHaveCount(0);
+  await page.clock.runFor(8100);
   await page.getByRole("button", { name: "Continue as guest" }).click();
   await expect(page.getByRole("button", { name: "Choose photo", exact: true })).toBeVisible();
   await page.evaluate(() => { window.fixtureAuth = {isLoaded:true,isSignedIn:true,userId:"synthetic-alice"}; window.dispatchEvent(new Event("fixture-auth")); });
+  await expect(page.getByRole("button", { name: "Open Overshirt details", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Use my wardrobe" }).click();
   await expect(page.getByRole("button", { name: "Open Overshirt details", exact: true })).toBeVisible();
   await page.evaluate(() => { window.fixtureAuth = {isLoaded:true,isSignedIn:true,userId:"synthetic-bob",backendPending:true}; window.dispatchEvent(new Event("fixture-auth")); });
   await expect(page.locator("[data-wardrobe-item-id]")).toHaveCount(0);
-  await expect(page.getByText("Restoring your session…", { exact: true })).toBeVisible();
+  await expect(page.locator("[data-home-shell]")).toBeVisible();
   await page.evaluate(() => { window.fixtureAuth = {isLoaded:true,isSignedIn:true,userId:"synthetic-bob"}; window.dispatchEvent(new Event("fixture-auth")); });
   await expect(page.getByRole("button", { name: "Open Bob shirt details", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open Overshirt details", exact: true })).toHaveCount(0);
@@ -97,4 +101,33 @@ test("confirmed empty Home Add a photo uses actual capture entry; failed query h
   await page.getByRole("button", { name: "Retry wardrobe", exact: true }).click();
   await expect(page.getByRole("button", { name: "Open Overshirt details", exact: true })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
+});
+
+test("bound account draft stays private during guest recovery and late foreign auth; owner reuses IDs",async({page})=>{
+ await page.clock.install();
+ await page.addInitScript(()=>{
+  window.fixtureAuth={isLoaded:false,isSignedIn:false,userId:null};
+  const dataUrl="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==";
+  sessionStorage.setItem("wardrobe.guestSnapshot.v1",JSON.stringify({version:1,createdAt:1000,importOwnerId:"synthetic-alice",bio:"A owned secret bio",sourceFit:{fileName:"fit.png",mimeType:"image/png",dataUrl,transcription:"Synthetic"},items:[{id:"guest-0",fileName:"private.png",mimeType:"image/png",dataUrl,createdItemId:"existing-piece",category:"Shirt",description:"A owned secret garment",styleTags:[]}]}));
+ });
+ await page.goto("/?scenario=home-import");
+ await expect(page.locator("[data-home-shell]")).toBeVisible();
+ await page.clock.runFor(8100);
+ await page.getByRole("button",{name:"Continue as guest"}).click();
+ await expect(page.getByRole("button",{name:"Choose photo",exact:true})).toBeVisible();
+ await expect(page.getByText("A owned secret bio")).toHaveCount(0);
+ await expect(page.getByText("A owned secret garment")).toHaveCount(0);
+ expect(await page.evaluate(()=>JSON.parse(sessionStorage.getItem("wardrobe.guestSnapshot.v1")!).importOwnerId)).toBe("synthetic-alice");
+ await page.evaluate(()=>{window.fixtureAuth={isLoaded:true,isSignedIn:true,userId:"synthetic-bob"};window.dispatchEvent(new Event("fixture-auth"));});
+ await expect(page.getByRole("button",{name:"Use my wardrobe"})).toBeVisible();
+ await expect(page.getByRole("button",{name:"Choose photo",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Use my wardrobe"}).click();
+ await expect(page.getByRole("button",{name:"Open Bob shirt details",exact:true})).toBeVisible();
+ let state=await page.request.get("/__fixture/state").then(r=>r.json());
+ expect(state.calls.some((call:{operation:string})=>["create-piece","complete-onboarding","update-bio"].includes(call.operation))).toBe(false);
+ await page.evaluate(()=>{window.fixtureAuth={isLoaded:true,isSignedIn:true,userId:"synthetic-alice"};window.dispatchEvent(new Event("fixture-auth"));});
+ await expect.poll(()=>page.evaluate(()=>sessionStorage.getItem("wardrobe.guestSnapshot.v1"))).toBeNull();
+ state=await page.request.get("/__fixture/state").then(r=>r.json());
+ expect(state.calls.filter((call:{operation:string})=>call.operation==="create-piece")).toHaveLength(0);
+ expect(state.calls.filter((call:{operation:string})=>call.operation==="complete-onboarding")).toHaveLength(1);
 });

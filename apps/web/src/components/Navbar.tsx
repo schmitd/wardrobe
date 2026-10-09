@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
-import { Sparkles, Shirt, Shield } from 'lucide-react';
+import { SignInButton, SignedIn, SignedOut, UserButton, useAuth } from '@clerk/nextjs';
+import { Sparkles, Shirt, Shield, UserRound, ArchiveRestore } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UnifiedCaptureController, UnifiedCaptureTrigger } from '@/components/UnifiedCapture';
 import { clerkAppearance } from '@/lib/clerk-appearance';
@@ -32,6 +32,8 @@ const signedInLinks = [
 
 export default function Navbar() {
   const pathname = usePathname();
+  const {isLoaded} = useAuth();
+  const accountPlaceholder = <span role="status" aria-label="Loading account" className="grid h-11 w-11 place-items-center text-[#56345c]"><UserRound aria-hidden="true" size={20} /></span>;
   return (
     <UnifiedCaptureController>
       <nav className="sticky top-0 z-40 border-b border-[var(--rack-line)] bg-[#D8C9DC]/95 backdrop-blur-sm">
@@ -62,10 +64,12 @@ export default function Navbar() {
 
           <InstallLint />
 
+          {!isLoaded && accountPlaceholder}
           <SignedIn>
             <div className="grid min-h-11 min-w-11 place-items-center border border-[var(--rack-line)] bg-white shadow-[2px_2px_0_var(--rack-panel-shadow)]" aria-label="Account, privacy, and sign out">
-              <UserButton userProfileProps={{ appearance: clerkAppearance }}>
+              <UserButton fallback={accountPlaceholder} userProfileProps={{ appearance: clerkAppearance }}>
                 <UserButton.MenuItems>
+                  <UserButton.Link label="Data management" href="/account/data" labelIcon={<ArchiveRestore aria-hidden="true" size={16} />} />
                   <UserButton.Link label="Privacy" href="/privacy" labelIcon={<Shield aria-hidden="true" size={16} />} />
                 </UserButton.MenuItems>
               </UserButton>

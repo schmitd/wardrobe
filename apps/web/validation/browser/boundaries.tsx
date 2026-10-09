@@ -2,16 +2,16 @@ import React, { useEffect, useState, useSyncExternalStore } from "react";
 
 // Only the standalone gallery uses these adapters. No application auth bypass exists.
 export const useUser = () => ({ isLoaded: true, isSignedIn: true, user: { id: "synthetic-alice", externalAccounts: [], createExternalAccount: async () => { throw new Error("External authentication is outside this fixture"); } } });
-type FixtureAuth = { isLoaded:boolean; isSignedIn:boolean; userId:string|null; backendPending?:boolean };
+type FixtureAuth = { isLoaded:boolean; isSignedIn:boolean; userId:string|null; backendPending?:boolean; backendUnavailable?:boolean };
 declare global { interface Window { fixtureAuth?:FixtureAuth } }
 const defaultAuth:FixtureAuth = {isLoaded:true,isSignedIn:true,userId:"synthetic-alice"};
 const readAuth = () => window.fixtureAuth ?? defaultAuth;
 export const useAuth = () => useSyncExternalStore(listener => { window.addEventListener("fixture-auth",listener); return () => window.removeEventListener("fixture-auth",listener); }, readAuth);
-export const useConvexAuth = () => { const auth = useAuth(); return {isLoading:!auth.isLoaded || Boolean(auth.backendPending),isAuthenticated:auth.isSignedIn && !auth.backendPending}; };
-export const SignedIn = ({ children }: { children: React.ReactNode }) => <>{children}</>;
-export const SignedOut = () => null;
-export const SignInButton = SignedIn;
-export const SignUpButton = SignedIn;
+export const useConvexAuth = () => { const auth = useAuth(); return {isLoading:!auth.isLoaded || Boolean(auth.backendPending),isAuthenticated:auth.isLoaded && auth.isSignedIn && !auth.backendPending && !auth.backendUnavailable}; };
+export const SignedIn = ({ children }: { children: React.ReactNode }) => { const auth=useAuth(); return auth.isLoaded && auth.isSignedIn ? <>{children}</> : null; };
+export const SignedOut = ({ children }: { children: React.ReactNode }) => { const auth=useAuth(); return auth.isLoaded && !auth.isSignedIn ? <>{children}</> : null; };
+export const SignInButton = ({children}:{children:React.ReactNode}) => <>{children}</>;
+export const SignUpButton = SignInButton;
 export const analyzeGuestFitCheckAction = async () => ({ kind: "error" as const, message: "Synthetic analysis unavailable. Retry or sign in." });
 export const UserButton = Object.assign(() => <span aria-label="Synthetic account">D</span>, { MenuItems: () => null, Link: () => null });
 export const usePathname = () => useSyncExternalStore(listener => { window.addEventListener("fixture-navigation",listener); return () => window.removeEventListener("fixture-navigation",listener); }, () => location.pathname);

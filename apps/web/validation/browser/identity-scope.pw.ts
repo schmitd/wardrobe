@@ -52,3 +52,24 @@ test("account switch and logout dispose persistent notices and Undo actions", as
   await page.evaluate(() => { window.fixtureAuth={isLoaded:true,isSignedIn:false,userId:null}; window.dispatchEvent(new Event("fixture-auth")); });
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
+
+test("same-owner backend confirmation loss cancels camera and prevents stale picker uploads", async ({page})=>{
+ await cameraFixture(page,"pending");
+ await page.goto("/?scenario=home-import");
+ await page.getByRole("button",{name:"Add outfit",exact:true}).click();
+ await expect(page.getByRole("dialog",{name:"Camera",exact:true})).toBeVisible();
+ const oldInput=await page.locator('input[type="file"]').last().elementHandle();
+ await page.evaluate(()=>{window.fixtureAuth={isLoaded:true,isSignedIn:true,userId:"synthetic-alice",backendPending:true};window.dispatchEvent(new Event("fixture-auth"));});
+ await expect(page.getByRole("dialog")).toHaveCount(0);
+ await expect(page.getByRole("button",{name:"Add outfit",exact:true})).toBeDisabled();
+ if(oldInput) await oldInput.evaluate(node=>node.dispatchEvent(new Event("change",{bubbles:true})));
+ const state=await page.request.get("/__fixture/state").then(r=>r.json());
+ expect(state.calls.filter((call:{operation:string})=>["upload-url","create-piece","daily-fit"].includes(call.operation))).toHaveLength(0);
+ await page.evaluate(()=>{window.fixtureAuth={isLoaded:true,isSignedIn:true,userId:"synthetic-alice",backendUnavailable:true};window.dispatchEvent(new Event("fixture-auth"));});
+ await expect(page.getByRole("alert")).toContainText("could not be confirmed");
+ await expect(page.getByRole("button",{name:"Retry connection"})).toBeVisible();
+ await page.evaluate(()=>{window.fixtureAuth={isLoaded:true,isSignedIn:true,userId:"synthetic-alice"};window.dispatchEvent(new Event("fixture-auth"));});
+ await page.getByRole("button",{name:"Add outfit",exact:true}).click();
+ await expect(page.getByRole("dialog",{name:"Camera",exact:true})).toBeVisible();
+ await page.getByRole("button",{name:"Close camera"}).click();
+});

@@ -37,9 +37,14 @@ test("labels save and collection removal restores while preserving pieces",async
   await page.reload(); await page.getByRole("button",{name:"Open Personal category details",exact:true}).click(); await page.getByRole("button",{name:"Labels",exact:false}).click(); await expect(page.getByRole("textbox",{name:"Category",exact:true})).toHaveValue("Personal category"); await expect(page.getByRole("textbox",{name:"Labels, separated by commas",exact:true})).toHaveValue("My label, Cotton"); await page.getByRole("button",{name:"Close",exact:true}).click();
   await page.getByRole("button",{name:"Work edit",exact:true}).click();await page.getByRole("button",{name:"Edit collection",exact:true}).click();await page.getByRole("button",{name:"Remove collection",exact:true}).click();
   await expect(page.getByText("Your pieces and photos stay in your wardrobe.",{exact:false})).toBeVisible();await page.getByRole("button",{name:"Remove collection",exact:true}).click();
+  await expect(page.getByRole("button",{name:"Work edit",exact:true})).toHaveCount(0);
+  await page.getByRole("link",{name:"Data management (synthetic account entry)"}).click();
   await expect(page.getByRole("region",{name:"Removed collections"}).getByText("Work edit")).toBeVisible();
   const before=await page.request.get("/__fixture/state").then(r=>r.json());expect(before.catalog.items).toHaveLength(4);expect(before.catalog.memberships).toHaveLength(6);
-  await page.getByRole("region",{name:"Removed collections"}).getByRole("button",{name:"Restore",exact:true}).click();await expect(page.getByRole("button",{name:"Work edit",exact:true})).toBeVisible();
+  await page.getByRole("region",{name:"Removed collections"}).getByRole("button",{name:"Restore collection",exact:true}).click();
+  await expect(page.getByText("No removed collections.")).toBeVisible();
+  await page.getByRole("link",{name:"Back to wardrobe"}).click();
+  await expect(page.getByRole("button",{name:"Work edit",exact:true})).toBeVisible();
 });
 
 

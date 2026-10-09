@@ -1,12 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, usePaginatedQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { WardrobeItem } from "@/types/wardrobe";
 import { Pencil, Plus } from "lucide-react";
+import { CollectionRailLoading, PiecesLoading } from "./WardrobeShell";
 import CollectionEnsemble from "./CollectionEnsemble";
 import WardrobeGrid, { type WardrobeGridProps } from "./WardrobeGrid";
 import ItemDetailsDrawer from "./ItemDetailsDrawer";
@@ -27,8 +28,6 @@ export default function CollectionsWorkspace({
     {},
     { initialNumItems: 12 },
   );
-  const [showRemoved, setShowRemoved] = useState(false);
-  const removed = usePaginatedQuery(api.wardrobe.pageCollections, showRemoved ? { archived: true } : "skip", { initialNumItems: 12 });
   const archive = useMutation(api.wardrobe.archiveCollection);
   const [selectedId, setSelectedId] = useState<Id<"wardrobes"> | null>(null);
   const selected = collections.results.find((c) => c._id === selectedId);
@@ -43,15 +42,41 @@ export default function CollectionsWorkspace({
     selectedId && tab === "inspiration" ? { wardrobeId: selectedId } : "skip",
     { initialNumItems: 24 },
   );
-  const [showRemovedInspiration, setShowRemovedInspiration] = useState(false);
-  const removedInspiration = usePaginatedQuery(api.wardrobe.pageInspiration, selectedId && tab === "inspiration" && showRemovedInspiration ? { wardrobeId: selectedId, removed: true } : "skip", { initialNumItems: 24 });
-  const recoveryButton = useRef<HTMLButtonElement>(null);
+  const [recovery, setRecovery] = useState<{ wardrobeId: Id<"wardrobes">; membershipId?: Id<"wardrobeMemberships"> } | null>(null);
+  const [undoBusy, setUndoBusy] = useState(false);
+  const [undoError, setUndoError] = useState("");
+  const recoveryNotice = useRef<HTMLDivElement>(null);
+  const collectionHeading = useRef<HTMLHeadingElement>(null);
+  const current = useRef(true);
+  const undoInFlight = useRef(false);
+  const undoButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => { if (undoError && !undoBusy) undoButton.current?.focus(); }, [undoError, undoBusy]);
+  const latestRecovery = useRef(recovery);
+  latestRecovery.current = recovery;
+  useEffect(() => { current.current = true; return () => { current.current = false; }; }, []);
+  useEffect(() => { if (recovery) recoveryNotice.current?.focus(); }, [recovery]);
   const setInspirationRemoved = useMutation(api.wardrobe.setInspirationRemoved);
   const changeInspiration = async (wardrobeId: Id<"wardrobes">, membershipId: Id<"wardrobeMemberships">, removed: boolean) => {
     await setInspirationRemoved({ wardrobeId, membershipId, removed });
+    if (!current.current) return;
     posthog.capture("inspiration_membership_changed", { operation: removed ? "removed" : "restored", surface: "wardrobe" });
-    if (removed) setShowRemovedInspiration(true);
-    recoveryButton.current?.focus();
+    if (removed) { setUndoError(""); setRecovery({ wardrobeId, membershipId }); }
+  };
+  const undoRemoval = async () => {
+    if (!recovery || undoInFlight.current) return;
+    const removed = recovery;
+    undoInFlight.current = true; setUndoBusy(true); setUndoError("");
+    try {
+      if (removed.membershipId) {
+        await setInspirationRemoved({ wardrobeId: removed.wardrobeId, membershipId: removed.membershipId, removed: false });
+      } else await archive({ wardrobeId: removed.wardrobeId, archived: false });
+      if (!current.current) return;
+      if (removed.membershipId) posthog.capture("inspiration_membership_changed", { operation: "restored", surface: "wardrobe" });
+      // A newer removal keeps its own recovery control while an older Undo completes.
+      setRecovery(latest => latest === removed ? null : latest);
+      if (latestRecovery.current === removed) collectionHeading.current?.focus();
+    } catch { if (current.current && latestRecovery.current === removed) setUndoError("Could not undo this removal. Please try again."); }
+    finally { undoInFlight.current = false; if (current.current) setUndoBusy(false); }
   };
   const [item, setItem] = useState<WardrobeItem | null>(null);
   const [modal, setModal] = useState<"create" | "edit" | "add" | "remove" | null>(null);
@@ -59,7 +84,6 @@ export default function CollectionsWorkspace({
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [collectionRecoveryError, setCollectionRecoveryError] = useState("");
   const create = useMutation(api.wardrobes.createWardrobe);
   const update = useMutation(api.wardrobes.updateWardrobe);
   const add = useMutation(api.wardrobes.addItemToWardrobe);
@@ -74,17 +98,6 @@ export default function CollectionsWorkspace({
       setBusy(false);
     }
   };
-  const restoreCollection = async (wardrobeId: Id<"wardrobes">) => {
-    setBusy(true);
-    setCollectionRecoveryError("");
-    try {
-      await archive({ wardrobeId, archived: false });
-    } catch {
-      setCollectionRecoveryError("Could not restore this collection. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  };
   return (
     <section
       id="collections"
@@ -92,8 +105,6 @@ export default function CollectionsWorkspace({
       className="ph-no-capture space-y-5"
     >
       <div>
-        <Button variant="ghost" onClick={() => setShowRemoved(value => !value)}>{showRemoved ? "Hide removed collections" : "Removed collections"}</Button>
-        {showRemoved && <section aria-label="Removed collections" className="space-y-2">{collectionRecoveryError && <p role="alert" className="text-sm">{collectionRecoveryError}</p>}{removed.results.map(collection => <div key={collection._id} className="flex items-center justify-between gap-3 rounded-lg border p-3" data-private><span>{collection.name}</span><Button variant="outline" disabled={busy} onClick={() => void restoreCollection(collection._id)}>Restore</Button></div>)}{removed.status === "CanLoadMore" && <Button variant="outline" onClick={() => removed.loadMore(12)}>More removed collections</Button>}{removed.status === "Exhausted" && !removed.results.length && <p>No removed collections.</p>}</section>}
         <h2 className="mb-3 text-sm font-semibold text-[#56345c]">
           Collections
         </h2>
@@ -110,6 +121,7 @@ export default function CollectionsWorkspace({
             <CollectionEnsemble pieces={grid.items} all />
             <span>All pieces</span>
           </button>
+          {collections.status === "LoadingFirstPage" && <CollectionRailLoading />}
           {collections.results.map((c) => (
             <button
               type="button"
@@ -153,8 +165,13 @@ export default function CollectionsWorkspace({
           )}
         </nav>
       </div>
+      {recovery && <div ref={recoveryNotice} tabIndex={-1} role="status" className="space-y-2 rounded-lg border border-[#241426] bg-[#e8f3ec] p-3 text-[#241426] focus:outline-2 focus:outline-offset-2 focus:outline-[#241426]">
+        <p>{recovery.membershipId ? "Inspiration removed." : "Collection removed."} Undo now, or restore later in Data management under your account.</p>
+        <div className="flex flex-wrap gap-2"><Button ref={undoButton} variant="outline" className="min-h-11" disabled={undoBusy} onClick={() => void undoRemoval()}>{undoBusy ? "Undoing…" : "Undo"}</Button><Button variant="ghost" className="min-h-11" disabled={undoBusy} onClick={() => { setRecovery(null); setUndoError(""); collectionHeading.current?.focus(); }}>Dismiss</Button></div>
+        {undoError && <p role="alert">{undoError}</p>}
+      </div>}
       <div className="collection-heading">
-        <h2 className="truncate text-2xl font-bold" data-private>
+        <h2 ref={collectionHeading} tabIndex={-1} className="truncate text-2xl font-bold" data-private>
           {selected?.name ?? (selectedId ? "Collection" : "All pieces")}
         </h2>
         <Button
@@ -208,9 +225,7 @@ export default function CollectionsWorkspace({
       {tab === "pieces" ? (
         <>
           {(selectedId ? pieces.status === "LoadingFirstPage" : loading) ? (
-            <p role="status" className="min-h-64">
-              Loading pieces…
-            </p>
+            <PiecesLoading />
           ) : selectedId && pieces.results.length === 0 ? (
             <div className="rounded-xl border border-dashed border-[#b6aabb] p-6">
               <p className="font-semibold">No pieces yet.</p>
@@ -265,14 +280,6 @@ export default function CollectionsWorkspace({
               More inspiration
             </Button>
           )}
-          <Button ref={recoveryButton} type="button" variant="ghost" className="min-h-11" aria-expanded={showRemovedInspiration} onClick={() => setShowRemovedInspiration(value => !value)}>{showRemovedInspiration ? "Hide removed inspiration" : "Removed inspiration"}</Button>
-          {showRemovedInspiration && <section aria-label="Removed inspiration" className="space-y-3">
-            <p role="status" className="text-sm">Removed inspiration stays here so you can restore it to this collection.</p>
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">{selectedId && removedInspiration.results.map(reference => <InspirationCard key={reference.membershipId} reference={reference} removed onChange={removed => changeInspiration(selectedId, reference.membershipId, removed)} />)}</div>
-            {removedInspiration.status === "LoadingFirstPage" && <p role="status">Loading removed inspiration…</p>}
-            {removedInspiration.status === "Exhausted" && !removedInspiration.results.length && <p>No removed inspiration.</p>}
-            {removedInspiration.status === "CanLoadMore" && <Button variant="outline" onClick={() => removedInspiration.loadMore(24)}>More removed inspiration</Button>}
-          </section>}
 
         </div>
       )}
@@ -303,7 +310,7 @@ export default function CollectionsWorkspace({
             >
               {error || (busy ? "Saving…" : "")}
             </div>
-            {modal === "remove" && selectedId ? <Button className="w-full" disabled={busy} onClick={() => void run(async () => { await archive({ wardrobeId: selectedId, archived: true }); setSelectedId(null); setModal(null); setShowRemoved(true); })}>Remove collection</Button> : modal !== "add" ? (
+            {modal === "remove" && selectedId ? <Button className="w-full" disabled={busy} onClick={() => void run(async () => { await archive({ wardrobeId: selectedId, archived: true }); if (!current.current) return; setSelectedId(null); setTab("pieces"); setModal(null); setUndoError(""); setRecovery({ wardrobeId: selectedId }); })}>Remove collection</Button> : modal !== "add" ? (
               <Button
                 form="collection-editor"
                 className="rack-primary-action w-full"
@@ -329,7 +336,7 @@ export default function CollectionsWorkspace({
           </>
         }
       >
-        {modal === "remove" ? <p>Your pieces and photos stay in your wardrobe. This collection can be restored from Removed collections.</p> : modal !== "add" ? (
+        {modal === "remove" ? <p>Your pieces and photos stay in your wardrobe. Restore this collection later in Data management under your account.</p> : modal !== "add" ? (
           <form
             id="collection-editor"
             className="space-y-4"

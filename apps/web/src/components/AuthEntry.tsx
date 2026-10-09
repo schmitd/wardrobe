@@ -1,21 +1,30 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
-
-/** A pending session is not evidence that the visitor is signed out. */
-export default function AuthEntry({ ready, children }: { ready: boolean; children: ReactNode }) {
-  const [continueAsGuest, setContinueAsGuest] = useState(false);
-  const [delayed, setDelayed] = useState(false);
-  useEffect(() => {
-    if (ready) return;
-    const timer = setTimeout(() => setDelayed(true), 8000);
-    return () => clearTimeout(timer);
-  }, [ready]);
-  if (ready || continueAsGuest) return children;
-  return <section className="rack-panel space-y-4" aria-label="Restoring your session">
-    <p role="status">{delayed ? "Sign-in is taking longer than expected. You can retry or continue as a guest." : "Restoring your session…"}</p>
-    <Link className="underline" href="/sign-in">Sign in</Link>
-    <button type="button" className="underline" onClick={() => setContinueAsGuest(true)}>Continue as guest</button>
-    {delayed && <button type="button" className="underline" onClick={() => window.location.reload()}>Retry sign-in</button>}
-  </section>;
+import { useGuestChoice } from "./GuestChoice";
+import WardrobeShell from "./WardrobeShell";
+export default function AuthEntry({ready,children,guest=children,phase="session",accountAvailable=false}:{ready:boolean;children:ReactNode;guest?:ReactNode;phase?:"session"|"backend"|"unavailable";accountAvailable?:boolean}) {
+  const choice = useGuestChoice();
+  const [delayedPhase,setDelayedPhase] = useState<string|null>(null);
+  const delayed = delayedPhase === phase;
+  useEffect(()=>{
+    if(ready || choice.guest) return;
+    const timer=setTimeout(()=>setDelayedPhase(phase),8000);
+    return ()=>clearTimeout(timer);
+  },[ready,choice.guest,phase]);
+  if(choice.guest) return <>
+    <section className="home-auth-recovery" aria-label="Guest mode"><p>You&apos;re browsing as a guest.</p>
+      <div className="home-auth-actions">{accountAvailable ? <button type="button" onClick={choice.useAccount}>Use my wardrobe</button> : <Link href="/sign-in">Sign in</Link>}</div>
+    </section>{guest}
+  </>;
+  if(ready) return children;
+  const unavailable=phase === "unavailable";
+  return <>
+    {(delayed || unavailable) && <section className="home-auth-recovery" aria-label="Session recovery">
+      <p role={unavailable ? "alert" : "status"}>{unavailable ? "Your session is signed in, but wardrobe access could not be confirmed." : phase === "backend" ? "Connecting to your wardrobe is taking longer than expected." : "Sign-in is taking longer than expected."}</p>
+      <div className="home-auth-actions"><button type="button" onClick={()=>window.location.reload()}>{phase === "session" ? "Retry sign-in" : "Retry connection"}</button>
+        <Link href="/sign-in">Sign in</Link><button type="button" onClick={choice.chooseGuest}>Continue as guest</button></div>
+    </section>}
+    <WardrobeShell />
+  </>;
 }

@@ -48,7 +48,7 @@ export default function InspirationCard({ reference, removed = false, onChange }
           <div className="space-y-2" onKeyDown={event => {
             if (event.key === "Escape" && !busy) { setConfirming(false); setError(""); }
           }}>
-            <p className="text-sm">Remove from this collection? You can restore it from Removed inspiration.</p>
+            <p className="text-sm">Remove from this collection? You can undo this or restore it later in Data management under your account.</p>
             <Button autoFocus type="button" variant="outline" className="min-h-11 w-full whitespace-normal" disabled={busy} onClick={() => void change(true)}>{busy ? "Removing…" : "Remove inspiration"}</Button>
             <Button type="button" variant="ghost" className="min-h-11 w-full whitespace-normal" disabled={busy} onClick={() => { setConfirming(false); setError(""); }}>Cancel</Button>
           </div>

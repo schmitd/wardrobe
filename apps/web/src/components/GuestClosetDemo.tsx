@@ -59,7 +59,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
 
   useEffect(() => {
     const snapshot = loadGuestSnapshot();
-    if (!snapshot || snapshot.items.length === 0) return;
+    if (!snapshot || snapshot.importOwnerId || snapshot.items.length === 0) return;
 
     setItems(
       snapshot.items.map((item) => ({

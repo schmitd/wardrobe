@@ -2,6 +2,9 @@
 
 import { uploadPhoto } from "@/services/photoUpload";
 
+import { useAuth } from "@clerk/nextjs";
+import { useConvexAuth } from "convex/react";
+import { useGuestChoice } from "./GuestChoice";
 import { usePathname } from 'next/navigation';
 import { useNotifications } from "./Notifications";
 import WebPhotoCamera from "./WebPhotoCamera";
@@ -121,6 +124,10 @@ export function UnifiedCaptureTrigger({ variant }: { variant: 'mobile' | 'deskto
 }
 
 export function UnifiedCaptureController({ children }: { children: ReactNode }) {
+  const auth = useAuth();
+  const backend = useConvexAuth();
+  const guestChoice = useGuestChoice();
+  const canCapture = auth.isLoaded && auth.isSignedIn && backend.isAuthenticated && !backend.isLoading && !guestChoice.guest;
   const inputRef = useRef<HTMLInputElement>(null);
   const locked = useRef(false);
   const active = useRef(true);
@@ -154,6 +161,7 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
   const tryOn = useCompatibilityCheck();
 
   const chooseIntent = (intent: CaptureIntent) => {
+    if (!canCapture) return;
     if (pending || locked.current) return;
     selectedIntentRef.current = intent;
     setCameraIntent(intent);
@@ -300,7 +308,7 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
   };
 
   return (
-    <CaptureContext.Provider value={{ pending, chooseIntent, onOpen: () => {} }}>
+    <CaptureContext.Provider value={{ pending: pending || !canCapture, chooseIntent, onOpen: () => {} }}>
       {children}
       <input ref={inputRef} type="file" aria-label="Choose photos" accept="image/*" multiple={selectedIntentRef.current === "my_wardrobe"} className="hidden" onChange={onFileChange} />
 

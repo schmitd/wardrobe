@@ -11,6 +11,7 @@ import {
   updateProfileBioAction,
 } from "@/app/actions/wardrobe";
 import { Button } from "@/components/ui/button";
+import { StyleLoading } from "./WardrobeShell";
 import TaskSheet from "@/components/TaskSheet";
 import { Textarea } from "@/components/ui/textarea";
 import { createTraceContext } from "@/lib/trace";
@@ -69,7 +70,9 @@ export default function StyleNotes() {
     }
   };
 
+  if (!isLoaded) return <StyleLoading />;
   if (!isSignedIn) return null;
+  if (profile === undefined) return <StyleLoading />;
 
   return (
     <section

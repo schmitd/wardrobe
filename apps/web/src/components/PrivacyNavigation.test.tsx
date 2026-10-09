@@ -14,6 +14,7 @@ const UserButton = Object.assign(({ children, userProfileProps }: { children: Re
   Link: ({ label, href }: { label: string; href: string }) => <a href={href}>{label}</a>,
 });
 mock.module('@clerk/nextjs', () => ({
+  useAuth:()=>({isLoaded:true,isSignedIn:signedIn,userId:signedIn?'synthetic-alice':null}),
   ClerkProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   SignedIn: ({ children }: { children: React.ReactNode }) => signedIn ? <>{children}</> : null,
   SignedOut: ({ children }: { children: React.ReactNode }) => signedIn ? null : <>{children}</>,
@@ -43,6 +44,7 @@ test('authenticated app moves Privacy to Account and preserves it after remount'
   const link = screen.getByRole('link', {name:'Privacy'});
   expect(link.closest('[aria-label="Synthetic account menu"]')).toBeTruthy();
   expect(link.getAttribute('href')).toBe('/privacy');
+  expect(screen.getByRole('link',{name:'Data management'}).getAttribute('href')).toBe('/account/data');
   expect(profileAppearance).toBe(clerkAppearance);
   view.unmount();
   render(<Layout><main>Closet</main></Layout>);

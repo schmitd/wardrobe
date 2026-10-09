@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { getFunctionName } from "convex/server";
 GlobalRegistrator.register();
 let failed = false;
-let restores = 0;
+let collectionArchived = false;
 let inspirationJourney = false;
 let inspirationRemoved = false;
 let inspirationFailure = false;
@@ -15,7 +15,7 @@ mock.module("convex/react", () => ({
   useMutation: (api: unknown) => {
     const [restored, setRestored] = useState(false);
     void restored;
-    return async (args: { removed?: boolean }) => {
+    return async (args: { removed?: boolean; archived?:boolean }) => {
       if (getFunctionName(api as never) === "wardrobe:setInspirationRemoved") {
         writes.push(args);
         if (inspirationFailure) throw new Error("Synthetic failure");
@@ -24,17 +24,17 @@ mock.module("convex/react", () => ({
         return;
       }
       if (getFunctionName(api as never) === "wardrobe:archiveCollection") {
-        restores++;
+        writes.push(args);
         if (failed) throw new Error("Synthetic restore failure");
-        removedCollection.name = "Synthetic restored collection";
-        setRestored(true);
+        collectionArchived = Boolean(args.archived);
+        setRestored(value => !value);
       }
     };
   },
   usePaginatedQuery: (api: unknown, args: { archived?: boolean } | string) => {
     if (getFunctionName(api as never) === "wardrobe:pageCollections" && typeof args === "object") {
       const restored = inspirationJourney || removedCollection.name === "Synthetic restored collection";
-      return { results: args.archived ? restored ? [] : [removedCollection] : restored ? [removedCollection] : [], status: "Exhausted", loadMore() {} };
+      return { results: args.archived ? collectionArchived ? [removedCollection] : [] : restored && !collectionArchived ? [removedCollection] : [], status: "Exhausted", loadMore() {} };
     }
     if (getFunctionName(api as never) === "wardrobe:pageInspiration" && typeof args === "object") {
       return { results: inspirationRemoved === Boolean((args as {removed?:boolean}).removed) ? [reference] : [], status: "Exhausted", loadMore() {} };
@@ -49,37 +49,19 @@ mock.module("./TaskSheet", () => ({default: ({open,children,footer}: {open:boole
 mock.module("posthog-js", () => ({default:{capture() {}}}));
 const {render,screen,fireEvent,cleanup,waitFor} = await import("@testing-library/react");
 const { default: CollectionsWorkspace } = await import("./CollectionsWorkspace");
-afterEach(() => {cleanup();failed=false;restores=0;removedCollection.name="Synthetic removed collection";inspirationJourney=false;inspirationRemoved=false;inspirationFailure=false;writes.length=0;});
+afterEach(() => {cleanup();failed=false;collectionArchived=false;removedCollection.name="Synthetic removed collection";inspirationJourney=false;inspirationRemoved=false;inspirationFailure=false;writes.length=0;});
 const props = {items:[],optimisticItems:[]} as unknown as React.ComponentProps<typeof CollectionsWorkspace>;
-test("collection Restore error is visible outside the closed task sheet; retry restores and clears error", async () => {
-  failed=true;
+test("main workspace does not mount removed-data browsers", () => {
   render(<CollectionsWorkspace {...props}/>);
-  fireEvent.click(screen.getByRole("button",{name:"Removed collections"}));
-  fireEvent.click(screen.getByRole("button",{name:"Restore"}));
-  await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("try again"));
-  expect(screen.queryByRole("dialog")).toBeNull();
-  failed=false;
-  fireEvent.click(screen.getByRole("button",{name:"Restore"}));
-  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
-  expect(restores).toBe(2);
-  expect(screen.getByRole("button",{name:"Synthetic restored collection"})).toBeTruthy();
-  expect(screen.queryByRole("button",{name:"Restore"})).toBeNull();
-});
-test("ordinary successful Restore returns collection to the rail without an error", async () => {
-  render(<CollectionsWorkspace {...props}/>);
-  fireEvent.click(screen.getByRole("button",{name:"Removed collections"}));
-  fireEvent.click(screen.getByRole("button",{name:"Restore"}));
-  await waitFor(() => expect(screen.getByRole("button",{name:"Synthetic restored collection"})).toBeTruthy());
-  expect(screen.queryByRole("alert")).toBeNull();
-  expect(restores).toBe(1);
+  expect(screen.queryByRole("button",{name:"Removed collections"})).toBeNull();
+  expect(screen.queryByRole("button",{name:"Removed inspiration"})).toBeNull();
 });
 
-test("true collections entry exposes inspiration Remove, supports Cancel/error/retry, recovery and remount", async () => {
+test("true inspiration entry supports cancel, removal failure/retry, immediate Undo error/retry and persistence", async () => {
   inspirationJourney=true;
   const view=render(<CollectionsWorkspace {...props}/>);
   fireEvent.click(screen.getByRole("button",{name:"Synthetic removed collection"}));
   fireEvent.click(screen.getByRole("button",{name:"inspiration"}));
-  expect(screen.getByRole("button",{name:"Add inspiration"})).toBeTruthy();
   fireEvent.click(screen.getByRole("button",{name:"Remove"}));
   fireEvent.click(screen.getByRole("button",{name:"Cancel"}));
   expect(writes).toEqual([]);
@@ -89,16 +71,45 @@ test("true collections entry exposes inspiration Remove, supports Cancel/error/r
   await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Try again"));
   inspirationFailure=false;
   fireEvent.click(screen.getByRole("button",{name:"Remove inspiration"}));
-  await waitFor(() => expect(screen.getByRole("button",{name:"Restore"})).toBeTruthy());
+  await waitFor(() => expect(screen.getByRole("button",{name:"Undo"})).toBeTruthy());
   expect(screen.getByText("Save a photo to begin your moodboard.")).toBeTruthy();
+  expect(document.activeElement?.textContent).toContain("Data management under your account");
   expect(writes.at(-1)).toEqual({wardrobeId:"synthetic-collection",membershipId:"synthetic-member",removed:true});
+  inspirationFailure=true;
+  fireEvent.click(screen.getByRole("button",{name:"Undo"}));
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Could not undo"));
+  inspirationFailure=false;
+  fireEvent.click(screen.getByRole("button",{name:"Undo"}));
+  await waitFor(() => expect(screen.getByRole("button",{name:"Remove"})).toBeTruthy());
+  expect(document.activeElement?.textContent).toBe("Synthetic removed collection");
+  fireEvent.click(screen.getByRole("button",{name:"Remove"}));
+  fireEvent.click(screen.getByRole("button",{name:"Remove inspiration"}));
+  await waitFor(() => expect(screen.getByRole("button",{name:"Dismiss"})).toBeTruthy());
+  fireEvent.click(screen.getByRole("button",{name:"Dismiss"}));
+  expect(screen.queryByRole("button",{name:"Undo"})).toBeNull();
   view.unmount();
   render(<CollectionsWorkspace {...props}/>);
   fireEvent.click(screen.getByRole("button",{name:"Synthetic removed collection"}));
   fireEvent.click(screen.getByRole("button",{name:"inspiration"}));
   expect(screen.queryByRole("button",{name:"Remove"})).toBeNull();
-  fireEvent.click(screen.getByRole("button",{name:"Removed inspiration"}));
-  fireEvent.click(screen.getByRole("button",{name:"Restore"}));
-  await waitFor(() => expect(screen.getByRole("button",{name:"Remove"})).toBeTruthy());
-  expect(writes.at(-1)).toEqual({wardrobeId:"synthetic-collection",membershipId:"synthetic-member",removed:false});
+  expect(screen.queryByRole("button",{name:"Removed inspiration"})).toBeNull();
+});
+
+test("collection edit entry removes collection, retains immediate Undo, then no inline archive after reload",async()=>{
+ inspirationJourney=true;
+ const view=render(<CollectionsWorkspace {...props}/>);
+ fireEvent.click(screen.getByRole("button",{name:"Synthetic removed collection"}));
+ fireEvent.click(screen.getByRole("button",{name:"Edit collection"}));
+ fireEvent.click(screen.getByRole("button",{name:"Remove collection"}));
+ expect(screen.getByText(/Restore this collection later in Data management/)).toBeTruthy();
+ fireEvent.click(screen.getByRole("button",{name:"Remove collection"}));
+ await waitFor(()=>expect(screen.getByRole("button",{name:"Undo"})).toBeTruthy());
+ expect(collectionArchived).toBe(true);expect(screen.queryByRole("button",{name:"Synthetic removed collection"})).toBeNull();
+ fireEvent.click(screen.getByRole("button",{name:"Undo"}));
+ await waitFor(()=>expect(screen.getByRole("button",{name:"Synthetic removed collection"})).toBeTruthy());
+ expect(collectionArchived).toBe(false);
+ expect(writes.at(-1)).toEqual({wardrobeId:"synthetic-collection",archived:false});
+ view.unmount();collectionArchived=true;render(<CollectionsWorkspace {...props}/>);
+ expect(screen.queryByRole("button",{name:"Removed collections"})).toBeNull();
+ expect(screen.queryByRole("button",{name:"Synthetic removed collection"})).toBeNull();
 });
