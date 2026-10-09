@@ -7,6 +7,7 @@ export default Table.make(() => Schema.Struct({
   kind: Schema.String,
   description: Schema.optionalKey(Schema.String),
   status: Schema.String,
+  archived: Schema.optionalKey(Schema.Boolean),
   moodWords: Schema.optionalKey(Schema.Array(Schema.String)),
   createdAt: Schema.Number,
   updatedAt: Schema.Number,

@@ -17,7 +17,7 @@ test("planner: adjust yesterday's outfit from history and preserve saved-but-sta
   await page.goto("/?scenario=history");
   await page.getByText("Swap a piece", { exact: true }).click();
   await page.getByRole("button", { name: "Add a piece", exact: true }).click();
-  await page.getByLabel("Add an owned piece").selectOption("piece-2");
+  await page.getByRole("region", { name: "Choose a piece" }).getByRole("button", { name: /Synthetic coat/ }).click();
   await expect(page.getByRole("dialog").getByText("Synthetic coat", { exact: true })).toBeVisible();
   await page.getByRole("listitem").filter({ hasText: "Synthetic shirt" }).getByRole("button", { name: "Remove", exact: true }).click();
   await expect(page.getByRole("dialog").getByText("Synthetic shirt", { exact: true })).toHaveCount(0);
@@ -54,6 +54,7 @@ test("capture: a delayed full-fit try-on retains intent without adding owned pie
   await page.getByRole("button", { name: "Add outfit", exact: true }).click();
   const chooser = page.waitForEvent("filechooser");
   await page.getByRole("menuitem", { name: "Try on outfit", exact: true }).click();
+  await page.getByRole("button", { name: "Choose photos", exact: true }).click();
   await (await chooser).setFiles(photo);
   await expect(page.getByRole("button", { name: "Add outfit", exact: true })).toBeDisabled();
   await expect(page.getByRole("heading", { name: "Strong closet fit", exact: true })).toBeVisible();
@@ -90,6 +91,8 @@ test("add menu connects to its trigger, supports keyboard dismissal and preserve
     await trigger.click();
     const chooser = page.waitForEvent("filechooser");
     await page.getByRole("menuitem", { name: "Add owned outfit", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Take photo", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Choose photos", exact: true }).click();
     await (await chooser).setFiles([]);
     await expect(menu).toHaveCount(0);
     await expect(trigger).toBeEnabled();

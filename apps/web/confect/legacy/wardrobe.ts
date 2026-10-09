@@ -484,8 +484,7 @@ export const applyTags = mutation({
     if (!item || item.userId !== userId) throw new Error("Not found");
 
     await ctx.db.patch(itemId, {
-      category: category ?? undefined,
-      styleTags,
+      ...(item.labelsEdited ? {} : { category: category ?? undefined, styleTags }),
       updatedAt: now(),
     });
   },
@@ -505,7 +504,7 @@ export const applyDescription = mutation({
     if (!item || item.userId !== userId) throw new Error("Not found");
 
     await ctx.db.patch(itemId, {
-      category: category ?? undefined,
+      ...(item.labelsEdited ? {} : { category: category ?? undefined }),
       description,
       updatedAt: now(),
     });
@@ -559,9 +558,9 @@ export const applyFullAnalysis = mutation({
     });
 
     await ctx.db.patch(itemId, {
-      category: category ?? undefined,
+      ...(item.labelsEdited ? {} : { category: category ?? undefined }),
       description,
-      styleTags,
+      ...(item.labelsEdited ? {} : { styleTags }),
       embedding,
       visualEmbedding,
       visualEmbeddingModel: visualEmbedding ? "gemini-embedding-2@768" : undefined,

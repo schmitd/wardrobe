@@ -26,6 +26,9 @@ export default function CollectionsWorkspace({
     {},
     { initialNumItems: 12 },
   );
+  const [showRemoved, setShowRemoved] = useState(false);
+  const removed = usePaginatedQuery(api.wardrobe.pageCollections, showRemoved ? { archived: true } : "skip", { initialNumItems: 12 });
+  const archive = useMutation(api.wardrobe.archiveCollection);
   const [selectedId, setSelectedId] = useState<Id<"wardrobes"> | null>(null);
   const selected = collections.results.find((c) => c._id === selectedId);
   const [tab, setTab] = useState<"pieces" | "inspiration">("pieces");
@@ -40,7 +43,7 @@ export default function CollectionsWorkspace({
     { initialNumItems: 24 },
   );
   const [item, setItem] = useState<WardrobeItem | null>(null);
-  const [modal, setModal] = useState<"create" | "edit" | "add" | null>(null);
+  const [modal, setModal] = useState<"create" | "edit" | "add" | "remove" | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
@@ -66,6 +69,8 @@ export default function CollectionsWorkspace({
       className="ph-no-capture space-y-5"
     >
       <div>
+        <Button variant="ghost" onClick={() => setShowRemoved(value => !value)}>{showRemoved ? "Hide removed collections" : "Removed collections"}</Button>
+        {showRemoved && <section aria-label="Removed collections" className="space-y-2">{removed.results.map(collection => <div key={collection._id} className="flex items-center justify-between gap-3 rounded-lg border p-3" data-private><span>{collection.name}</span><Button variant="outline" disabled={busy} onClick={() => void run(async () => { await archive({ wardrobeId: collection._id, archived: false }); })}>Restore</Button></div>)}{removed.status === "CanLoadMore" && <Button variant="outline" onClick={() => removed.loadMore(12)}>More removed collections</Button>}{removed.status === "Exhausted" && !removed.results.length && <p>No removed collections.</p>}</section>}
         <h2 className="mb-3 text-sm font-semibold text-[#56345c]">
           Collections
         </h2>
@@ -279,7 +284,7 @@ export default function CollectionsWorkspace({
             ? "New collection"
             : modal === "edit"
               ? "Edit collection"
-              : "Add from your wardrobe"
+              : modal === "remove" ? "Remove collection" : "Add from your wardrobe"
         }
         footer={
           <>
@@ -289,7 +294,7 @@ export default function CollectionsWorkspace({
             >
               {error || (busy ? "Saving…" : "")}
             </div>
-            {modal !== "add" ? (
+            {modal === "remove" && selectedId ? <Button className="w-full" disabled={busy} onClick={() => void run(async () => { await archive({ wardrobeId: selectedId, archived: true }); setSelectedId(null); setModal(null); setShowRemoved(true); })}>Remove collection</Button> : modal !== "add" ? (
               <Button
                 form="collection-editor"
                 className="rack-primary-action w-full"
@@ -315,7 +320,7 @@ export default function CollectionsWorkspace({
           </>
         }
       >
-        {modal !== "add" ? (
+        {modal === "remove" ? <p>Your pieces and photos stay in your wardrobe. This collection can be restored from Removed collections.</p> : modal !== "add" ? (
           <form
             id="collection-editor"
             className="space-y-4"
@@ -349,6 +354,7 @@ export default function CollectionsWorkspace({
               });
             }}
           >
+            {modal === "edit" && <Button type="button" variant="ghost" disabled={busy} onClick={() => setModal("remove")}>Remove collection</Button>}
             <label className="block space-y-2">
               Collection name
               <input

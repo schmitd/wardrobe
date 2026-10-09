@@ -29,7 +29,13 @@
       "@convex/*": [
         "./convex/*"
       ]
-    }
+    },
+    "types": [
+      "bun",
+      "node",
+      "react",
+      "react-dom"
+    ]
   },
   "include": [
     "next-env.d.ts",

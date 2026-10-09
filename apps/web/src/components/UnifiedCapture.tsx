@@ -3,6 +3,9 @@
 import { uploadPhoto } from "@/services/photoUpload";
 
 import Link from 'next/link';
+import TaskSheet from "./TaskSheet";
+import WebPhotoCamera from "./WebPhotoCamera";
+import { Button } from "./ui/button";
 import { ChangeEvent, createContext, useContext, useRef, useState, type ReactNode } from 'react';
 import {
   Check,
@@ -129,6 +132,8 @@ export function UnifiedCaptureTrigger({ variant }: { variant: 'mobile' | 'deskto
 
 export function UnifiedCaptureController({ children }: { children: ReactNode }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const locked = useRef(false);
+  const [source, setSource] = useState<"choose" | "camera" | null>(null);
   const selectedIntentRef = useRef<CaptureIntent>('my_wardrobe');
   const [pending, setPending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -138,10 +143,10 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
   const tryOn = useCompatibilityCheck();
 
   const chooseIntent = (intent: CaptureIntent) => {
-    if (pending) return;
+    if (pending || locked.current) return;
     selectedIntentRef.current = intent;
     setToast(null);
-    inputRef.current?.click();
+    setSource("choose");
   };
 
   const completeCapture = async (capture: PendingCapture, scope: CaptureScope) => {
@@ -214,10 +219,7 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
     posthog.capture('unified_capture_completed', { intent: capture.intent, scope });
   };
 
-  const onFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file || pending) return;
+  const processFile = async (file: File) => {
     const intent = selectedIntentRef.current;
     if (!file.type.startsWith('image/')) {
       setToast({ message: 'Choose a photo to continue.', error: true });
@@ -253,13 +255,30 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
       return;
     }
 
-    void completeCapture(outcome.success, outcome.success.route.scope);
+    await completeCapture(outcome.success, outcome.success.route.scope);
   };
+
+  const submitPhotos = async (files: File[]) => {
+    if (locked.current || pending || !files.length) return;
+    if (files.length > 8) { setToast({ message: "Choose up to 8 photos at a time.", error: true }); return; }
+    locked.current = true; setSource(null);
+    try { for (const file of files) await processFile(file); }
+    finally { locked.current = false; setPending(false); }
+  };
+  const onFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []); event.target.value = "";
+    void submitPhotos(files);
+  };
+  const choosePhotos = () => { setSource(null); inputRef.current?.click(); };
 
   return (
     <CaptureContext.Provider value={{ pending, chooseIntent, onOpen: () => setToast(null) }}>
       {children}
-      <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={onFileChange} />
+      <input ref={inputRef} type="file" aria-label="Choose photos" accept="image/*" multiple={selectedIntentRef.current === "my_wardrobe"} className="hidden" onChange={onFileChange} />
+
+      <TaskSheet open={source !== null} onOpenChange={open => { if (!open) setSource(null); }} title={source === "camera" ? "Take photo" : "Add photos"}>
+        {source === "camera" ? <WebPhotoCamera onPhoto={photo => void submitPhotos([photo])} onChoosePhotos={choosePhotos} /> : <div className="space-y-3"><Button className="min-h-12 w-full" onClick={() => setSource("camera")}>Take photo</Button><Button variant="outline" className="min-h-12 w-full" onClick={choosePhotos}>Choose photos</Button><p className="text-sm text-[#685e70]">{selectedIntentRef.current === "my_wardrobe" ? "Select up to 8 photos. Each is added separately." : "Choose one outfit photo."}</p></div>}
+      </TaskSheet>
 
       {pending && (status || (!tryOnOpen && tryOn.isProcessing)) && (
         <div className="rack-capture-status" role="status" aria-live="polite">

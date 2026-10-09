@@ -87,6 +87,7 @@ export const listWardrobes = query({
     return ctx.db
       .query("wardrobes")
       .withIndex("by_user_updatedAt", (q) => q.eq("userId", userId))
+      .filter(q => q.neq(q.field("archived"), true))
       .order("desc")
       .take(100);
   },

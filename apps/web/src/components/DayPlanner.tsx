@@ -25,6 +25,9 @@ import { Button } from "./ui/button";
 import TaskSheet from "./TaskSheet";
 import DayVoiceInput from "./DayVoiceInput";
 import GoogleCalendarConnect from "./GoogleCalendarConnect";
+import OwnedPiecePicker from "./OwnedPiecePicker";
+import { outfitText } from "@/lib/outfitText";
+import { requestWeatherCity } from "@/lib/weatherLocation";
 
 type Draft = {
   week: string;
@@ -80,6 +83,8 @@ function WeekPlanner({
   userId: string;
   historyDate?: string;
 }) {
+  const [locating, setLocating] = useState(false);
+  const [locationMessage, setLocationMessage] = useState("");
   const [data, setData] = useState<PlanningData | null>(null);
   const [draft, setDraft] = useState<Draft>(() => ({
     ...initial(),
@@ -489,10 +494,10 @@ function WeekPlanner({
           <>
             {pieces}
             <div className="planner-outfit-title" data-private>
-              <h4 className="text-lg font-semibold">{outfit.title}</h4>
+              <h4 className="text-lg font-semibold">{outfitText(outfit.title, [...(data?.items.map(item => item.id) ?? []), outfit.id])}</h4>
               {outfit.missing.length > 0 && (
                 <p className="text-sm">
-                  To complete or adapt: {outfit.missing.join(" · ")}
+                  To complete or adapt: {outfitText(outfit.missing.join(" · "), data?.items.map(item => item.id))}
                 </p>
               )}
             </div>
@@ -755,12 +760,14 @@ function WeekPlanner({
             </label>
             <label className="block space-y-2 text-sm">
               City for weather (optional)
-              <select data-private className={input} value={draft.weatherCity} disabled={busy} onChange={event => setDraft(current => ({ ...current, weatherCity: event.target.value }))}>
+              <Button type="button" variant="outline" disabled={busy || locating} onClick={async () => { setLocating(true); setLocationMessage(""); try { const city = await requestWeatherCity(navigator.geolocation); if (city) { setDraft(current => ({ ...current, weatherCity: city.id })); setLocationMessage(`Nearby supported city: ${city.label}. You can change it below.`); } else setLocationMessage("No supported city nearby. Choose a city or skip weather."); } catch { setLocationMessage("Location unavailable or access declined. Choose a city instead."); } finally { setLocating(false); } }}>{locating ? "Finding nearby city…" : "Use my location"}</Button>
+              {locationMessage && <p role="status" className="text-sm">{locationMessage}</p>}
+              <select aria-label="City for weather (optional)" data-private className={input} value={draft.weatherCity} disabled={busy} onChange={event => setDraft(current => ({ ...current, weatherCity: event.target.value }))}>
                 <option value="">Skip weather</option>
                 {weatherCities.map(city => <option key={city.id} value={city.id}>{city.label}</option>)}
               </select>
             </label>
-            <p className="text-sm">Choose a supported city, or skip if yours is not listed. Used only when you request outfits. Approximate city coordinates are sent by our server to MET Norway; no device location is requested. If unavailable, use removable layers and check rain before leaving.</p>
+            <p className="text-sm">Optional forecast uses approximate city coordinates. Location stays on this device; you can choose a city or skip weather.</p>
             <p className="text-xs"><a className="underline" href="https://api.met.no/">Data from MET Norway</a> and <a className="underline" href="https://www.geonames.org/">GeoNames city data</a>, <a className="underline" href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Coordinates rounded; forecast periods summarized into city-local days.</p>
             {data?.inventoryTruncated && (
               <p className="text-sm">
@@ -779,9 +786,9 @@ function WeekPlanner({
         )}
         {view === "why" && outfit && (
           <div data-private className="space-y-5 text-sm leading-relaxed">
-            <p className="whitespace-pre-line">{outfit.rationale}</p>
+            <p className="whitespace-pre-line">{outfitText(outfit.rationale, [...(data?.items.map(item => item.id) ?? []), outfit.id])}</p>
             <h3 className="font-semibold">Context used</h3>
-            <p>{outfit.context.join(" · ")}</p>
+            <p>{outfitText(outfit.context.join(" · "), [...(data?.items.map(item => item.id) ?? []), outfit.id])}</p>
           </div>
         )}
         {view === "swap" && outfit && (
@@ -836,41 +843,7 @@ function WeekPlanner({
                 Add a piece
               </Button>
             )}
-            {swap && (
-              <label className="block space-y-2">
-                {swap === "add"
-                  ? "Add an owned piece"
-                  : "Replace with an owned piece"}
-                <select
-                  data-private
-                  className={input}
-                  value=""
-                  disabled={busy}
-                  onChange={(event) => {
-                    if (event.target.value)
-                      void update({
-                        operation: "planning_edit",
-                        id: outfit.id,
-                        itemIds:
-                          swap === "add"
-                            ? [...outfit.itemIds, event.target.value]
-                            : outfit.itemIds.map((id) =>
-                                id === swap ? event.target.value : id,
-                              ),
-                      });
-                  }}
-                >
-                  <option value="">Choose a piece…</option>
-                  {data?.items
-                    .filter((item) => !outfit.itemIds.includes(item.id))
-                    .map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.category}: {item.description}
-                      </option>
-                    ))}
-                </select>
-              </label>
-            )}
+            {swap && <OwnedPiecePicker items={data?.items.filter(item => !outfit.itemIds.includes(item.id)) ?? []} disabled={busy} onChoose={id => void update({ operation: "planning_edit", id: outfit.id, itemIds: swap === "add" ? [...outfit.itemIds, id] : outfit.itemIds.map(existing => existing === swap ? id : existing) })} />}
             {outfit.status === "planned" && (
               <p className="text-sm">
                 Adjust the pieces to match what you actually wore before
@@ -879,26 +852,7 @@ function WeekPlanner({
             )}
           </div>
         )}
-        {view === "dismiss" && (
-          <label className="block space-y-2 text-sm">
-            Reason
-            <select
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
-              className={input}
-            >
-              <option value="">Choose a reason…</option>
-              {[
-                "Not my style",
-                "Wrong for the occasion",
-                "Pieces unavailable",
-                "Weather mismatch",
-              ].map((value) => (
-                <option key={value}>{value}</option>
-              ))}
-            </select>
-          </label>
-        )}
+        {view === "dismiss" && <fieldset className="space-y-3"><legend className="mb-3 text-sm">Reason</legend><div className="flex flex-wrap gap-2">{["Not my style", "Wrong for the occasion", "Pieces unavailable", "Weather mismatch"].map(value => <button type="button" key={value} disabled={busy} aria-pressed={reason === value} onClick={() => setReason(value)} className={`min-h-11 rounded-full border px-4 py-2 text-sm ${reason === value ? "border-[#241426] bg-[#E4FF91]" : "bg-white"}`}>{value}</button>)}</div></fieldset>}
       </TaskSheet>
     </section>
   );

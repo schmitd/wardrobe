@@ -12,7 +12,7 @@ export const pageCollections = FunctionImpl.make(
   schema,
   spec,
   "pageCollections",
-  ({ paginationOpts }) =>
+  ({ paginationOpts, archived }) =>
     Effect.gen(function* () {
       const ctx = yield* QueryCtx;
       const { userId } = yield* CurrentUser;
@@ -20,6 +20,7 @@ export const pageCollections = FunctionImpl.make(
         ctx.db
           .query("wardrobes")
           .withIndex("by_user_updatedAt", (q) => q.eq("userId", userId))
+          .filter(q => archived ? q.eq(q.field("archived"), true) : q.neq(q.field("archived"), true))
           .order("desc")
           .paginate({
             ...paginationOpts,
@@ -150,13 +151,16 @@ export const itemDetails = FunctionImpl.make(
             const collection = yield* Effect.promise(() =>
               ctx.db.get(m.wardrobeId),
             );
-            return collection?.userId === userId
+            return collection?.userId === userId && !collection.archived
               ? { id: collection._id, name: collection.name }
               : null;
           }),
       );
       return {
         note: item.note ?? "",
+        category: item.category ?? "",
+        styleTags: item.styleTags ?? [],
+        wearPolicy: item.wearPolicy ?? "check",
         collections: collections.filter((c) => c !== null),
         truncated: memberships.length > 100,
       };
@@ -262,3 +266,21 @@ export const saveNote = FunctionImpl.make(
       return null;
     }),
 );
+
+export const saveLabels = FunctionImpl.make(schema, spec, "saveLabels", ({ itemId, category, styleTags, wearPolicy, readyToWear }) => Effect.gen(function* () {
+  const ctx = yield* MutationCtx; const { userId } = yield* CurrentUser;
+  const item = yield* Effect.promise(() => ctx.db.get(itemId));
+  if (!item || item.userId !== userId) return yield* new CollectionInput({ message: "This piece is no longer available." });
+  const tags = [...new Set(styleTags.map(tag => tag.trim()).filter(Boolean))];
+  if (!category.trim() || category.length > 80 || tags.length > 20 || tags.some(tag => tag.length > 60)) return yield* new CollectionInput({ message: "Use a category and up to 20 short labels." });
+  yield* Effect.promise(() => ctx.db.patch(itemId, { category: category.trim(), styleTags: tags, labelsEdited: true, wearPolicy, ...(readyToWear ? { wearReadyAt: Date.now() } : {}), updatedAt: Date.now() }));
+  return null;
+}));
+export const archiveCollection = FunctionImpl.make(schema, spec, "archiveCollection", ({ wardrobeId, archived }) => Effect.gen(function* () {
+  const ctx = yield* MutationCtx; const { userId } = yield* CurrentUser;
+  const collection = yield* Effect.promise(() => ctx.db.get(wardrobeId));
+  if (!collection || collection.userId !== userId) return yield* new CollectionInput({ message: "Collection unavailable." });
+  // Keep pieces and memberships intact so restore can recover the exact collection.
+  yield* Effect.promise(() => ctx.db.patch(wardrobeId, { archived, updatedAt: Date.now() }));
+  return null;
+}));

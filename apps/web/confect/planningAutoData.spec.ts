@@ -59,6 +59,8 @@ export default GroupSpec.make()
                 category: Schema.String,
                 description: Schema.String,
                 note: Schema.String,
+                wearPolicy: Schema.optionalKey(Schema.Literals(["after_each_wear", "rewear", "check"])),
+                wearReadyAt: Schema.optionalKey(Schema.Number),
               }),
             ),
             plans: Schema.Array(
@@ -71,6 +73,7 @@ export default GroupSpec.make()
             ),
             bio: Schema.String,
             history: Schema.Array(Schema.String),
+            wearHistory: Schema.Array(Schema.Struct({ date: Schema.String, itemIds: Schema.Array(itemId), wornAt: Schema.Number })),
             inventoryTruncated: Schema.Boolean,
             suggestions: Schema.Array(
               Schema.Struct({

@@ -74,6 +74,8 @@ export default function ItemDetailsDrawer({
     { initialNumItems: 30 },
   );
   const saveNote = useMutation(api.wardrobe.saveNote);
+  const saveLabels = useMutation(api.wardrobe.saveLabels);
+  const [labelDraft, setLabelDraft] = useState<{category: string; tags: string; wearPolicy: "after_each_wear" | "rewear" | "check"; ready: boolean} | null>(null);
   const preview = useQuery(api.garmentPreviewData.status, { itemId });
   const generatePreview = useMutation(api.garmentPreviewData.request);
   const [draft, setDraft] = useState<string | null>(null);
@@ -140,7 +142,7 @@ export default function ItemDetailsDrawer({
     }
   };
   const labels = [
-    ...new Set([item.category, ...(item.styleTags ?? [])].filter(Boolean)),
+    ...new Set([details?.category ?? item.category, ...(details?.styleTags ?? item.styleTags ?? [])].filter(Boolean)),
   ];
   const collectionNames =
     details === undefined
@@ -363,23 +365,13 @@ export default function ItemDetailsDrawer({
           </Button>
         </>
       )}
-      {view === "labels" && (
-        <section
-          aria-label="Item labels"
-          data-private
-          className="flex flex-wrap gap-2"
-        >
-          {labels.map((label) => (
-            <span
-              key={label}
-              className="border border-[#d8c9dc] bg-[#f7f3f5] px-3 py-2 text-sm"
-            >
-              {label}
-            </span>
-          ))}
-          {!labels.length && <p>Labels will appear after analysis.</p>}
-        </section>
-      )}
+      {view === "labels" && <form id="item-label-editor" className="space-y-4" data-private onSubmit={event => { event.preventDefault(); const value = labelDraft ?? { category: details?.category ?? item.category ?? "", tags: (details?.styleTags ?? item.styleTags ?? []).join(", "), wearPolicy: details?.wearPolicy ?? "check", ready: false }; void run(async () => { await saveLabels({ itemId, category: value.category, styleTags: value.tags.split(","), wearPolicy: value.wearPolicy, readyToWear: value.ready }); setLabelDraft(null); }, "Labels saved."); }}>
+        <label className="block space-y-2">Category<input aria-label="Category" maxLength={80} disabled={busy || !details} className="w-full rounded-lg border p-3" value={labelDraft?.category ?? details?.category ?? item.category ?? ""} onChange={event => setLabelDraft(current => ({ category: event.target.value, tags: current?.tags ?? (details?.styleTags ?? item.styleTags ?? []).join(", "), wearPolicy: current?.wearPolicy ?? details?.wearPolicy ?? "check", ready: current?.ready ?? false }))} /></label>
+        <label className="block space-y-2">Labels, separated by commas<input aria-label="Labels, separated by commas" maxLength={1200} disabled={busy || !details} className="w-full rounded-lg border p-3" value={labelDraft?.tags ?? (details?.styleTags ?? item.styleTags ?? []).join(", ")} onChange={event => setLabelDraft(current => ({ category: current?.category ?? details?.category ?? item.category ?? "", tags: event.target.value, wearPolicy: current?.wearPolicy ?? details?.wearPolicy ?? "check", ready: current?.ready ?? false }))} /></label>
+        <fieldset><legend className="mb-2 text-sm">Between wears</legend><div className="space-y-2">{([{value:"check",label:"I’ll check before wearing again"},{value:"after_each_wear",label:"Wash or prepare after each wear"},{value:"rewear",label:"Usually suitable to rewear"}] as const).map(option => <button key={option.value} type="button" disabled={busy || !details} aria-pressed={(labelDraft?.wearPolicy ?? details?.wearPolicy ?? "check") === option.value} className={`min-h-11 w-full rounded-lg border p-3 text-left ${(labelDraft?.wearPolicy ?? details?.wearPolicy ?? "check") === option.value ? "bg-[#E4FF91]" : "bg-white"}`} onClick={() => setLabelDraft(current => ({ category: current?.category ?? details?.category ?? item.category ?? "", tags: current?.tags ?? (details?.styleTags ?? item.styleTags ?? []).join(", "), wearPolicy: option.value, ready: current?.ready ?? false }))}>{option.label}</button>)}</div></fieldset>
+        <label className="flex items-center gap-3 text-sm"><input type="checkbox" checked={labelDraft?.ready ?? false} disabled={busy || !details} onChange={event => setLabelDraft(current => ({ category: current?.category ?? details?.category ?? item.category ?? "", tags: current?.tags ?? (details?.styleTags ?? item.styleTags ?? []).join(", "), wearPolicy: current?.wearPolicy ?? details?.wearPolicy ?? "check", ready: event.target.checked }))} />I’ve checked this piece; it’s ready to wear.</label>
+        <Button type="submit" disabled={busy || !details} className="w-full">{busy ? "Saving…" : "Save labels"}</Button>
+      </form>}
       {view === "collections" && (
         <section
           aria-label="Item collections"
@@ -429,24 +421,7 @@ export default function ItemDetailsDrawer({
           }}
         />
       )}
-      {view === "remove" && (
-        <label className="block space-y-2 text-sm">
-          Reason for removing this piece
-          <select
-            data-private
-            value={removeReason}
-            disabled={busy}
-            onChange={(event) => setRemoveReason(event.target.value)}
-            className="block min-h-11 w-full rounded-md border border-[#b6aabb] bg-white px-3"
-          >
-            <option value="">Choose a reason…</option>
-            <option value="Disliked item style">Disliked style</option>
-            <option value="Item damaged/lost">Damaged or lost</option>
-            <option value="Poor fit">Poor fit</option>
-            <option value="Other">Other</option>
-          </select>
-        </label>
-      )}
+      {view === "remove" && <fieldset className="space-y-3" data-private><legend>Reason for removing this piece</legend>{["Disliked item style", "Item damaged/lost", "Poor fit", "Other"].map(reason => <button key={reason} type="button" disabled={busy} aria-pressed={removeReason === reason} onClick={() => setRemoveReason(reason)} className={`min-h-11 w-full rounded-lg border p-3 text-left ${removeReason === reason ? "bg-[#E4FF91]" : "bg-white"}`}>{reason}</button>)}</fieldset>}
     </TaskSheet>
   );
 }

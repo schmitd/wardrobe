@@ -167,15 +167,18 @@ const load = FunctionImpl.make(
         loadPlanningData(ctx, userId, { week, context }),
       );
       return {
-        items: data.items.map(({ id, category, description, note }) => ({
+        items: data.items.map(({ id, category, description, note, wearPolicy, wearReadyAt }) => ({
           id,
           category,
           description,
           note,
+          ...(wearPolicy ? { wearPolicy } : {}),
+          ...(wearReadyAt ? { wearReadyAt } : {}),
         })),
         plans: data.plans,
         bio: data.bio,
         history: data.history,
+        wearHistory: data.wearHistory,
         inventoryTruncated: data.inventoryTruncated,
         suggestions: data.suggestions.map(
           ({ date, status, itemIds, reason }) => ({

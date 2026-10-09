@@ -333,3 +333,26 @@ test("automatic calendar recall includes older collection pieces beyond the rece
   expect(data.plans.find((p) => p.id === work)?.itemIds).toEqual([item]);
   expect(data.items.some((i) => i.note === "Private")).toBe(false);
 });
+
+test("edited labels persist, reject foreign writes and survive later analysis", async () => {
+  const {alice,bob,item} = await fixture();
+  const edited = {itemId:item,category:"Trousers",styleTags:["Personal label","Personal label","  Work  "],wearPolicy:"after_each_wear" as const,readyToWear:true};
+  await expect(bob.mutation(api.wardrobe.saveLabels,edited)).rejects.toThrow();
+  await alice.mutation(api.wardrobe.saveLabels,edited);
+  await alice.mutation(api.wardrobe.applyTags,{itemId:item,category:"AI category",styleTags:["AI label"]});
+  await alice.mutation(api.wardrobe.applyDescription,{itemId:item,category:"AI category",description:"New description"});
+  const details=await alice.query(api.wardrobe.itemDetails,{itemId:item});
+  expect(details?.category).toBe("Trousers");expect(details?.styleTags).toEqual(["Personal label","Work"]);expect(details?.wearPolicy).toBe("after_each_wear");
+  await expect(alice.mutation(api.wardrobe.saveLabels,{...edited,styleTags:Array.from({length:21},(_,i)=>String(i))})).rejects.toThrow();
+});
+test("collection removal is owned, recoverable and preserves pieces, blobs and membership", async () => {
+  const {t,alice,bob,work,item,storageId}=await fixture();
+  await expect(bob.mutation(api.wardrobe.archiveCollection,{wardrobeId:work,archived:true})).rejects.toThrow();
+  await alice.mutation(api.wardrobe.archiveCollection,{wardrobeId:work,archived:true});
+  const options={paginationOpts:{numItems:24,cursor:null}};
+  expect((await alice.query(api.wardrobe.pageCollections,options)).page.some(collection=>collection._id===work)).toBe(false);
+  expect((await alice.query(api.wardrobe.pageCollections,{...options,archived:true})).page.some(collection=>collection._id===work)).toBe(true);
+  await t.run(async ctx=>{expect(await ctx.db.get(item)).not.toBeNull();expect(await ctx.storage.getUrl(storageId)).not.toBeNull();expect((await ctx.db.query("wardrobeMemberships").withIndex("by_wardrobe",q=>q.eq("wardrobeId",work)).take(10)).length).toBeGreaterThan(0);});
+  await alice.mutation(api.wardrobe.archiveCollection,{wardrobeId:work,archived:false});
+  expect((await alice.query(api.wardrobe.pageCollections,options)).page.some(collection=>collection._id===work)).toBe(true);
+});

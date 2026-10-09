@@ -29,6 +29,7 @@ export const pageCollectionsSpec = FunctionSpec.publicQuery({
   name: "pageCollections",
   args: () => ({
     paginationOpts: paginationOptions,
+    archived: Schema.optional(Schema.Boolean),
   }),
   returns: () =>
     Schema.Struct({
@@ -109,6 +110,9 @@ export const itemDetailsSpec = FunctionSpec.publicQuery({
     Schema.NullOr(
       Schema.Struct({
         note: Schema.String,
+        category: Schema.String,
+        styleTags: Schema.Array(Schema.String),
+        wearPolicy: Schema.Literals(["after_each_wear", "rewear", "check"]),
         truncated: Schema.Boolean,
         collections: Schema.Array(
           Schema.Struct({ id: Id("wardrobes"), name: Schema.String }),
@@ -129,4 +133,11 @@ export const saveNoteSpec = FunctionSpec.publicMutation({
   args: () => ({ itemId: Id("wardrobeItems"), note: Schema.String }),
   returns: () => Schema.Null,
   error: () => CollectionInput,
+}).middleware(RequireUser);
+
+export const saveLabelsSpec = FunctionSpec.publicMutation({
+  name: "saveLabels", args: () => ({ itemId: Id("wardrobeItems"), category: Schema.String, styleTags: Schema.Array(Schema.String), wearPolicy: Schema.Literals(["after_each_wear", "rewear", "check"]), readyToWear: Schema.optional(Schema.Boolean) }), returns: () => Schema.Null, error: () => CollectionInput,
+}).middleware(RequireUser);
+export const archiveCollectionSpec = FunctionSpec.publicMutation({
+  name: "archiveCollection", args: () => ({ wardrobeId: Id("wardrobes"), archived: Schema.Boolean }), returns: () => Schema.Null, error: () => CollectionInput,
 }).middleware(RequireUser);

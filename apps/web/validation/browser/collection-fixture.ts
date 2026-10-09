@@ -50,7 +50,7 @@ export function collectionFixture() {
         name: "Saved ideas",
         description: "Shapes and textures to try",
       },
-    ],
+    ].map(collection => ({ ...collection, archived: false })),
     memberships: [
       { wardrobeId: "work", itemId: "piece-0" },
       { wardrobeId: "work", itemId: "piece-1" },

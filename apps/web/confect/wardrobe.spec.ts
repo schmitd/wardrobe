@@ -1,5 +1,5 @@
 import { FunctionSpec, GroupSpec } from "@confect/core";
-import { pageCollectionsSpec, pagePiecesSpec, pageInspirationSpec, itemDetailsSpec, itemCollectionMembershipSpec, saveNoteSpec } from "./collectionContracts";
+import { pageCollectionsSpec, pagePiecesSpec, pageInspirationSpec, itemDetailsSpec, itemCollectionMembershipSpec, saveNoteSpec, saveLabelsSpec, archiveCollectionSpec } from "./collectionContracts";
 import type * as functions from "./legacy/wardrobe";
 
 export default GroupSpec.make()
@@ -9,6 +9,8 @@ export default GroupSpec.make()
   .addFunction(itemDetailsSpec)
   .addFunction(itemCollectionMembershipSpec)
   .addFunction(saveNoteSpec)
+  .addFunction(saveLabelsSpec)
+  .addFunction(archiveCollectionSpec)
   .addFunction(FunctionSpec.convexPublicQuery<typeof functions.pageWardrobeItems>()("pageWardrobeItems"))
   .addFunction(FunctionSpec.convexPublicQuery<typeof functions.listWardrobeItems>()("listWardrobeItems"))
   .addFunction(FunctionSpec.convexPublicMutation<typeof functions.getUploadUrl>()("getUploadUrl"))

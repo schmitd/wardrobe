@@ -75,12 +75,12 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
     const args = input.args as Record<string, string>;
     const c = state.catalog;
     switch (input.query) {
-      case "mobile.plans": case "wardrobes.listWardrobes": return Response.json(c.collections);
-      case "wardrobe.pageCollections": return Response.json(c.collections.map(collection => ({ ...collection, previews: [...c.items.filter(i => c.memberships.some(m => m.wardrobeId === collection._id && m.itemId === i.id)), ...c.inspirations.filter(r => r.wardrobeId === collection._id).map(r => ({ id: r._id, imageUrl: r.imageUrl, category: r.category }))].slice(0, 3) })));
+      case "mobile.plans": case "wardrobes.listWardrobes": return Response.json(c.collections.filter(collection => !collection.archived));
+      case "wardrobe.pageCollections": return Response.json(c.collections.filter(collection => Boolean(collection.archived) === Boolean(args.archived)).map(collection => ({ ...collection, previews: [...c.items.filter(i => c.memberships.some(m => m.wardrobeId === collection._id && m.itemId === i.id)), ...c.inspirations.filter(r => r.wardrobeId === collection._id).map(r => ({ id: r._id, imageUrl: r.imageUrl, category: r.category }))].slice(0, 3) })));
       case "wardrobe.pageWardrobeItems": return Response.json(c.items);
       case "wardrobe.pagePieces": return Response.json(c.items.filter(i => c.memberships.some(m => m.wardrobeId === args.wardrobeId && m.itemId === i.id)));
       case "garmentPreviewData.status": return Response.json({ status: state.previews[args.itemId!] ?? "original", enabled: true, imageUrl: c.items.find(i => i.id === args.itemId)?.imageUrl ?? null });
-      case "wardrobe.itemDetails": return Response.json({ note: c.items.find(i => i.id === args.itemId)?.note ?? "", collections: c.collections.filter(collection => c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === collection._id)).map(collection => ({ id: collection._id, name: collection.name })), truncated: false });
+      case "wardrobe.itemDetails": return Response.json({ category: c.items.find(i => i.id === args.itemId)?.category ?? "", styleTags: c.items.find(i => i.id === args.itemId)?.styleTags ?? [], wearPolicy: "check", note: c.items.find(i => i.id === args.itemId)?.note ?? "", collections: c.collections.filter(collection => c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === collection._id)).map(collection => ({ id: collection._id, name: collection.name })), truncated: false });
       case "wardrobe.itemCollectionMembership": return Response.json(c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === args.wardrobeId));
       case "profile.getProfile": return Response.json({ bio: c.bio });
       case "planning.load": return Response.json(state.data);
@@ -99,11 +99,13 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
       if (input.name === "garmentPreviewData.restore") { state.previews[args.itemId!] = "original"; return Response.json(null); }
       if (input.name === "wardrobe.getUploadUrl") return Response.json(`http://127.0.0.1:${port}/__fixture/upload`);
       if (input.name === "candidates.createInspiration") { const id = `reference-${c.inspirations.length}`; c.inspirations.unshift({ _id: id, wardrobeId: args.wardrobeId!, category: args.category!, description: args.description!, imageUrl: "/__fixture/piece-0.svg" }); return Response.json({ id }); }
-      if (input.name === "wardrobe.saveNote") { const item = c.items.find(i => i.id === args.itemId); if (item) item.note = args.note.trim(); }
+      if (input.name === "wardrobe.saveLabels") { const item = c.items.find(i => i.id === args.itemId); if (item) { item.category = args.category; item.styleTags = (input.args as {styleTags: string[]}).styleTags; } }
+      else if (input.name === "wardrobe.archiveCollection") { const collection = c.collections.find(collection => collection._id === args.wardrobeId); if (collection) collection.archived = Boolean((input.args as {archived:boolean}).archived); }
+      else if (input.name === "wardrobe.saveNote") { const item = c.items.find(i => i.id === args.itemId); if (item) item.note = args.note.trim(); }
       else if (input.name === "wardrobes.addItemToWardrobe") { if (!c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === args.wardrobeId)) c.memberships.push({ itemId: args.itemId!, wardrobeId: args.wardrobeId! }); }
       else if (input.name === "wardrobes.removeItemFromWardrobe") c.memberships = c.memberships.filter(m => !(m.itemId === args.itemId && m.wardrobeId === args.wardrobeId));
       else if (input.name === "wardrobes.updateWardrobe") { const collection = c.collections.find(collection => collection._id === args.wardrobeId); if (collection) { collection.name = args.name!; collection.description = args.description ?? ""; } }
-      else if (input.name === "wardrobes.createWardrobe") { const id = `collection-${c.collections.length}`; c.collections.push({ _id: id, name: args.name!, description: args.description ?? "" }); return Response.json({ id }); }
+      else if (input.name === "wardrobes.createWardrobe") { const id = `collection-${c.collections.length}`; c.collections.push({ _id: id, name: args.name!, description: args.description ?? "", archived: false }); return Response.json({ id }); }
       return Response.json(null);
     }
     case "delete-piece": {

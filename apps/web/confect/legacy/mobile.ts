@@ -41,7 +41,7 @@ export const plans = query({
   handler: async (ctx, { paginationOpts }) => {
     const user = await getAuthenticatedUser(ctx);
     if (!user) throw new Error("Unauthorized");
-    const result = await ctx.db.query("wardrobes").withIndex("by_user_updatedAt", q => q.eq("userId", user.userId)).order("desc").paginate({ ...paginationOpts, numItems: Math.max(1, Math.min(50, paginationOpts.numItems)), maximumRowsRead: 50 });
+    const result = await ctx.db.query("wardrobes").withIndex("by_user_updatedAt", q => q.eq("userId", user.userId)).filter(q => q.neq(q.field("archived"), true)).order("desc").paginate({ ...paginationOpts, numItems: Math.max(1, Math.min(50, paginationOpts.numItems)), maximumRowsRead: 50 });
     return { ...result, page: result.page.map(plan => ({ _id: plan._id, name: plan.name, description: plan.description, moodWords: plan.moodWords, updatedAt: plan.updatedAt, items: [], inspirations: [], detailsLoaded: false })) };
   },
 });

@@ -16,6 +16,8 @@ const item = v.object({
   description: v.string(),
   imageUrl: v.union(v.string(), v.null()),
   note: v.string(),
+  wearPolicy: v.optional(v.union(v.literal("after_each_wear"), v.literal("rewear"), v.literal("check"))),
+  wearReadyAt: v.optional(v.number()),
 });
 const suggestion = v.object({
   ...outfitFields,
@@ -35,6 +37,7 @@ export const load = query({
       }),
     ),
     history: v.array(v.string()),
+    wearHistory: v.array(v.object({ date: v.string(), itemIds: v.array(v.id("wardrobeItems")), wornAt: v.number() })),
     bio: v.string(),
     suggestions: v.array(suggestion),
     calendarEnabled: v.boolean(),
@@ -86,8 +89,9 @@ export async function loadPlanningData(ctx: QueryCtx, userId: string, { week, pl
           .withIndex("by_user", (q) => q.eq("userId", userId))
           .unique(),
       ]);
-    const recalled = recallCollections(plans.map(p => ({ ...p, id: p._id })), context ?? "");
-    const selectedIds = new Set([...(planId && plans.some(p => p._id === planId) ? [planId] : []), ...recalled.map(p => p._id)]);
+    const activePlans = plans.filter(plan => !plan.archived);
+    const recalled = recallCollections(activePlans.map(p => ({ ...p, id: p._id })), context ?? "");
+    const selectedIds = new Set([...(planId && activePlans.some(p => p._id === planId) ? [planId] : []), ...recalled.map(p => p._id)]);
     const selectedMemberships = (await Promise.all([...selectedIds].map(id =>
       ctx.db.query("wardrobeMemberships").withIndex("by_wardrobe", q => q.eq("wardrobeId", id)).take(100)
     ))).flat().filter(m => m.userId === userId);
@@ -95,6 +99,13 @@ export async function loadPlanningData(ctx: QueryCtx, userId: string, { week, pl
       ...suggestions.flatMap(s => s.itemIds),
       ...selectedMemberships.flatMap(m => m.userId === userId && m.itemId ? [m.itemId] : []),
     ]);
+    const recent = await ctx.db.query("outfitSuggestions").withIndex("by_user", q => q.eq("userId", userId)).order("desc").take(100);
+    const wearHistory = recent.filter(row => row.status === "worn").map(row => ({ date: row.date, itemIds: row.itemIds, wornAt: row.updatedAt }));
+    for (const fit of history.filter(fit => fit.type === "daily_fit_check")) {
+      const linked = await ctx.db.query("fitCheckItems").withIndex("by_fit_check", q => q.eq("fitCheckId", fit._id)).take(24);
+      const itemIds = linked.flatMap(link => link.userId === userId && link.wardrobeItemId ? [link.wardrobeItemId] : []);
+      if (itemIds.length) wearHistory.push({ date: new Date(fit.createdAt).toISOString().slice(0, 10), itemIds, wornAt: fit.createdAt });
+    }
     const inventory = new Map(items.slice(0, 300).map(i => [i._id, i]));
     for (const id of referenced) if (!inventory.has(id)) {
       const row = await ctx.db.get(id);
@@ -107,15 +118,18 @@ export async function loadPlanningData(ctx: QueryCtx, userId: string, { week, pl
           category: i.category ?? "Piece",
           description: i.description ?? "Un-described piece",
           note: (i.note ?? "").slice(0, 500),
+          ...(i.wearPolicy ? { wearPolicy: i.wearPolicy } : {}),
+          ...(i.wearReadyAt ? { wearReadyAt: i.wearReadyAt } : {}),
           imageUrl: await wardrobeDisplayUrl(ctx, userId, i),
         })),
       ),
-      plans: plans.map((p) => ({
+      plans: activePlans.map((p) => ({
           id: p._id,
           name: p.name,
           description: p.description ?? "",
           itemIds: selectedMemberships.flatMap(m => m.wardrobeId === p._id && m.itemId && inventory.get(m.itemId)?.userId === userId ? [m.itemId] : []),
         })),
+      wearHistory: wearHistory.map(wear => ({ ...wear, itemIds: wear.itemIds.filter(id => inventory.get(id)?.userId === userId) })),
       history: history.map((h) =>
         (h.transcription ?? h.description ?? "").slice(0, 1200),
       ),
