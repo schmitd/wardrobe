@@ -849,7 +849,7 @@ h4 {
 .loading-text-line { display:block; height:12px; width:min(100%,460px); margin-top:8px; background:#c3b5c7; }
 .loading-text-line--short { width:65%; }
 .loading-image-region { width:100%; height:100%; background:#eee7ee; }
-.collection-shortcut > span:last-child { height:30px; width:100%; }
+.collection-shortcut > span:nth-child(2) { height:30px; width:100%; }
 .rack-piece-caption .loading-text-line { width:75%; min-width:48px; margin:0; }
 .home-auth-recovery { border:1px solid var(--rack-line); padding:16px; background:var(--rack-paper); color:#241426; }
 .home-auth-actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:12px; }

@@ -97,6 +97,8 @@ for(const width of [320,390,430]) test(`in-app archived collection selection and
  await page.getByRole("link",{name:"Data management (synthetic account entry)"}).click();
  const rail=page.getByRole("navigation",{name:"Inspiration collections"});const choose=rail.getByRole("button",{name:"Saved ideas Removed"});await choose.focus();await page.keyboard.press("Enter");
  await expect(choose).toHaveAttribute("aria-pressed","true");await expect(page.locator("select")).toHaveCount(0);
+ expect(await choose.locator(":scope > span").nth(1).evaluate(node=>node.getBoundingClientRect().height)).toBe(30);
+ expect(await choose.locator(":scope > span").nth(2).evaluate(node=>node.getBoundingClientRect().height)).toBeLessThan(30);
  await expect(page.getByText(/Restore this collection above/)).toHaveCount(0);
  let fail=true;const operations:string[]=[];
  await page.route("**/__fixture/action/mutation",async route=>{
