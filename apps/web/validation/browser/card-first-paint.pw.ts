@@ -47,7 +47,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const) test(`Fits col
   const collage = page.locator(".planner-outfit-photo").first();
   await expect(collage).toBeVisible();
   const box = await collage.boundingBox();
-  await expect.poll(() => collage.locator("img").evaluateAll(images => images.every(image => (image as HTMLImageElement).complete))).toBe(true);
+  await expect.poll(() => collage.locator("img").evaluateAll(images => images.length > 0 && images.every(image => (image as HTMLImageElement).complete))).toBe(true);
   expect(await collage.boundingBox()).toEqual(box);
   const reveals = await page.evaluate(() => (window as unknown as {fixtureReveals:{tag:string,duration:unknown}[]}).fixtureReveals.filter(r=>r.tag === "IMG"));
   if (reducedMotion === "reduce") expect(reveals).toHaveLength(0);

@@ -3,6 +3,7 @@
 import type { OptimisticWardrobeItem, WardrobeItem } from "@/types/wardrobe";
 import { userFacingErrorMessage } from "@/lib/userFacingError";
 import { Button } from "@/components/ui/button";
+import {PIECE_GRID} from "./LayoutGeometry";
 import RackItemCard from "./RackItemCard";
 
 export interface WardrobeGridProps {
@@ -54,7 +55,7 @@ export default function WardrobeGrid({
 
     return (
         <section className="space-y-4" aria-label="Closet rack">
-            <div className="collection-piece-grid grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4">
+            <div className={PIECE_GRID}>
                 {mergedItems.map((item) => {
                     const itemId = item.isOptimistic ? item.tempId : item.id;
                     const isPending = item.isOptimistic ? item.status !== "error" : !["ready", "error"].includes(item.analysisStatus);

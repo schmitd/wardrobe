@@ -2,10 +2,22 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 import wardrobe from "./validation/confect-eslint.mjs";
+import ux from "./validation/ux-eslint.mjs";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    files: ["src/**/*.tsx"],
+    ignores: ["**/*.test.tsx"],
+    plugins: { ux },
+    rules: {
+      "ux/entity-selection": "error",
+      "ux/visible-entity-id": "error",
+      "ux/recovery-location": "error",
+      "ux/entity-browser-dialog": "error",
+    },
+  },
   {
     files: ["confect/**/*.ts"],
     ignores: ["**/*.test.ts", "confect/_generated/**"],

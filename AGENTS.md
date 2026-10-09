@@ -2,6 +2,7 @@
 
 ## Development
 - Always use Bun to run node commands.
+- Before web UI changes, read [CONTRIBUTING.md](CONTRIBUTING.md) and [the UI contribution contract](docs/UX_CONTRIBUTION.md). Use the repo [lint-ui-change skill](.agents/skills/lint-ui-change/SKILL.md) for entity choices, task/recovery, auth/provider, notice or loading work; include its interaction and visual evidence checklist in review. Existing lint/test gates enforce the documented narrow checks; functional passes are not visual acceptance.
 - Read `docs/ARCHITECTURE.md` before backend changes and `docs/REPAIR_RELEASE.md` before releasing the Effect 4 migration.
 - Use Effect 4 Context services, Layers, tagged errors, schemas, cancellation, and the shared runtime for server I/O workflows. Keep deterministic transformations and React state plain TypeScript.
 - Confect source lives in `apps/web/confect`; `confect/_generated` and most of `apps/web/convex` are generated. Never put helpers in the generated directory. Regenerate with `bun run --bun confect codegen` at the repository root.

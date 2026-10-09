@@ -16,7 +16,7 @@ const modules: Record<string, string> = {
   "@/app/actions/wardrobe": "getUploadUrlAction, routeCaptureAction, recordDailyFitCheckAction, createWardrobeItemAction, completeGuestOnboardingAction, checkCompatibilityAction, saveInspirationAction, enrichInspirationAction, deleteWardrobeItemAction, refreshStyleBioAction, updateProfileBioAction, analyzeGuestFitCheckAction",
 };
 const build = await Bun.build({
-  entrypoints: [resolve(import.meta.dir, "gallery.tsx")], target: "browser", minify: true,
+  entrypoints: [resolve(import.meta.dir, "gallery.tsx")], target: "browser", minify: true, splitting:true, naming:{entry:"gallery.js",chunk:"chunks/[hash].js"},
   define: { "process.env.NODE_ENV": '"development"' },
   plugins: [{ name: "test-only-boundaries", setup(builder) {
     builder.onResolve({ filter: /^(?:@clerk\/nextjs|convex\/react|@convex\/_generated\/api|next\/image|next\/link|next\/navigation|posthog-js|@\/app\/actions\/wardrobe)$/ }, args => ({ path: args.path, namespace: "test-boundary" }));
@@ -24,7 +24,9 @@ const build = await Bun.build({
   } }],
 });
 if (!build.success) throw new AggregateError(build.logs, "Gallery build failed");
-const bundle = build.outputs[0]!;
+const assets=new Map(build.outputs.map(output=>[output.path.slice(output.path.indexOf('/chunks/')>=0 ? output.path.indexOf('/chunks/') : output.path.lastIndexOf('/')),output]));
+const bundle = build.outputs.find(output=>output.path.endsWith('/gallery.js'))!;
+const diaryChunk=await Promise.all(build.outputs.filter(output=>output.path.includes('/chunks/')).map(async output=>({path:output.path.slice(output.path.indexOf('/chunks/')),diary:(await output.text()).includes('daily_fit_check')})));
 type State = { uploadImages: {width?:number; height?:number}[]; fixtureKey: string; previews: Record<string, string>; catalog: ReturnType<typeof collectionFixture>; data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean; scenarioCase: string | null };
 const states = new Map<string, State>();
 function fixture(url: URL): State {
@@ -47,6 +49,8 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
   if (url.pathname === "/manifest.webmanifest") return Response.json(manifest());
   if (url.pathname === "/favicon.ico") return new Response(null, { status: 204 });
   if (url.pathname === "/health") return new Response(process.env.PROBE_TOKEN ?? "ok");
+  if(url.pathname === "/__fixture/chunks") return Response.json(diaryChunk);
+  if(url.pathname.startsWith('/chunks/') && assets.has(url.pathname)) return new Response(assets.get(url.pathname),{headers:{'Content-Type':'application/javascript'}});
   if (url.pathname === "/gallery.js") return new Response(bundle, { headers: { "Content-Type": "application/javascript" } });
   if (url.pathname === "/gallery.css") return new Response(css.css, { headers: { "Content-Type": "text/css" } });
   if (/^\/__fixture\/piece-\d\.svg$/.test(url.pathname)) return new Response(pieceSvg(Number(url.pathname.match(/piece-(\d)/)?.[1])), { headers: { "Content-Type": "image/svg+xml" } });
@@ -66,6 +70,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
       next.data.suggestions[0]!.status = "suggested";
       next.data.suggestions[0]!.itemIds = next.catalog.items.map(i => i.id);
     }
+    if(next.scenarioCase==="history-geometry"){next.data.suggestions[0]!.date=shiftDay(new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date()),-1);next.data.suggestions[0]!.status="planned";}
     states.set(session, next);
     return new Response(html, { headers: { "Content-Type": "text/html", "Set-Cookie": `probe_session=${session}; Path=/; HttpOnly; SameSite=Strict` } });
   }
@@ -87,7 +92,9 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
       if (input.query === "profile.getProfile") return Response.json({bio:"Second account style"});
       if (String(input.query).startsWith("wardrobe.page")) return Response.json([]);
     }
+    if (input.query === "fitChecks.pageFitChecks" && state.scenarioCase === "diary-error" && !state.wrote) {state.wrote=true;return Response.json({error:"Synthetic unavailable"},{status:503});}
     switch (input.query) {
+      case "fitChecks.pageFitChecks": return Response.json(state.scenarioCase === "diary-empty" ? [] : [{_id:"synthetic-fit",type:"daily_fit_check",createdAt:Date.now(),imageUrl:"/__fixture/piece-0.svg",description:"Cotton layers for a relaxed day",observations:[]}]);
       case "mobile.plans": case "wardrobes.listWardrobes": return Response.json(c.collections.filter(collection => !collection.archived));
       case "wardrobe.pageCollections": return Response.json(c.collections.filter(collection => Boolean(collection.archived) === Boolean(args.archived)).map(collection => ({ ...collection, previews: [...c.items.filter(i => c.memberships.some(m => m.wardrobeId === collection._id && m.itemId === i.id)), ...c.inspirations.filter(r => r.wardrobeId === collection._id && !r.removed).map(r => ({ id: r._id, imageUrl: r.imageUrl, category: r.category }))].slice(0, 3) })));
       case "wardrobe.pageWardrobeItems": return Response.json(c.items);
@@ -138,7 +145,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
     case "update-bio": state.catalog.bio = String(input.bio); return Response.json({ success: true });
     case "planning_dismiss": { const outfit = state.data.suggestions.find(outfit => outfit.id === input.id); if (!outfit) return Response.json({ error: "Unknown synthetic outfit" }, { status: 404 }); outfit.status = "dismissed"; state.wrote = true; return Response.json({ ok: true }); }
     case "planning_accept": state.data.suggestions[0]!.status = "planned"; return Response.json({ ok: true });
-    case "planning_load": return state.stale && state.wrote ? Response.json({ error: "Synthetic refresh unavailable" }, { status: 503 }) : Response.json(state.data);
+    case "planning_load": if(state.scenarioCase==='plan-error'&&!state.wrote){state.wrote=true;return Response.json({error:'Synthetic planning unavailable'},{status:503});}return state.stale && state.wrote ? Response.json({ error: "Synthetic refresh unavailable" }, { status: 503 }) : Response.json(state.data);
     case "planning_week": return Response.json({ days: sevenDays(String(input.week)).map((date, index) => ({ date, events: index === 0 ? [{ title: "Synthetic meeting", start: "09:00" }] : [], truncated: index === 0 })) });
     case "planning_interpret": if (state.scenarioCase === "clarify" && !String(input.description).includes("today")) return Response.json({ days: [], clarification: "Which day is the meeting?" }); return Response.json({ days: sevenDays(String(input.week)).map(date => ({ date, description: "予定".repeat(600) })), clarification: "" });
     case "planning_generate_week": {
@@ -172,6 +179,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
       if (state.scenarioCase === "import-completion-error" && !state.wrote) { state.wrote = true; return Response.json({error:"Synthetic transient completion failure"},{status:503}); }
       return Response.json({ success: true, results: (input.items as {itemId:string}[]).map(item => ({itemId:item.itemId,success:true})) });
     }
+    case "save-inspiration": return Response.json({id:"synthetic-saved-reference"});
     case "try-on": return Response.json({ storageId: "synthetic-storage", candidate: { category: "Full fit", description: "Synthetic two-piece fit", styleTags: [] }, evaluation: { score: 80, explanation: "Synthetic compatibility" }, similarItems: [], dissimilarItems: [], message: "Synthetic result" });
     default: return Response.json({ error: `Unimplemented fixture operation: ${operation}` }, { status: 400 });
   }

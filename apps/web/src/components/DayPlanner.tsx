@@ -23,6 +23,7 @@ import {
 import { planningRequest } from "@/lib/planning-client";
 import { Button } from "./ui/button";
 import TaskSheet from "./TaskSheet";
+import { PlannerHeader, PlanLoading } from "./FitsLoading";
 import DayVoiceInput from "./DayVoiceInput";
 import GoogleCalendarConnect from "./GoogleCalendarConnect";
 import OwnedPiecePicker from "./OwnedPiecePicker";
@@ -64,21 +65,23 @@ type View =
   | null;
 
 export default function DayPlanner({
-  historyDate,
-}: { historyDate?: string } = {}) {
+  historyDate, visible = true,
+}: { historyDate?: string; visible?: boolean } = {}) {
   const { user } = useUser();
   return user ? (
     <WeekPlanner
       key={`${user.id}-${historyDate ?? "current"}`}
       userId={user.id}
       historyDate={historyDate}
+      visible={visible}
     />
-  ) : null;
+  ) : <PlanLoading />;
 }
 function WeekPlanner({
   userId,
-  historyDate,
+  historyDate, visible,
 }: {
+  visible: boolean;
   userId: string;
   historyDate?: string;
 }) {
@@ -445,61 +448,9 @@ function WeekPlanner({
       aria-label="Week outfit planner"
       className="space-y-4 text-[#241426]"
     >
-      {!historyDate && (
-        <>
-          <header className="flex items-center justify-between gap-4">
-            <h2 className="text-lg font-semibold sm:text-xl">This week</h2>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                aria-label="Calendar"
-                onClick={() => open("calendar")}
-              >
-                <CalendarDays />
-                <span className="hidden sm:inline">Calendar</span>
-              </Button>
-            </div>
-          </header>
-          <div className="planner-day-rail">
-            {sevenDays(draft.week).map((date) => {
-              const suggestion = outfitForDay(data?.suggestions ?? [], date);
-              return (
-                <button
-                  key={date}
-                  type="button"
-                  aria-pressed={selected === date}
-                  aria-label={`${dateLabel(date, true)}, ${suggestion?.status ?? "No suggestion"}`}
-                  onClick={() => {
-                    setSelected(date);
-                    setDraft((d) => ({ ...d, review: [], clarification: "" }));
-                    setSwap(null);
-                    setReason("");
-                  }}
-                  className={`planner-day ${selected === date ? "planner-day--selected" : ""}`}
-                >
-                  <span className="block font-medium">
-                    {new Date(`${date}T12:00:00`).toLocaleDateString(
-                      undefined,
-                      { weekday: "short" },
-                    )}
-                  </span>
-                  <span className="block text-xl tabular-nums">
-                    {new Date(`${date}T12:00:00`).getDate()}
-                  </span>
-                  <span
-                    className="planner-day-dot"
-                    aria-label={suggestion ? "Outfit saved" : "No outfit yet"}
-                  >
-                    {suggestion ? "•" : "·"}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
+      {!historyDate && <PlannerHeader week={draft.week} selected={selected} onCalendar={() => open("calendar")} status={date => outfitForDay(data?.suggestions ?? [], date)?.status ?? (data ? "No suggestion" : undefined)} onSelect={date => {setSelected(date);setDraft(d=>({...d,review:[],clarification:""}));setSwap(null);setReason("");}} />}
       {!view && (error || message || refreshWarning || busy) && status}
-      {!data && (
+      {!data && error && (
         <Button
           variant="outline"
           onClick={() =>
@@ -515,7 +466,7 @@ function WeekPlanner({
         aria-label={`Outfit for ${dateLabel(selected, true)}`}
         className="space-y-4"
       >
-        <div className="row">
+        <div className="flex min-h-12 items-center justify-between gap-3">
           <h3 className="text-xl font-semibold">{dateLabel(selected, true)}</h3>
           {outfit && (
             <p className="text-sm capitalize text-[#685e70]">{outfit.status}</p>
@@ -562,10 +513,10 @@ function WeekPlanner({
           <>
             <div className="planner-outfit-photo p-6 text-center">
               <p role="status">
-                {historyDate
-                  ? "No saved outfit is available for this date."
-                  : !data
-                    ? "Loading your outfits…"
+                {!data
+                  ? error ? "Outfits unavailable." : "Loading your outfits…"
+                  : historyDate
+                    ? "No saved outfit is available for this date."
                     : data.items.length === 0
                       ? "Add pieces to your wardrobe to get outfit suggestions."
                       : data.autoPlan?.state === "running" ||
@@ -648,7 +599,7 @@ function WeekPlanner({
         </div>
       )}
       <TaskSheet
-        open={view !== null}
+        open={visible && view !== null}
         onOpenChange={(value) => {
           if (!value && !busy) { planningEntry.current++; setCalendarPrompt(false); setView(null); }
         }}

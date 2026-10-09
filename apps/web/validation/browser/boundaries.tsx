@@ -15,7 +15,7 @@ export const SignUpButton = SignInButton;
 export const analyzeGuestFitCheckAction = async () => ({ kind: "error" as const, message: "Synthetic analysis unavailable. Retry or sign in." });
 export const UserButton = Object.assign(() => <span aria-label="Synthetic account">D</span>, { MenuItems: () => null, Link: () => null });
 export const usePathname = () => useSyncExternalStore(listener => { window.addEventListener("fixture-navigation",listener); return () => window.removeEventListener("fixture-navigation",listener); }, () => location.pathname);
-export const useSearchParams = () => new URLSearchParams(location.search);
+export const useSearchParams = () => new URLSearchParams(useSyncExternalStore(listener => {window.addEventListener("fixture-navigation",listener);window.addEventListener("popstate",listener);return ()=>{window.removeEventListener("fixture-navigation",listener);window.removeEventListener("popstate",listener);};},()=>location.search));
 export const api = new Proxy({}, { get: (_, group: string) => new Proxy({}, { get: (_, name: string) => `${group}.${name}` }) });
 let revision = 0;
 const listeners = new Set<() => void>();
@@ -36,12 +36,15 @@ export function useQuery<T = unknown>(query: string, args: object | "skip" = {})
 }
 export function usePaginatedQuery(query: string, args: object | "skip", _options: unknown) { // eslint-disable-line @typescript-eslint/no-unused-vars
   const result = useQuery<unknown[]>(query, args);
-  return { results: result ?? [], status: result ? "Exhausted" : "LoadingFirstPage", loadMore() {} };
+  const [more,setMore]=useState(false);
+  const partial=query==='fitChecks.pageFitChecks' && new URLSearchParams(location.search).get('case')==='diary-partial' && !more;
+  return { results: result ?? [], status: result ? partial ? "CanLoadMore" : "Exhausted" : "LoadingFirstPage", loadMore() {setMore(true);} };
 }
 export const useMutation = (name: string) => async (args: unknown) => { const result = await action("mutation", { name, args }); invalidate(); return result; };
 export const analytics = { capture() {}, captureException() {}, has_opted_out_capturing: () => true };
 export const Link = ({ href, children, ...props }: React.ComponentProps<"a">) => <a href={href} {...props} onClick={event => {
   props.onClick?.(event);
+  if (!event.defaultPrevented && href?.startsWith('/fits?view=')) {event.preventDefault();const next=new URL(href,location.href);new URLSearchParams(location.search).forEach((value,key)=>{if(key!=='view')next.searchParams.set(key,value);});history.pushState({},'',next);window.dispatchEvent(new Event('fixture-navigation'));return;}
   if (!event.defaultPrevented && location.search.includes("scenario=home-continuity") && (href === "/" || href === "/fits")) { event.preventDefault(); history.pushState({}, "", `${href}?scenario=home-continuity`); window.dispatchEvent(new Event("fixture-navigation")); }
 }}>{children}</a>;
 export const Image = ({ fill, unoptimized: _unoptimized, priority: _priority, style, ...props }: React.ComponentProps<"img"> & { fill?: boolean; unoptimized?: boolean; priority?: boolean }) => <img alt={props.alt ?? ""} style={{ ...(fill ? { position: "absolute", inset: 0, width: "100%", height: "100%" } : {}), ...style }} {...props} />; // eslint-disable-line @next/next/no-img-element, @typescript-eslint/no-unused-vars

@@ -4,6 +4,8 @@ Policy: automatically merge a ready PR when CI and an independent Codex adversar
 
 ## Small stable gates
 
+Web UI changes also follow [the UI contribution contract](UX_CONTRIBUTION.md). The existing lint gate includes targeted AST UX rules, and the existing test glob runs their negative/positive fixtures plus the actual owned-piece picker tests. `bun run validate ux` runs source lint, focused real-component suites and the existing browser gate in isolated processes. It does not install dependencies or run a build. Visual/geometry/contrast evidence remains required human review, with synthetic/live coverage distinguished.
+
 `CI / Merge checks` combines lint, type checking, existing unit/integration tests, seeded properties, generated-adapter drift (including untracked files), build, and three Playwright journeys. One failed, canceled or skipped prerequisite prevents success. Use Bun 1.3.8 and Node 22; Playwright is launched with `bun run playwright`, not `bun run --bun playwright`.
 
 Root `scripts/**` are included in Turbo's global cache inputs: web checks compile/import these tools, so changing a tool must invalidate the cached checks too.
@@ -23,6 +25,7 @@ bun run validate core
 bun run validate storage
 bun run validate planning --grep 'week'
 bun run validate reads
+bun run validate ux
 bun run validate fuzz --seed 739123 --runs 100
 # Reproduce exactly one property by name when supplying a shrink path:
 bun run validate fuzz --grep 'arbitrary claim order' --seed 739123 --path '0:1:2'

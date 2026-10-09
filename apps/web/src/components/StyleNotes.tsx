@@ -11,6 +11,7 @@ import {
   updateProfileBioAction,
 } from "@/app/actions/wardrobe";
 import { Button } from "@/components/ui/button";
+import {STYLE_ROW,STYLE_TITLE,STYLE_BIO} from "./LayoutGeometry";
 import { StyleLoading } from "./WardrobeShell";
 import TaskSheet from "@/components/TaskSheet";
 import { Textarea } from "@/components/ui/textarea";
@@ -82,19 +83,19 @@ export default function StyleNotes() {
     >
       <button
         type="button"
-        className="flex min-h-20 w-full items-center justify-between gap-4 text-left"
+        className={STYLE_ROW}
         onClick={() => setOpen(true)}
       >
         <span className="min-w-0">
           <span
             id="style-notes-title"
-            className="block text-base font-extrabold text-[#241426]"
+            className={STYLE_TITLE}
           >
             Your style
           </span>
           <span
             data-private
-            className="mt-1 line-clamp-2 h-11 text-sm leading-relaxed text-[#685e70]"
+            className={STYLE_BIO}
           >
             {profile?.bio || "Add style notes"}
           </span>

@@ -7,6 +7,7 @@ import type { CSSProperties } from "react";
 
 interface RackItemCardProps {
   compact?: boolean;
+  loading?: boolean;
   hasNote?: boolean;
   collectionLabel?: string;
   imageUrl: string;
@@ -54,6 +55,7 @@ function synchronizedAccent(description: string | null, tags: string[] | null) {
 
 export default function RackItemCard({
   compact,
+  loading = false,
   hasNote,
   collectionLabel,
   imageUrl,
@@ -68,9 +70,11 @@ export default function RackItemCard({
   if (compact)
     return (
       <div
-        data-private
+        data-private={loading ? undefined : true}
+        aria-hidden={loading || undefined}
+        data-loading-piece={loading || undefined}
         className={`rack-piece ${className ?? ""}`.trim()}
-        style={{ "--rack-item-accent": accentColor } as CSSProperties}
+        style={{ "--rack-item-accent": loading ? "#d8c9dc" : accentColor } as CSSProperties}
       >
         <div className="rack-piece-stage">
           <svg
@@ -96,14 +100,14 @@ export default function RackItemCard({
             />
           </svg>
           <div className="rack-piece-photo">
-            <Image
+            {loading ? <div className="loading-image-region" /> : <Image
               src={imageUrl}
               onLoad={revealDecodedImage}
               alt={description ?? category ?? "Closet item"}
               fill
               sizes="(max-width: 640px) 44vw, (max-width: 1024px) 40vw, 280px"
               className="object-contain"
-            />
+            />}
           </div>
           <div className="rack-piece-tag">
             <svg
@@ -135,7 +139,7 @@ export default function RackItemCard({
           {badgeLabel && <span className="rack-piece-badge">{badgeLabel}</span>}
         </div>
         <div className="rack-piece-caption">
-          <span>{category ?? "Your piece"}</span>
+          <span>{loading ? <span className="loading-text-line" /> : category ?? "Your piece"}</span>
           <ArrowUpRight size={15} aria-hidden="true" />
         </div>
       </div>

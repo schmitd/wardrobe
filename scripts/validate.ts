@@ -7,7 +7,7 @@ const { values, positionals } = parseArgs({ args: Bun.argv.slice(2), allowPositi
   seed: { type: "string" }, runs: { type: "string" }, path: { type: "string" }, grep: { type: "string" },
 } });
 const suite = positionals[0] ?? "core";
-if (positionals.length > 1) throw new Error("One suite at a time: core | storage | planning | reads | fuzz | browser | generated | all");
+if (positionals.length > 1) throw new Error("One suite at a time: core | storage | planning | reads | ux | fuzz | browser | generated | all");
 const files: Record<string, string[]> = {
   core: ["confect/storage.integration.test.ts", "confect/readModels.integration.test.ts", "confect/legacy/planning.test.ts", "src/server/progressStream.test.ts"],
   storage: ["confect/storage.integration.test.ts"],
@@ -15,13 +15,19 @@ const files: Record<string, string[]> = {
   reads: ["confect/readModels.integration.test.ts"],
   fuzz: ["validation/storage.fuzz.test.ts"],
 };
+// Keep DOM/module-mock suites in separate processes, as in run-tests.ts.
+const uxTests = ["validation/ux-eslint.test.ts", "src/components/OwnedPiecePicker.test.tsx", "src/components/DataManagement.test.tsx", "src/components/DayPlanner.calendar.test.tsx", "src/components/WardrobeShell.test.tsx"];
 const env = { ...process.env, ...(values.seed ? { FUZZ_SEED: values.seed } : {}), ...(values.runs ? { FUZZ_RUNS: values.runs } : {}), ...(values.path ? { FUZZ_PATH: values.path } : {}) };
 async function run(cmd: string[], cwd = web) {
   const child = Bun.spawn(cmd, { cwd, env, stdout: "inherit", stderr: "inherit" });
   const code = await child.exited;
   if (code) process.exit(code);
 }
-if (suite === "generated") {
+if (suite === "ux") {
+  await run(["bun", "run", "lint"], root);
+  for (const file of uxTests) await run(["bun", "test", file]);
+  await run(["bun", "run", "validate", "browser"], root);
+} else if (suite === "generated") {
   await run(["bun", "run", "--bun", "confect", "codegen"], root);
   const paths = ["apps/web/confect/_generated", "apps/web/convex"];
   const status = Bun.spawnSync(["git", "status", "--porcelain", "--untracked-files=all", "--", ...paths], { cwd: root });
