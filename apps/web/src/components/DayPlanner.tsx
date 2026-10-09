@@ -767,7 +767,7 @@ function WeekPlanner({
                 {weatherCities.map(city => <option key={city.id} value={city.id}>{city.label}</option>)}
               </select>
             </div>
-            <p className="text-sm">Optional forecast uses approximate city coordinates. Location stays on this device; you can choose a city or skip weather.</p>
+            <p className="text-sm">Device coordinates stay here. Weather uses your selected city.</p>
             <p className="text-xs"><a className="underline" href="https://api.met.no/">Data from MET Norway</a> and <a className="underline" href="https://www.geonames.org/">GeoNames city data</a>, <a className="underline" href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Coordinates rounded; forecast periods summarized into city-local days.</p>
             {data?.inventoryTruncated && (
               <p className="text-sm">
