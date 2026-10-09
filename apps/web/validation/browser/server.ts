@@ -54,7 +54,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
   if (url.pathname === "/gallery.js") return new Response(bundle, { headers: { "Content-Type": "application/javascript" } });
   if (url.pathname === "/gallery.css") return new Response(css.css, { headers: { "Content-Type": "text/css" } });
   if (/^\/__fixture\/piece-\d\.svg$/.test(url.pathname)) return new Response(pieceSvg(Number(url.pathname.match(/piece-(\d)/)?.[1])), { headers: { "Content-Type": "image/svg+xml" } });
-  if (url.pathname === "/" || url.pathname === "/fits" || url.pathname === "/account/data") {
+  if (url.pathname === "/" || url.pathname === "/fits" || url.pathname === "/fits/plan" || url.pathname === "/fits/diary" || url.pathname === "/account/data") {
     const previousSession = request.headers.get("cookie")?.match(/(?:^|;\s*)probe_session=([^;]+)/)?.[1];
     if (previousSession && (states.get(previousSession)?.fixtureKey === url.search || url.pathname === "/account/data" || !url.search)) return new Response(html, { headers: { "Content-Type": "text/html" } });
     const session = crypto.randomUUID();

@@ -75,7 +75,7 @@ export default function GoogleCalendarConnect({
       const existing = user.externalAccounts.find(
         (a) => a.provider === "google",
       );
-      const redirectUrl = `${window.location.origin}/fits?view=plans&calendar=connected${mobile ? "&returnTo=mobile" : ""}`;
+      const redirectUrl = `${window.location.origin}/fits/plan?calendar=connected${mobile ? "&returnTo=mobile" : ""}`;
       const account = existing
         ? await existing.reauthorize({
             additionalScopes: CALENDAR_SCOPES,

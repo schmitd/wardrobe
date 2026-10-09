@@ -114,12 +114,12 @@ function WeekPlanner({
     try {
       sessionStorage.setItem(
         storageKey,
-        JSON.stringify({ draft, expires: Date.now() + 8 * 3600000 }),
+        JSON.stringify({ draft, selected, expires: Date.now() + 8 * 3600000 }),
       );
     } catch {
       /* The in-memory draft remains usable. */
     }
-  }, [draft, storageKey]);
+  }, [draft, selected, storageKey]);
   useEffect(() => {
     try {
       const saved = JSON.parse(sessionStorage.getItem(storageKey) ?? "null");
@@ -128,6 +128,7 @@ function WeekPlanner({
         saved?.expires > Date.now() &&
         typeof saved.draft?.description === "string"
       ) {
+        if (typeof saved.selected === "string" && sevenDays(localDate()).includes(saved.selected)) setSelected(saved.selected);
         // Never replay a stale interpretation after local-date rollover.
         setDraft({
           ...initial(),

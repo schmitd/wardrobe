@@ -238,7 +238,7 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
     const saved = outcome.success;
     notify(
       saved.kind === 'fit'
-        ? { message: 'Outfit saved.', href: `/fits?view=diary#fit-${saved.id}` }
+        ? { message: 'Outfit saved.', href: `/fits/diary#fit-${saved.id}` }
         : { message: 'Piece added.', href: '/' }
     );
     posthog.capture('unified_capture_completed', { intent: capture.intent, scope });

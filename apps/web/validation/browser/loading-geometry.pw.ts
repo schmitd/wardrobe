@@ -2,6 +2,7 @@ import { test, expect, type Page } from "playwright/test";
 const points = [
   ".collection-rail",
   ".collection-heading",
+  ".rack-piece-photo",
   ".rack-piece-stage",
   ".rack-piece-caption",
   '[aria-label="Fits views"]',
@@ -65,7 +66,7 @@ for (const width of [320, 390, 430])
       await page.goto(
         area === "wardrobe"
           ? "/?scenario=home-import"
-          : `/fits?scenario=fits&view=${area}`,
+          : `/fits/${area}?scenario=fits`,
       );
       await page
         .locator(
@@ -77,6 +78,14 @@ for (const width of [320, 390, 430])
         )
         .first()
         .waitFor();
+      if (area === "wardrobe") {
+        await expect(
+          page.locator(".rack-piece-photo .loading-image-region"),
+        ).toHaveCount(0);
+        await expect(page.locator(".rack-piece-photo img")).toHaveCount(0);
+        expect(await page.locator(".rack-piece-photo").first().evaluate(node => ({children:node.childElementCount, background:getComputedStyle(node).backgroundColor}))).toEqual({children:0, background:"rgba(0, 0, 0, 0)"});
+        expect(await page.locator(".rack-piece-caption .loading-text-line").count()).toBeGreaterThan(0);
+      }
       const pending = await boxes(page);
       await page.screenshot({
         path: info.outputPath("pending.png"),
@@ -106,6 +115,7 @@ for (const width of [320, 390, 430])
           ? [
               ".collection-rail",
               ".collection-heading",
+              ".rack-piece-photo",
               ".rack-piece-stage",
               ".rack-piece-caption",
             ]
@@ -191,7 +201,7 @@ test("cold Diary lazy module uses the same calendar and recent-card geometry", a
       await gate;
       await route.continue();
     });
-  await page.goto("/fits?scenario=fits&view=diary");
+  await page.goto("/fits/diary?scenario=fits");
   await page
     .getByRole("heading", { name: "Outfit diary", exact: true })
     .waitFor();
@@ -204,7 +214,7 @@ test("cold Diary lazy module uses the same calendar and recent-card geometry", a
   for (const s of ['[aria-label="Daily fit calendar"]', "[data-fit-card]"])
     expect(settled[s]).toEqual(pending[s]);
 });
-test("visited Plan and Diary retain content; history starts only after Diary and pending clears private content", async ({
+test("nested Plan and Diary restore owner drafts; history starts only in Diary and pending clears private content", async ({
   page,
 }) => {
   const queries: string[] = [];
@@ -212,28 +222,37 @@ test("visited Plan and Diary retain content; history starts only after Diary and
     if (request.url().endsWith("/__fixture/query"))
       queries.push(request.postDataJSON().query);
   });
-  await page.goto("/fits?scenario=fits&view=plan");
+  await page.goto("/fits/plan?scenario=fits");
   await page
     .getByText("Easy structure for your day", { exact: true })
     .waitFor();
   expect(queries).not.toContain("fitChecks.pageFitChecks");
+  const selectedDay = await page.locator(".planner-day").nth(1).getAttribute("aria-label");
+  await page.locator(".planner-day").nth(1).click();
+  await page.getByRole("button", { name: "Describe your day or week" }).click();
+  await page
+    .getByRole("textbox", { name: "Describe your day or week" })
+    .fill("Owner A unfinished plans");
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "Diary", exact: true }).click();
+  await expect(page).toHaveURL(/\/fits\/diary/);
+  await page.locator("#fit-synthetic-fit").waitFor();
+  await page.getByRole("link", { name: "Plan", exact: true }).click();
+  await expect(page.locator(".planner-day").nth(1)).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".planner-day").nth(1)).toHaveAttribute("aria-label", selectedDay!);
+  await page.getByRole("button", { name: "Describe your day or week" }).click();
+  await expect(
+    page.getByRole("textbox", { name: "Describe your day or week" }),
+  ).toHaveValue("Owner A unfinished plans");
+  await page.keyboard.press("Escape");
+  await page.goBack();
+  await expect(page).toHaveURL(/\/fits\/diary/);
+  await page.locator("#fit-synthetic-fit").waitFor();
+  await page.goForward();
+  await expect(page).toHaveURL(/\/fits\/plan/);
+  await expect(page.locator(".planner-day").nth(1)).toHaveAttribute("aria-pressed", "true");
   await page.getByRole("link", { name: "Diary", exact: true }).click();
   await page.locator("#fit-synthetic-fit").waitFor();
-  await page
-    .locator("#fit-synthetic-fit")
-    .evaluate((node) => node.setAttribute("data-retained", "yes"));
-  await page.getByRole("link", { name: "Plan", exact: true }).click();
-  await expect(
-    page.getByText("Easy structure for your day", { exact: true }),
-  ).toBeVisible();
-  await page.getByRole("link", { name: "Diary", exact: true }).click();
-  await expect(page.locator("#fit-synthetic-fit")).toHaveAttribute(
-    "data-retained",
-    "yes",
-  );
-  expect(queries.filter((q) => q === "fitChecks.pageFitChecks")).toHaveLength(
-    1,
-  );
   await page.evaluate(() => {
     window.fixtureAuth = {
       isLoaded: true,
@@ -247,20 +266,33 @@ test("visited Plan and Diary retain content; history starts only after Diary and
   await expect(
     page.getByRole("heading", { name: "Outfit diary", exact: true }),
   ).toBeVisible();
+  await page.evaluate(() => {
+    window.fixtureAuth = {
+      isLoaded: true,
+      isSignedIn: true,
+      userId: "synthetic-bob",
+    };
+    window.dispatchEvent(new Event("fixture-auth"));
+  });
+  await page.getByRole("link", { name: "Plan", exact: true }).click();
+  await page.getByRole("button", { name: "Describe your day or week" }).click();
+  await expect(
+    page.getByRole("textbox", { name: "Describe your day or week" }),
+  ).toHaveValue("");
 });
 test("Diary empty and query failure recover truthfully; Plan failure actually retries", async ({
   page,
 }) => {
-  await page.goto("/fits?scenario=fits&view=diary&case=diary-empty");
+  await page.goto("/fits/diary?scenario=fits&case=diary-empty");
   await expect(
     page.getByText("No fits recorded yet.", { exact: true }),
   ).toBeVisible();
   await expect(page.locator('[aria-label$="no fit recorded"]')).toHaveCount(84);
-  await page.goto("/fits?scenario=fits&view=diary&case=diary-error");
+  await page.goto("/fits/diary?scenario=fits&case=diary-error");
   await expect(page.getByRole("alert")).toContainText("could not load");
   await page.getByRole("button", { name: "Retry fits", exact: true }).click();
   await expect(page.locator("#fit-synthetic-fit")).toBeVisible();
-  await page.goto("/fits?scenario=fits&view=plan&case=plan-error");
+  await page.goto("/fits/plan?scenario=fits&case=plan-error");
   await page
     .getByRole("button", { name: "Retry loading outfits", exact: true })
     .click();
@@ -272,7 +304,7 @@ test("Diary empty and query failure recover truthfully; Plan failure actually re
 test("partial Diary history stays unknown until bounded history is exhausted", async ({
   page,
 }) => {
-  await page.goto("/fits?scenario=fits&view=diary&case=diary-partial");
+  await page.goto("/fits/diary?scenario=fits&case=diary-partial");
   await page.locator("#fit-synthetic-fit").waitFor();
   await expect(page.locator('[aria-label$="no fit recorded"]')).toHaveCount(0);
   await expect(page.locator('[aria-label$="history not loaded"]')).toHaveCount(
@@ -301,7 +333,7 @@ for (const reducedMotion of ["no-preference", "reduce"] as const)
         return animate.call(this, frames, options);
       };
     });
-    await page.goto("/fits?scenario=fits&view=diary");
+    await page.goto("/fits/diary?scenario=fits");
     await page.locator("#fit-synthetic-fit img").waitFor();
     await page.waitForFunction(() =>
       Array.from(document.images).every((i) => i.complete),
@@ -327,7 +359,7 @@ test("saved outfit history placeholder matches a real planned card without wrapp
     if (route.request().postDataJSON().query === "planning.load") await gate;
     await route.continue();
   });
-  await page.goto("/fits?scenario=fits&view=diary&case=history-geometry");
+  await page.goto("/fits/diary?scenario=fits&case=history-geometry");
   const card = page.locator("[data-history-card]").first();
   await card.waitFor();
   const pending = await card.boundingBox();

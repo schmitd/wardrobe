@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useSyncExternalStore } from "react";
 
 // Only the standalone gallery uses these adapters. No application auth bypass exists.
-export const useUser = () => ({ isLoaded: true, isSignedIn: true, user: { id: "synthetic-alice", externalAccounts: [], createExternalAccount: async () => { throw new Error("External authentication is outside this fixture"); } } });
-type FixtureAuth = { isLoaded:boolean; isSignedIn:boolean; userId:string|null; backendPending?:boolean; backendUnavailable?:boolean };
+export const useUser = () => { const auth = useAuth(); return { isLoaded: auth.isLoaded, isSignedIn: auth.isSignedIn, user: auth.userId ? { id: auth.userId, externalAccounts: [], createExternalAccount: async () => { throw new Error("External authentication is outside this fixture"); } } : null }; };
+type FixtureAuth = { isLoaded:boolean; isSignedIn:boolean; userId:string|null; sessionId?:string; backendPending?:boolean; backendUnavailable?:boolean };
 declare global { interface Window { fixtureAuth?:FixtureAuth } }
 const defaultAuth:FixtureAuth = {isLoaded:true,isSignedIn:true,userId:"synthetic-alice"};
 const readAuth = () => window.fixtureAuth ?? defaultAuth;
@@ -14,7 +14,7 @@ export const SignInButton = ({children}:{children:React.ReactNode}) => <>{childr
 export const SignUpButton = SignInButton;
 export const analyzeGuestFitCheckAction = async () => ({ kind: "error" as const, message: "Synthetic analysis unavailable. Retry or sign in." });
 export const UserButton = Object.assign(() => <span aria-label="Synthetic account">D</span>, { MenuItems: () => null, Link: () => null });
-export const usePathname = () => useSyncExternalStore(listener => { window.addEventListener("fixture-navigation",listener); return () => window.removeEventListener("fixture-navigation",listener); }, () => location.pathname);
+export const usePathname = () => useSyncExternalStore(listener => { window.addEventListener("fixture-navigation",listener); window.addEventListener("popstate",listener); return () => { window.removeEventListener("fixture-navigation",listener); window.removeEventListener("popstate",listener); }; }, () => location.pathname);
 export const useSearchParams = () => new URLSearchParams(useSyncExternalStore(listener => {window.addEventListener("fixture-navigation",listener);window.addEventListener("popstate",listener);return ()=>{window.removeEventListener("fixture-navigation",listener);window.removeEventListener("popstate",listener);};},()=>location.search));
 export const api = new Proxy({}, { get: (_, group: string) => new Proxy({}, { get: (_, name: string) => `${group}.${name}` }) });
 let revision = 0;
@@ -44,7 +44,7 @@ export const useMutation = (name: string) => async (args: unknown) => { const re
 export const analytics = { capture() {}, captureException() {}, has_opted_out_capturing: () => true };
 export const Link = ({ href, children, ...props }: React.ComponentProps<"a">) => <a href={href} {...props} onClick={event => {
   props.onClick?.(event);
-  if (!event.defaultPrevented && href?.startsWith('/fits?view=')) {event.preventDefault();const next=new URL(href,location.href);new URLSearchParams(location.search).forEach((value,key)=>{if(key!=='view')next.searchParams.set(key,value);});history.pushState({},'',next);window.dispatchEvent(new Event('fixture-navigation'));return;}
+  if (!event.defaultPrevented && (href === '/fits/plan' || href === '/fits/diary')) {event.preventDefault();const next=new URL(href,location.href);new URLSearchParams(location.search).forEach((value,key)=>{if(key!=='view')next.searchParams.set(key,value);});history.pushState({},'',next);window.dispatchEvent(new Event('fixture-navigation'));return;}
   if (!event.defaultPrevented && location.search.includes("scenario=home-continuity") && (href === "/" || href === "/fits")) { event.preventDefault(); history.pushState({}, "", `${href}?scenario=home-continuity`); window.dispatchEvent(new Event("fixture-navigation")); }
 }}>{children}</a>;
 export const Image = ({ fill, unoptimized: _unoptimized, priority: _priority, style, ...props }: React.ComponentProps<"img"> & { fill?: boolean; unoptimized?: boolean; priority?: boolean }) => <img alt={props.alt ?? ""} style={{ ...(fill ? { position: "absolute", inset: 0, width: "100%", height: "100%" } : {}), ...style }} {...props} />; // eslint-disable-line @next/next/no-img-element, @typescript-eslint/no-unused-vars

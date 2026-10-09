@@ -52,7 +52,7 @@ export default function Navbar() {
               </Button>
               <UnifiedCaptureTrigger key={pathname} variant="desktop" />
               {signedInLinks.slice(1).map(({ href, label, icon: Icon }) => (
-                <Button key={href} asChild variant="outline" className={navClass(pathname === href)}>
+                <Button key={href} asChild variant="outline" className={navClass(pathname === href || (href === '/fits' && pathname.startsWith('/fits/')))}>
                   <Link href={href}>
                     <Icon className="h-3.5 w-3.5" />
                     <span>{label}</span>
@@ -99,7 +99,7 @@ export default function Navbar() {
             <div className="rack-mobile-capture-slot flex items-start justify-center">
               <UnifiedCaptureTrigger key={pathname} variant="mobile" />
             </div>
-            <Link href="/fits" className={mobileNavClass(pathname === '/fits')} aria-current={pathname === '/fits' ? 'page' : undefined}>
+            <Link href="/fits" className={mobileNavClass(pathname === '/fits' || pathname.startsWith('/fits/'))} aria-current={pathname === '/fits' || pathname.startsWith('/fits/') ? 'page' : undefined}>
               <Sparkles className="h-5 w-5" />
               <span>Fits</span>
             </Link>

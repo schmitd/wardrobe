@@ -30,28 +30,50 @@ const fallbackAccent = "rgb(240 255 189)";
 // tint from that same reactive row so the first render and updates agree.
 // No image fetch, client cache, photo-pixel extraction or new stored field.
 const garmentTints: Record<string, string> = {
-  black: "rgb(194 190 196)", charcoal: "rgb(194 190 196)",
-  navy: "rgb(192 204 221)", "dark blue": "rgb(192 204 221)",
-  blue: "rgb(201 221 235)", denim: "rgb(201 221 235)",
-  grey: "rgb(216 215 219)", gray: "rgb(216 215 219)", silver: "rgb(216 215 219)",
-  beige: "rgb(235 222 201)", tan: "rgb(235 222 201)", khaki: "rgb(235 222 201)",
-  brown: "rgb(221 199 180)", camel: "rgb(221 199 180)", chocolate: "rgb(221 199 180)",
-  cream: "rgb(246 237 216)", ivory: "rgb(246 237 216)", "off-white": "rgb(246 237 216)",
-  white: "rgb(238 235 233)", olive: "rgb(215 219 187)",
-  green: "rgb(202 225 202)", sage: "rgb(202 225 202)",
-  burgundy: "rgb(229 196 207)", maroon: "rgb(229 196 207)",
-  red: "rgb(241 202 198)", pink: "rgb(242 214 228)",
-  purple: "rgb(222 206 234)", lavender: "rgb(222 206 234)",
-  orange: "rgb(248 221 191)", rust: "rgb(248 221 191)",
-  yellow: "rgb(244 237 192)", gold: "rgb(244 237 192)", mustard: "rgb(244 237 192)",
+  black: "rgb(194 190 196)",
+  charcoal: "rgb(194 190 196)",
+  navy: "rgb(192 204 221)",
+  "dark blue": "rgb(192 204 221)",
+  blue: "rgb(201 221 235)",
+  denim: "rgb(201 221 235)",
+  grey: "rgb(216 215 219)",
+  gray: "rgb(216 215 219)",
+  silver: "rgb(216 215 219)",
+  beige: "rgb(235 222 201)",
+  tan: "rgb(235 222 201)",
+  khaki: "rgb(235 222 201)",
+  brown: "rgb(221 199 180)",
+  camel: "rgb(221 199 180)",
+  chocolate: "rgb(221 199 180)",
+  cream: "rgb(246 237 216)",
+  ivory: "rgb(246 237 216)",
+  "off-white": "rgb(246 237 216)",
+  white: "rgb(238 235 233)",
+  olive: "rgb(215 219 187)",
+  green: "rgb(202 225 202)",
+  sage: "rgb(202 225 202)",
+  burgundy: "rgb(229 196 207)",
+  maroon: "rgb(229 196 207)",
+  red: "rgb(241 202 198)",
+  pink: "rgb(242 214 228)",
+  purple: "rgb(222 206 234)",
+  lavender: "rgb(222 206 234)",
+  orange: "rgb(248 221 191)",
+  rust: "rgb(248 221 191)",
+  yellow: "rgb(244 237 192)",
+  gold: "rgb(244 237 192)",
+  mustard: "rgb(244 237 192)",
 };
-const garmentColor = /\b(off-white|dark blue|black|charcoal|navy|blue|denim|grey|gray|silver|beige|tan|khaki|brown|camel|chocolate|cream|ivory|white|olive|green|sage|burgundy|maroon|red|pink|purple|lavender|orange|rust|yellow|gold|mustard)\b/i;
+const garmentColor =
+  /\b(off-white|dark blue|black|charcoal|navy|blue|denim|grey|gray|silver|beige|tan|khaki|brown|camel|chocolate|cream|ivory|white|olive|green|sage|burgundy|maroon|red|pink|purple|lavender|orange|rust|yellow|gold|mustard)\b/i;
 function synchronizedAccent(description: string | null, tags: string[] | null) {
-  const text = [description?.slice(0, 2000) ?? "", ...(tags ?? []).slice(0, 20).map(tag => tag.slice(0, 80))].join(" ");
+  const text = [
+    description?.slice(0, 2000) ?? "",
+    ...(tags ?? []).slice(0, 20).map((tag) => tag.slice(0, 80)),
+  ].join(" ");
   const color = text.match(garmentColor)?.[1].toLowerCase();
   return color ? garmentTints[color] : fallbackAccent;
 }
-
 
 export default function RackItemCard({
   compact,
@@ -74,7 +96,11 @@ export default function RackItemCard({
         aria-hidden={loading || undefined}
         data-loading-piece={loading || undefined}
         className={`rack-piece ${className ?? ""}`.trim()}
-        style={{ "--rack-item-accent": loading ? "#d8c9dc" : accentColor } as CSSProperties}
+        style={
+          {
+            "--rack-item-accent": loading ? "#d8c9dc" : accentColor,
+          } as CSSProperties
+        }
       >
         <div className="rack-piece-stage">
           <svg
@@ -100,14 +126,16 @@ export default function RackItemCard({
             />
           </svg>
           <div className="rack-piece-photo">
-            {loading ? <div className="loading-image-region" /> : <Image
-              src={imageUrl}
-              onLoad={revealDecodedImage}
-              alt={description ?? category ?? "Closet item"}
-              fill
-              sizes="(max-width: 640px) 44vw, (max-width: 1024px) 40vw, 280px"
-              className="object-contain"
-            />}
+            {!loading && (
+              <Image
+                src={imageUrl}
+                onLoad={revealDecodedImage}
+                alt={description ?? category ?? "Closet item"}
+                fill
+                sizes="(max-width: 640px) 44vw, (max-width: 1024px) 40vw, 280px"
+                className="object-contain"
+              />
+            )}
           </div>
           <div className="rack-piece-tag">
             <svg
@@ -139,7 +167,13 @@ export default function RackItemCard({
           {badgeLabel && <span className="rack-piece-badge">{badgeLabel}</span>}
         </div>
         <div className="rack-piece-caption">
-          <span>{loading ? <span className="loading-text-line" /> : category ?? "Your piece"}</span>
+          <span>
+            {loading ? (
+              <span className="loading-text-line" />
+            ) : (
+              (category ?? "Your piece")
+            )}
+          </span>
           <ArrowUpRight size={15} aria-hidden="true" />
         </div>
       </div>
