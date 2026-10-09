@@ -99,11 +99,13 @@ test("drawers keep their frame, garment and actions fixed through details and co
     await page.goto("/?scenario=wardrobe&latency=80");
     const rack = page.getByRole("region", { name: "Closet rack", exact: true });
     await expect(rack).toBeVisible();
+    await expect(page.getByRole("button", { name: "Open Overshirt details", exact: true })).toBeVisible();
     const position = () => rack.evaluate(element => element.getBoundingClientRect().top + window.scrollY);
     const top = await position();
     await page.getByRole("button", { name: "Work edit", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Work edit", exact: true })).toBeVisible();
     await expect(rack).toBeVisible();
+    await expect(page.getByRole("button", { name: "Open Overshirt details", exact: true })).toBeVisible();
     expect(Math.abs(await position() - top)).toBeLessThan(1);
     await page.getByRole("button", { name: "Open Overshirt details", exact: true }).click();
     const dialog = page.getByRole("dialog");
