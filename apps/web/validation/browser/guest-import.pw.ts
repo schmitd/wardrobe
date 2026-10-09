@@ -15,6 +15,7 @@ for (const failure of ["create", "completion"] as const) test(`guest import ${fa
   const saved = await page.evaluate(() => JSON.parse(sessionStorage.getItem("wardrobe.guestSnapshot.v1")!).items);
   expect(saved[0].createdItemId).toBe("already-created");
   expect(saved[1].createdItemId).toBe("synthetic-piece-1");
+  expect(await page.evaluate(() => JSON.parse(sessionStorage.getItem("wardrobe.guestSnapshot.v1")!).importOwnerId)).toBe("synthetic-alice");
   await retry.click();
   await expect(retry).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => sessionStorage.getItem("wardrobe.guestSnapshot.v1"))).toBeNull();

@@ -20,6 +20,8 @@ export type GuestSnapshotItem = {
 export type GuestSnapshot = {
   version: 1;
   createdAt: number;
+  // Bind resumed imports to the account that began them, without clearing drafts.
+  importOwnerId?: string;
   bio: string;
   items: GuestSnapshotItem[];
   sourceFit?: {

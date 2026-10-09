@@ -4,6 +4,7 @@ import {
 } from '@clerk/nextjs'
 import Navbar from '@/components/Navbar';
 import Providers from '@/components/Providers';
+import HomeContinuity from '@/components/HomeContinuity';
 import { Oswald, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
@@ -11,11 +12,13 @@ import "./globals.css";
 const heading = Oswald({
   variable: "--font-heading",
   subsets: ["latin"],
+  display: "optional",
 });
 
 const body = Space_Grotesk({
   variable: "--font-body",
   subsets: ["latin"],
+  display: "optional",
 });
 
 export const metadata: Metadata = {
@@ -83,7 +86,7 @@ export default function RootLayout({
         <body className={`${heading.variable} ${body.variable} min-h-screen flex flex-col`}>
           <Providers>
             <Navbar />
-            {children}
+            <HomeContinuity>{children}</HomeContinuity>
             <footer className="mx-auto w-full max-w-[1320px] px-4 py-6 pb-28 text-sm md:pb-6">
               <a href="/privacy" className="underline">Privacy</a>
             </footer>

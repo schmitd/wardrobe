@@ -10,7 +10,7 @@ import sharp from "sharp";
 const port = boundedInteger(process.env.PROBE_PORT, 4173, 1024, 65535);
 const boundary = resolve(import.meta.dir, "boundaries.tsx");
 const modules: Record<string, string> = {
-  "@clerk/nextjs": "useUser, useAuth, SignedIn, SignedOut, SignInButton, SignUpButton, UserButton", "convex/react": "useQuery, useMutation, usePaginatedQuery",
+  "@clerk/nextjs": "useUser, useAuth, SignedIn, SignedOut, SignInButton, SignUpButton, UserButton", "convex/react": "useQuery, useConvexAuth, useMutation, usePaginatedQuery",
   "next/navigation": "usePathname, useSearchParams", "@convex/_generated/api": "api",
   "next/image": "Image as default", "next/link": "Link as default", "posthog-js": "analytics as default",
   "@/app/actions/wardrobe": "getUploadUrlAction, routeCaptureAction, recordDailyFitCheckAction, createWardrobeItemAction, completeGuestOnboardingAction, checkCompatibilityAction, saveInspirationAction, enrichInspirationAction, deleteWardrobeItemAction, refreshStyleBioAction, updateProfileBioAction, analyzeGuestFitCheckAction",
@@ -56,6 +56,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
     const session = crypto.randomUUID();
     if (states.size > 100) states.delete(states.keys().next().value!);
     const next = fixture(url);
+    if (url.searchParams.get("case") === "home-empty") { next.catalog.items = []; next.catalog.collections = []; next.catalog.inspirations = []; next.catalog.memberships = []; }
     if (url.searchParams.get("case") === "item-states") {
       next.catalog.items[0]!.analysisStatus = "processing_description";
       next.catalog.items[1]!.analysisStatus = "error";
@@ -79,6 +80,13 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
   if (url.pathname === "/__fixture/query") {
     const args = input.args as Record<string, string>;
     const c = state.catalog;
+    if (state.latency) await Bun.sleep(state.latency);
+    if (input.query === "wardrobe.pageWardrobeItems" && state.scenarioCase === "home-load-error" && !state.wrote) { state.wrote = true; return Response.json({error:"Synthetic unavailable"},{status:503}); }
+    if (input.subject === "synthetic-bob") {
+      if (input.query === "wardrobe.pageWardrobeItems") return Response.json([{...c.items[0],id:"bob-piece",category:"Bob shirt",description:"Second account shirt"}]);
+      if (input.query === "profile.getProfile") return Response.json({bio:"Second account style"});
+      if (String(input.query).startsWith("wardrobe.page")) return Response.json([]);
+    }
     switch (input.query) {
       case "mobile.plans": case "wardrobes.listWardrobes": return Response.json(c.collections.filter(collection => !collection.archived));
       case "wardrobe.pageCollections": return Response.json(c.collections.filter(collection => Boolean(collection.archived) === Boolean(args.archived)).map(collection => ({ ...collection, previews: [...c.items.filter(i => c.memberships.some(m => m.wardrobeId === collection._id && m.itemId === i.id)), ...c.inspirations.filter(r => r.wardrobeId === collection._id).map(r => ({ id: r._id, imageUrl: r.imageUrl, category: r.category }))].slice(0, 3) })));
@@ -112,6 +120,10 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
       else if (input.name === "wardrobes.updateWardrobe") { const collection = c.collections.find(collection => collection._id === args.wardrobeId); if (collection) { collection.name = args.name!; collection.description = args.description ?? ""; } }
       else if (input.name === "wardrobes.createWardrobe") { const id = `collection-${c.collections.length}`; c.collections.push({ _id: id, name: args.name!, description: args.description ?? "", archived: false }); return Response.json({ id }); }
       return Response.json(null);
+    }
+    case "fixture-insert-piece": {
+      state.catalog.items.push({...state.catalog.items[0]!,id:"live-piece",category:"Live shirt",description:"New live item"});
+      return Response.json({ok:true});
     }
     case "delete-piece": {
       state.catalog.items = state.catalog.items.filter(item => item.id !== input.itemId);

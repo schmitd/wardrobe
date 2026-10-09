@@ -6,11 +6,14 @@ import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { HomeVisibilityContext } from "@/components/homeVisibility"
 
 function Dialog({
+  open,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+  const visible = React.useContext(HomeVisibilityContext)
+  return <DialogPrimitive.Root data-slot="dialog" {...props} open={visible ? open : false} />
 }
 
 function DialogTrigger({

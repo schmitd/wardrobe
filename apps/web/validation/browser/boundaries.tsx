@@ -2,28 +2,36 @@ import React, { useEffect, useState, useSyncExternalStore } from "react";
 
 // Only the standalone gallery uses these adapters. No application auth bypass exists.
 export const useUser = () => ({ isLoaded: true, isSignedIn: true, user: { id: "synthetic-alice", externalAccounts: [], createExternalAccount: async () => { throw new Error("External authentication is outside this fixture"); } } });
-export const useAuth = () => ({ isLoaded: true, isSignedIn: true });
+type FixtureAuth = { isLoaded:boolean; isSignedIn:boolean; userId:string|null; backendPending?:boolean };
+declare global { interface Window { fixtureAuth?:FixtureAuth } }
+const defaultAuth:FixtureAuth = {isLoaded:true,isSignedIn:true,userId:"synthetic-alice"};
+const readAuth = () => window.fixtureAuth ?? defaultAuth;
+export const useAuth = () => useSyncExternalStore(listener => { window.addEventListener("fixture-auth",listener); return () => window.removeEventListener("fixture-auth",listener); }, readAuth);
+export const useConvexAuth = () => { const auth = useAuth(); return {isLoading:!auth.isLoaded || Boolean(auth.backendPending),isAuthenticated:auth.isSignedIn && !auth.backendPending}; };
 export const SignedIn = ({ children }: { children: React.ReactNode }) => <>{children}</>;
 export const SignedOut = () => null;
 export const SignInButton = SignedIn;
 export const SignUpButton = SignedIn;
 export const analyzeGuestFitCheckAction = async () => ({ kind: "error" as const, message: "Synthetic analysis unavailable. Retry or sign in." });
 export const UserButton = () => <span aria-label="Synthetic account">D</span>;
-export const usePathname = () => location.pathname;
+export const usePathname = () => useSyncExternalStore(listener => { window.addEventListener("fixture-navigation",listener); return () => window.removeEventListener("fixture-navigation",listener); }, () => location.pathname);
 export const useSearchParams = () => new URLSearchParams(location.search);
 export const api = new Proxy({}, { get: (_, group: string) => new Proxy({}, { get: (_, name: string) => `${group}.${name}` }) });
 let revision = 0;
 const listeners = new Set<() => void>();
 function invalidate() { revision++; listeners.forEach(listener => listener()); }
+window.addEventListener("fixture-refresh", invalidate);
 export function useQuery<T = unknown>(query: string, args: object | "skip" = {}) {
   const version = useSyncExternalStore(listener => { listeners.add(listener); return () => listeners.delete(listener); }, () => revision);
+  const subject = useAuth().userId;
   const key = JSON.stringify(args);
-  const [result, setResult] = useState<{ key: string; data: T } | undefined>();
+  const [result, setResult] = useState<{ key: string; data?: T; error?:Error } | undefined>();
   useEffect(() => {
     let active = true;
-    if (key !== '"skip"') void fetch("/__fixture/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query, args: JSON.parse(key) }) }).then(r => r.json()).then(data => { if (active) setResult({ key, data }); });
+    if (key !== '"skip"') void fetch("/__fixture/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query, subject, args: JSON.parse(key) }) }).then(async r => { if (!r.ok) throw new Error("Synthetic query unavailable"); return r.json(); }).then(data => { if (active) setResult({ key, data }); }).catch(error => { if (active) setResult({key,error}); });
     return () => { active = false; };
-  }, [query, key, version]);
+  }, [query, key, subject, version]);
+  if (result?.key === key && result.error) throw result.error;
   return key === '"skip"' ? undefined : result?.key === key ? result.data : undefined;
 }
 export function usePaginatedQuery(query: string, args: object | "skip", _options: unknown) { // eslint-disable-line @typescript-eslint/no-unused-vars
@@ -32,7 +40,10 @@ export function usePaginatedQuery(query: string, args: object | "skip", _options
 }
 export const useMutation = (name: string) => async (args: unknown) => { const result = await action("mutation", { name, args }); invalidate(); return result; };
 export const analytics = { capture() {}, captureException() {}, has_opted_out_capturing: () => true };
-export const Link = ({ href, children, ...props }: React.ComponentProps<"a">) => <a href={href} {...props}>{children}</a>;
+export const Link = ({ href, children, ...props }: React.ComponentProps<"a">) => <a href={href} {...props} onClick={event => {
+  props.onClick?.(event);
+  if (!event.defaultPrevented && location.search.includes("scenario=home-continuity") && (href === "/" || href === "/fits")) { event.preventDefault(); history.pushState({}, "", `${href}?scenario=home-continuity`); window.dispatchEvent(new Event("fixture-navigation")); }
+}}>{children}</a>;
 export const Image = ({ fill, unoptimized: _unoptimized, priority: _priority, style, ...props }: React.ComponentProps<"img"> & { fill?: boolean; unoptimized?: boolean; priority?: boolean }) => <img alt={props.alt ?? ""} style={{ ...(fill ? { position: "absolute", inset: 0, width: "100%", height: "100%" } : {}), ...style }} {...props} />; // eslint-disable-line @next/next/no-img-element, @typescript-eslint/no-unused-vars
 
 async function action(name: string, input?: unknown) {

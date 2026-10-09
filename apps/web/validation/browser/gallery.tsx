@@ -1,5 +1,6 @@
 import React from "react";
-import Home from "../../src/app/page";
+import Home from "../../src/components/HomeWorkspace";
+import HomeContinuity from "../../src/components/HomeContinuity";
 import AuthEntry from "../../src/components/AuthEntry";
 import GuestClosetDemo from "../../src/components/GuestClosetDemo";
 import { createRoot } from "react-dom/client";
@@ -19,5 +20,5 @@ function WardrobeFixture() {
 const scenario = new URLSearchParams(location.search).get("scenario") ?? (location.pathname === "/" ? "wardrobe" : "fits");
 createRoot(document.getElementById("root")!).render(<>
   <div className="fixture-banner">Design review · synthetic data</div>
-  {scenario === "home-import" ? <><Navbar /><Home /></> : scenario === "guest" ? <main className="p-5"><AuthEntry ready={!new URLSearchParams(location.search).has("authPending")}><GuestClosetDemo /></AuthEntry></main> : scenario === "wardrobe" ? <WardrobeFixture /> : scenario === "fits" ? <><Navbar /><FitsPage /></> : scenario === "capture" ? <UnifiedCaptureController><UnifiedCaptureTrigger variant="desktop" /></UnifiedCaptureController> : <main className="p-5"><DayPlanner historyDate={scenario === "history" ? shiftDay(localDate(), -1) : undefined} /></main>}
+  {scenario === "home-continuity" ? <><Navbar /><HomeContinuity><FitsPage /></HomeContinuity></> : scenario === "home-import" ? <><Navbar /><Home /></> : scenario === "guest" ? <main className="p-5"><AuthEntry ready={!new URLSearchParams(location.search).has("authPending")}><GuestClosetDemo /></AuthEntry></main> : scenario === "wardrobe" ? <WardrobeFixture /> : scenario === "fits" ? <><Navbar /><FitsPage /></> : scenario === "capture" ? <UnifiedCaptureController><UnifiedCaptureTrigger variant="desktop" /></UnifiedCaptureController> : <main className="p-5"><DayPlanner historyDate={scenario === "history" ? shiftDay(localDate(), -1) : undefined} /></main>}
 </>);
