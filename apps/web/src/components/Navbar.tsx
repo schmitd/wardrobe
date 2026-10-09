@@ -8,6 +8,7 @@ import { Sparkles, Shirt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UnifiedCaptureController, UnifiedCaptureTrigger } from '@/components/UnifiedCapture';
 import { cn } from '@/lib/utils';
+import InstallLint from '@/components/InstallLint';
 
 const navClass = (active: boolean) =>
   cn(
@@ -57,6 +58,8 @@ export default function Navbar() {
               ))}
             </SignedIn>
           </div>
+
+          <InstallLint />
 
           <SignedIn>
             <div className="grid min-h-11 min-w-11 place-items-center border border-[var(--rack-line)] bg-white shadow-[2px_2px_0_var(--rack-panel-shadow)]" aria-label="Account, privacy, and sign out">

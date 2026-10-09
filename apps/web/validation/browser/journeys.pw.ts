@@ -50,56 +50,45 @@ test("planner: one action generates multilingual days and discloses partial Cale
 });
 
 test("capture: a delayed full-fit try-on retains intent without adding owned pieces", async ({ page }) => {
+  await page.addInitScript(() => { Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia: () => new Promise(() => {}) } }); });
   await page.goto("/?scenario=capture&latency=150");
   await page.getByRole("button", { name: "Add outfit", exact: true }).click();
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("menuitem", { name: "Try on outfit", exact: true }).click();
+  await page.getByRole("button", { name: "Try on", exact: true }).click();
   await page.getByRole("button", { name: "Choose photos", exact: true }).click();
   await (await chooser).setFiles(photo);
-  await expect(page.locator("button[aria-haspopup=\"menu\"]")).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Add outfit", exact: true })).toBeDisabled();
   await expect(page.getByRole("heading", { name: "Strong closet fit", exact: true })).toBeVisible();
   const state = await page.request.get("/__fixture/state").then(r => r.json());
   expect(state.calls.find((call: { operation: string }) => call.operation === "try-on").input.scope).toBe("full_fit");
   expect(state.calls.some((call: { operation: string }) => ["create-piece", "daily-fit"].includes(call.operation))).toBe(false);
 });
 
-test("add menu connects to its trigger, supports keyboard dismissal and preserves picker cancellation", async ({ page }) => {
+test("Add enters full viewport camera, restores focus and preserves picker cancellation", async ({ page }) => {
+  await page.addInitScript(() => { Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia: () => new Promise(() => {}) } }); });
   for (const width of [320, 390, 768, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto("/?scenario=wardrobe");
     const trigger = page.getByRole("button", { name: "Add outfit", exact: true });
-    await page.emulateMedia({ reducedMotion: width === 320 ? "reduce" : "no-preference" });
     await trigger.click();
-    const menu = page.getByRole("menu", { name: "Add outfit", exact: true });
-    await expect(menu).toBeVisible();
-    if (width === 390 || width === 1280) await page.screenshot({ path: `../../output/playwright/add-menu-${width}.png`, animations: "disabled" });
-    await expect(page.getByRole("menuitem")).toHaveCount(2);
-    expect(await page.getByRole("menuitem").evaluateAll(items => items.every(item => !item.hasAttribute("data-highlighted")))).toBe(true);
-    const anchor = await page.getByRole("button", { name: "Close add menu", exact: true }).boundingBox();
-    const bounds = await menu.boundingBox();
-    expect(bounds!.x).toBeGreaterThanOrEqual(0);
-    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
-    expect(Math.abs(bounds!.x + bounds!.width / 2 - anchor!.x - anchor!.width / 2)).toBeLessThan(3);
-    if (width === 320) expect(await menu.evaluate(element => getComputedStyle(element).animationName)).toBe("none");
-    await menu.press("ArrowDown");
-    await expect(page.getByRole("menuitem", { name: "Add owned outfit", exact: true })).toBeFocused();
-    await page.getByRole("menuitem", { name: "Add owned outfit", exact: true }).press("ArrowDown");
-    await expect(page.getByRole("menuitem", { name: "Try on outfit", exact: true })).toBeFocused();
-    await page.getByRole("menuitem", { name: "Try on outfit", exact: true }).press("Escape");
-    await expect(menu).toHaveCount(0);
+    const camera = page.getByRole("dialog", { name: "Camera", exact: true });
+    await expect(camera).toBeVisible();
+    await expect(page.getByRole("menu")).toHaveCount(0);
+    await expect(page.locator(".task-sheet")).toHaveCount(0);
+    expect(await camera.boundingBox()).toEqual({ x: 0, y: 0, width, height: 844 });
+    await expect(page.getByRole("button", { name: "Close camera" })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(camera).toHaveCount(0);
     await expect(trigger).toBeFocused();
     await trigger.click();
     const chooser = page.waitForEvent("filechooser");
-    await page.getByRole("menuitem", { name: "Add owned outfit", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Take photo", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Choose photos", exact: true }).click();
     await (await chooser).setFiles([]);
-    await expect(menu).toHaveCount(0);
+    await expect(camera).toHaveCount(0);
     await expect(trigger).toBeEnabled();
     await trigger.click();
-    await expect(menu).toBeVisible();
-    await page.getByRole("heading", { name: "All pieces", exact: true }).click();
-    await expect(menu).toHaveCount(0);
+    await expect(camera).toBeVisible();
+    await page.getByRole("button", { name: "Close camera", exact: true }).click();
   }
 });
 

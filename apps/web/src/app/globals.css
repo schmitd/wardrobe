@@ -511,64 +511,12 @@ h4 {
   height: 1rem;
 }
 
-.rack-capture-trigger[data-state="open"] .rack-capture-plus {
-  transform: rotate(45deg);
-}
-
 .rack-capture-trigger:disabled {
   opacity: 0.5;
   cursor: wait;
 }
 
-.rack-capture-intent {
-  z-index: 70;
-  width: min(16rem, calc(100vw - 1.5rem));
-  padding: 0.3rem;
-  border: 1px solid var(--rack-line);
-  background: var(--rack-paper);
-  box-shadow: 3px 4px 0 var(--rack-panel-shadow);
-  transform-origin: var(--radix-dropdown-menu-content-transform-origin);
-}
-
-.rack-capture-intent[data-state="open"] {
-  animation: capture-menu-in 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.rack-capture-intent[data-state="closed"] {
-  animation: capture-menu-out 120ms ease-in;
-}
-
-.rack-capture-intent-option {
-  display: flex;
-  min-height: 52px;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.75rem;
-  color: var(--rack-ink);
-  font-size: 0.95rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.rack-capture-intent-option svg { flex-shrink: 0; }
-.rack-capture-intent-option[data-highlighted] {
-  background: var(--rack-wash);
-  outline: 2px solid var(--rack-ink);
-  outline-offset: -2px;
-}
-.rack-capture-arrow { fill: var(--rack-ink); }
-
-@keyframes capture-menu-in {
-  from { opacity: 0; transform: scale(0.88); }
-  to { opacity: 1; transform: scale(1); }
-}
-@keyframes capture-menu-out {
-  from { opacity: 1; transform: scale(1); }
-  to { opacity: 0; transform: scale(0.92); }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .rack-capture-intent { animation: none !important; }
   .rack-capture-trigger, .rack-capture-plus { transition: none; }
 }
 
@@ -846,4 +794,29 @@ h4 {
   .task-sheet-hero { padding-bottom:12px; }
   .task-sheet-hero > div, .task-sheet-hero > div > div:first-child { height:72px; }
   .task-sheet-footer { padding-top:8px; padding-bottom:max(8px,env(safe-area-inset-bottom)); }
+}
+
+/* Capture owns the usable viewport, independent of the detail-sheet shell. */
+.lint-camera-surface[data-slot="dialog-content"] { inset:0; z-index:90; width:100%; max-width:none; height:100vh; height:100dvh; border:0; border-radius:0; padding:0; gap:0; background:#080808; box-shadow:none; overflow:hidden; }
+.lint-camera { position:relative; width:100%; height:100%; overflow:hidden; color:#fff; background:#080808; }
+.lint-camera-preview { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.lint-camera-header { position:absolute; inset:0 0 auto; display:flex; align-items:center; gap:16px; padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 36px max(16px,env(safe-area-inset-left)); background:linear-gradient(#0008,transparent); }
+.lint-camera-icon { display:grid; place-items:center; width:48px; height:48px; flex-shrink:0; border-radius:50%; color:#fff; background:#0005; }
+.lint-camera-icon svg { width:24px; height:24px; }
+.lint-camera-mode { display:flex; margin:0 auto; padding:4px; border-radius:24px; background:#0008; }
+.lint-camera-mode button { min-height:40px; padding:0 14px; border-radius:20px; font-size:13px; font-weight:700; color:#fff; }
+.lint-camera-mode button[aria-pressed="true"] { color:#241426; background:#fff; }
+.lint-camera-controls { position:absolute; inset:auto 0 0; display:flex; align-items:center; justify-content:space-between; gap:24px; padding:40px max(24px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left)); background:linear-gradient(transparent,#0009); }
+.lint-camera-shutter { display:grid; place-items:center; width:76px; height:76px; border:3px solid #fff; border-radius:50%; padding:5px; }
+.lint-camera-shutter span { width:100%; height:100%; border-radius:50%; background:#fff; }
+.lint-camera-shutter:disabled { opacity:.4; }
+.lint-camera-controls-spacer { width:48px; }
+.lint-camera-waiting { position:absolute; top:45%; left:0; right:0; padding:24px; text-align:center; font-size:15px; }
+.lint-camera-fallback { display:flex; height:100%; flex-direction:column; align-items:center; justify-content:center; gap:20px; padding:80px 24px; text-align:center; }
+.lint-camera-choose { min-height:48px; padding:12px 24px; border-radius:24px; color:#241426; background:#fff; font-weight:700; }
+.lint-camera button:focus-visible { outline:3px solid #DCE66E; outline-offset:4px; }
+@media (orientation:landscape) and (max-height:500px) {
+  .lint-camera-controls { left:auto; top:0; width:112px; flex-direction:column; padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) 16px; background:linear-gradient(90deg,transparent,#0008); }
+  .lint-camera-controls-spacer { height:48px; }
+  .lint-camera-header { right:112px; padding-bottom:16px; }
 }

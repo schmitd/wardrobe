@@ -4,14 +4,16 @@ import { collectionFixture, pieceSvg } from "./collection-fixture";
 import { resolve } from "node:path";
 import { shiftDay, sevenDays, type PlanningData } from "@wardrobe/shared";
 import { boundedInteger } from "../property-options";
+import manifest from "../../src/app/manifest";
+import sharp from "sharp";
 
 const port = boundedInteger(process.env.PROBE_PORT, 4173, 1024, 65535);
 const boundary = resolve(import.meta.dir, "boundaries.tsx");
 const modules: Record<string, string> = {
-  "@clerk/nextjs": "useUser, SignedIn, SignedOut, SignInButton, SignUpButton, UserButton", "convex/react": "useQuery, useMutation, usePaginatedQuery",
+  "@clerk/nextjs": "useUser, useAuth, SignedIn, SignedOut, SignInButton, SignUpButton, UserButton", "convex/react": "useQuery, useMutation, usePaginatedQuery",
   "next/navigation": "usePathname, useSearchParams", "@convex/_generated/api": "api",
   "next/image": "Image as default", "next/link": "Link as default", "posthog-js": "analytics as default",
-  "@/app/actions/wardrobe": "getUploadUrlAction, routeCaptureAction, recordDailyFitCheckAction, createWardrobeItemAction, checkCompatibilityAction, saveInspirationAction, enrichInspirationAction, deleteWardrobeItemAction, refreshStyleBioAction, updateProfileBioAction, analyzeGuestFitCheckAction",
+  "@/app/actions/wardrobe": "getUploadUrlAction, routeCaptureAction, recordDailyFitCheckAction, createWardrobeItemAction, completeGuestOnboardingAction, checkCompatibilityAction, saveInspirationAction, enrichInspirationAction, deleteWardrobeItemAction, refreshStyleBioAction, updateProfileBioAction, analyzeGuestFitCheckAction",
 };
 const build = await Bun.build({
   entrypoints: [resolve(import.meta.dir, "gallery.tsx")], target: "browser", minify: true,
@@ -23,13 +25,13 @@ const build = await Bun.build({
 });
 if (!build.success) throw new AggregateError(build.logs, "Gallery build failed");
 const bundle = build.outputs[0]!;
-type State = { fixtureKey: string; previews: Record<string, string>; catalog: ReturnType<typeof collectionFixture>; data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean; scenarioCase: string | null };
+type State = { uploadImages: {width?:number; height?:number}[]; fixtureKey: string; previews: Record<string, string>; catalog: ReturnType<typeof collectionFixture>; data: PlanningData; calls: { operation: string; input: Record<string, unknown> }[]; stale: boolean; latency: number; scope: string; wrote: boolean; scenarioCase: string | null };
 const states = new Map<string, State>();
 function fixture(url: URL): State {
   // Match the Playwright/probe browser even when the runner's local date is UTC.
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   return {
-    fixtureKey: url.search, previews: {}, catalog: collectionFixture(),
+    uploadImages: [], fixtureKey: url.search, previews: {}, catalog: collectionFixture(),
     data: { items: ["Shirt", "Trousers", "Coat"].map((category, i) => ({ id: `piece-${i}`, category, description: `Synthetic ${category.toLowerCase()}`, imageUrl: `/__fixture/piece-${i}.svg` })), plans: [], calendarEnabled: true, calendarIds: ["synthetic-calendar"], suggestions: [{ id: "outfit", date: url.searchParams.get("scenario") === "history" ? shiftDay(today, -1) : today, title: "Easy structure for your day", rationale: "Relaxed tailoring draws on Work edit; the cotton layers work together for your client meeting.", itemIds: ["piece-0", "piece-1"], missing: [], context: ["Collection: Work edit", "Style profile"], status: "planned", calendarDerived: false }] },
     calls: [], stale: url.searchParams.get("case") === "stale", latency: boundedInteger(url.searchParams.get("latency") ?? undefined, 0, 0, 5000), scenarioCase: url.searchParams.get("case"), scope: url.searchParams.get("scope") === "single_piece" ? "single_piece" : "full_fit", wrote: false,
   };
@@ -39,9 +41,10 @@ const css = await postcss([tailwind({ optimize: { minify: true } })]).process(aw
 const html = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Wardrobe review gallery</title><link rel="stylesheet" href="/gallery.css"><style>body{font-family:Arial,sans-serif}.fixture-banner{padding:5px 12px;background:#241426;color:#eee5f0;font-size:11px;text-align:center}</style><div id="root"></div><script type="module" src="/gallery.js"></script></html>`;
 Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
   const url = new URL(request.url);
-  if (url.pathname === "/brand/lint-round-tuft-lockup.png" || url.pathname === "/brand/lint-round-tuft-mark.png") {
+  if (["/brand/lint-round-tuft-lockup.png", "/brand/lint-round-tuft-mark.png", "/brand/lint-app-192.png", "/brand/lint-app-512.png"].includes(url.pathname)) {
     return new Response(Bun.file(resolve(import.meta.dir, "../../public", url.pathname.slice(1))));
   }
+  if (url.pathname === "/manifest.webmanifest") return Response.json(manifest());
   if (url.pathname === "/favicon.ico") return new Response(null, { status: 204 });
   if (url.pathname === "/health") return new Response(process.env.PROBE_TOKEN ?? "ok");
   if (url.pathname === "/gallery.js") return new Response(bundle, { headers: { "Content-Type": "application/javascript" } });
@@ -69,7 +72,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
   const state = session ? states.get(session) : undefined;
   if (!state) return Response.json({ error: "Open a fixture first" }, { status: 400 });
   if (url.pathname === "/__fixture/state") return Response.json(state);
-  if (url.pathname === "/__fixture/upload") return Response.json({ storageId: "synthetic-storage" });
+  if (url.pathname === "/__fixture/upload") { const {width,height} = await sharp(Buffer.from(await request.arrayBuffer())).metadata(); state.uploadImages.push({width,height}); return Response.json({ storageId: "synthetic-storage" }); }
   if (url.pathname === "/api/wardrobe/process-stream") return new Response('{"type":"status","stage":"persisting"}\n{"type":"complete"}\n', { headers: { "Content-Type": "application/x-ndjson" } });
   if (request.method !== "POST") return new Response("Not found", { status: 404 });
   const input = await request.json() as Record<string, unknown>;
@@ -142,7 +145,15 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
     case "upload-url": return Response.json(`http://127.0.0.1:${port}/__fixture/upload`);
     case "route": return Response.json({ scope: state.scope, confidence: .95, needsReview: false, rationale: "Synthetic route" });
     case "daily-fit": return Response.json({ id: "synthetic-fit" });
-    case "create-piece": return Response.json({ id: "synthetic-piece" });
+    case "create-piece": {
+      const count = state.calls.filter(call => call.operation === "create-piece").length;
+      if (state.scenarioCase === "import-create-error" && count === 2 && !state.wrote) { state.wrote = true; return Response.json({error:"Synthetic transient create failure"},{status:503}); }
+      return Response.json({ id: `synthetic-piece-${count}` });
+    }
+    case "complete-onboarding": {
+      if (state.scenarioCase === "import-completion-error" && !state.wrote) { state.wrote = true; return Response.json({error:"Synthetic transient completion failure"},{status:503}); }
+      return Response.json({ success: true, results: (input.items as {itemId:string}[]).map(item => ({itemId:item.itemId,success:true})) });
+    }
     case "try-on": return Response.json({ storageId: "synthetic-storage", candidate: { category: "Full fit", description: "Synthetic two-piece fit", styleTags: [] }, evaluation: { score: 80, explanation: "Synthetic compatibility" }, similarItems: [], dissimilarItems: [], message: "Synthetic result" });
     default: return Response.json({ error: `Unimplemented fixture operation: ${operation}` }, { status: 400 });
   }

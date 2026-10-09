@@ -2,6 +2,7 @@ import React, { useEffect, useState, useSyncExternalStore } from "react";
 
 // Only the standalone gallery uses these adapters. No application auth bypass exists.
 export const useUser = () => ({ isLoaded: true, isSignedIn: true, user: { id: "synthetic-alice", externalAccounts: [], createExternalAccount: async () => { throw new Error("External authentication is outside this fixture"); } } });
+export const useAuth = () => ({ isLoaded: true, isSignedIn: true });
 export const SignedIn = ({ children }: { children: React.ReactNode }) => <>{children}</>;
 export const SignedOut = () => null;
 export const SignInButton = SignedIn;
@@ -44,6 +45,7 @@ export const getUploadUrlAction = () => action("upload-url");
 export const routeCaptureAction = (input: unknown) => action("route", input);
 export const recordDailyFitCheckAction = (input: unknown) => action("daily-fit", input);
 export const createWardrobeItemAction = (input: unknown) => action("create-piece", input);
+export const completeGuestOnboardingAction = (input: unknown) => action("complete-onboarding", input);
 export const checkCompatibilityAction = (input: unknown) => action("try-on", input);
 export const saveInspirationAction = (input: unknown) => action("save-inspiration", input);
 export const enrichInspirationAction = (input: unknown) => action("enrich-inspiration", input);

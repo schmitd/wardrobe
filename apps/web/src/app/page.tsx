@@ -7,7 +7,6 @@ import { useAuth } from '@clerk/nextjs';
 import { usePaginatedQuery } from 'convex/react';
 import { Effect, Result } from 'effect';
 import { api } from '@convex/_generated/api';
-import AddItemSection from '@/components/AddItemSection';
 import GuestClosetDemo from '@/components/GuestClosetDemo';
 import AuthEntry from '@/components/AuthEntry';
 import CollectionsWorkspace from '@/components/CollectionsWorkspace';
@@ -33,6 +32,8 @@ export default function Home() {
   const [optimisticItems, setOptimisticItems] = useState<OptimisticWardrobeItem[]>([]);
   const [importStatus, setImportStatus] = useState<string | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importRetryAvailable, setImportRetryAvailable] = useState(false);
+  const importOptimisticIdsRef = useRef(new Set<string>());
   const importedSnapshotRef = useRef<number | null>(null);
   const isImportingSnapshotRef = useRef(false);
 
@@ -92,12 +93,14 @@ export default function Home() {
     importedSnapshotRef.current = snapshot.createdAt;
     isImportingSnapshotRef.current = true;
     setImportError(null);
+    setImportRetryAvailable(false);
 
     const queue = snapshot.items.map((item) => ({
       item,
       tempId: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
       ...createTraceContext(),
     }));
+    importOptimisticIdsRef.current = new Set(queue.map(({ tempId }) => tempId));
 
     setOptimisticItems((prev) => [
       ...queue.map(({ item, tempId }) => ({
@@ -174,7 +177,11 @@ export default function Home() {
         }
       }
 
-      if (!allItemsPrepared) return;
+      if (!allItemsPrepared) {
+        setImportError('Some photos could not be imported. Retry to finish adding your pieces.');
+        setImportRetryAvailable(true);
+        return;
+      }
       if (!snapshot.sourceFit) {
         setImportError('Your original fit check is no longer available. Start with a new full-body photo.');
         return;
@@ -218,6 +225,7 @@ export default function Home() {
           patchOptimisticItem(tempId, { status: 'error', error: message });
         });
         setImportError(message);
+        setImportRetryAvailable(true);
         return;
       }
 
@@ -232,30 +240,33 @@ export default function Home() {
           });
         }
         setImportError('Some pieces need another pass before the first fit can be saved.');
+        setImportRetryAvailable(true);
         return;
       }
 
       clearGuestSnapshot();
+    } catch (error) {
+      setImportError(userFacingErrorMessage(error, 'Import could not finish. Please retry.'));
+      setImportRetryAvailable(true);
     } finally {
       setImportStatus(null);
       isImportingSnapshotRef.current = false;
     }
   }, [patchOptimisticItem]);
 
+  const retryGuestImport = () => {
+    if (isImportingSnapshotRef.current) return;
+    // Retry only on explicit request. Saved IDs in the snapshot are reused.
+    importedSnapshotRef.current = null;
+    const previous = importOptimisticIdsRef.current;
+    setOptimisticItems(items => items.filter(item => !previous.has(item.tempId)));
+    void importGuestSnapshot();
+  };
+
   useEffect(() => {
     if (!isLoaded || !isSignedIn) return;
     void importGuestSnapshot();
   }, [importGuestSnapshot, isLoaded, isSignedIn]);
-
-  const handleOptimisticAdd = (newItems: OptimisticWardrobeItem[]) => {
-    setOptimisticItems((prev) => [...newItems, ...prev]);
-  };
-
-  const handleOptimisticUpdate = (tempId: string, patch: Partial<OptimisticWardrobeItem>) => {
-    setOptimisticItems((prev) =>
-      prev.map((item) => (item.tempId === tempId ? { ...item, ...patch } : item))
-    );
-  };
 
   const handleRemoveOptimistic = (tempId: string) => {
     setOptimisticItems((prev) => {
@@ -298,6 +309,7 @@ export default function Home() {
           {importError && (
             <div role="alert" className="rack-panel rounded-none border-[var(--rack-danger)] bg-[var(--rack-danger-wash)] px-5 py-4 text-sm font-semibold text-[var(--rack-danger)]">
               {importError}
+              {importRetryAvailable && <button type="button" disabled={Boolean(importStatus)} onClick={retryGuestImport} className="mt-3 block min-h-11 border border-current px-4 font-bold text-[#241426]">Retry import</button>}
             </div>
           )}
 
@@ -306,11 +318,6 @@ export default function Home() {
             <>
               <h1 className="sr-only">Wardrobe</h1>
               <StyleNotes />
-              <AddItemSection
-                onOptimisticAdd={handleOptimisticAdd}
-                onOptimisticUpdate={handleOptimisticUpdate}
-                uploaderInputId={uploadInputId}
-              />
               <CollectionsWorkspace
                 loading={closet.status === "LoadingFirstPage"}
                 loadMore={closet.status === "CanLoadMore" ? () => closet.loadMore(48) : undefined}

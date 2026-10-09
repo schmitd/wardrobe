@@ -6,11 +6,9 @@ test("mobile web FAB offers camera, handles denied camera and imports selected p
   await page.addInitScript(() => { Object.defineProperty(navigator,"mediaDevices",{configurable:true,value:{getUserMedia:async()=>{throw new DOMException("Synthetic denial","NotAllowedError");}}}); });
   await page.goto("/?scenario=wardrobe");
   await page.getByRole("button",{name:"Add outfit",exact:true}).click();
-  await page.getByRole("menuitem",{name:"Add owned outfit",exact:true}).click();
-  await expect(page.getByRole("button",{name:"Choose photos",exact:true})).toBeVisible();
-  await page.getByRole("button",{name:"Take photo",exact:true}).click();
+  await expect(page.getByRole("menu")).toHaveCount(0);
   await expect(page.getByRole("alert")).toContainText("access declined");
-  const chooser=page.waitForEvent("filechooser");await page.getByRole("button",{name:"Choose photos",exact:true}).click();
+  const chooser=page.waitForEvent("filechooser");await page.getByRole("button",{name:"Choose photo",exact:true}).click();
   const picker=await chooser;expect(picker.isMultiple()).toBe(true);
   await picker.setFiles([photo,{...photo,name:"second.png"}]);
   await expect(page.getByRole("button",{name:"Add outfit",exact:true})).toBeEnabled();

@@ -3,10 +3,9 @@
 import { uploadPhoto } from "@/services/photoUpload";
 
 import Link from 'next/link';
-import TaskSheet from "./TaskSheet";
+import { usePathname } from 'next/navigation';
 import WebPhotoCamera from "./WebPhotoCamera";
-import { Button } from "./ui/button";
-import { ChangeEvent, createContext, useContext, useRef, useState, type ReactNode } from 'react';
+import { ChangeEvent, createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Check,
   ImagePlus,
@@ -133,7 +132,16 @@ export function UnifiedCaptureTrigger({ variant }: { variant: 'mobile' | 'deskto
 export function UnifiedCaptureController({ children }: { children: ReactNode }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const locked = useRef(false);
-  const [source, setSource] = useState<"choose" | "camera" | null>(null);
+  const [source, setSource] = useState<"camera" | null>(null);
+  const [cameraIntent, setCameraIntent] = useState<CaptureIntent>("my_wardrobe");
+  const opener = useRef<HTMLElement | null>(null);
+  const pathname = usePathname();
+  const closeCamera = useCallback(() => setSource(null), []);
+  useEffect(() => closeCamera, [pathname, closeCamera]);
+  useEffect(() => {
+    window.addEventListener("popstate", closeCamera);
+    return () => window.removeEventListener("popstate", closeCamera);
+  }, [closeCamera]);
   const selectedIntentRef = useRef<CaptureIntent>('my_wardrobe');
   const [pending, setPending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -145,8 +153,12 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
   const chooseIntent = (intent: CaptureIntent) => {
     if (pending || locked.current) return;
     selectedIntentRef.current = intent;
+    setCameraIntent(intent);
     setToast(null);
-    setSource("choose");
+    opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    // Native pickers require this original click, before an async permission result.
+    if (!navigator.mediaDevices?.getUserMedia) { choosePhotos(); return; }
+    setSource("camera");
   };
 
   const completeCapture = async (capture: PendingCapture, scope: CaptureScope) => {
@@ -269,16 +281,34 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
     const files = Array.from(event.target.files ?? []); event.target.value = "";
     void submitPhotos(files);
   };
-  const choosePhotos = () => { setSource(null); inputRef.current?.click(); };
+  const choosePhotos = () => {
+    setSource(null);
+    const input = inputRef.current;
+    if (!input) return;
+    input.multiple = selectedIntentRef.current === "my_wardrobe";
+    input.value = "";
+    // showPicker is optional; click remains the compatible native picker path.
+    try { if (input.showPicker) input.showPicker(); else input.click(); }
+    catch { input.click(); }
+  };
 
   return (
     <CaptureContext.Provider value={{ pending, chooseIntent, onOpen: () => setToast(null) }}>
       {children}
       <input ref={inputRef} type="file" aria-label="Choose photos" accept="image/*" multiple={selectedIntentRef.current === "my_wardrobe"} className="hidden" onChange={onFileChange} />
 
-      <TaskSheet open={source !== null} onOpenChange={open => { if (!open) setSource(null); }} title={source === "camera" ? "Take photo" : "Add photos"}>
-        {source === "camera" ? <WebPhotoCamera onPhoto={photo => void submitPhotos([photo])} onChoosePhotos={choosePhotos} /> : <div className="space-y-3"><Button className="min-h-12 w-full" onClick={() => setSource("camera")}>Take photo</Button><Button variant="outline" className="min-h-12 w-full" onClick={choosePhotos}>Choose photos</Button><p className="text-sm text-[#685e70]">{selectedIntentRef.current === "my_wardrobe" ? "Select up to 8 photos. Each is added separately." : "Choose one outfit photo."}</p></div>}
-      </TaskSheet>
+      <Dialog open={source === "camera"} onOpenChange={open => { if (!open) closeCamera(); }}>
+        <DialogContent presentation="sheet" showCloseButton={false} className="lint-camera-surface"
+          aria-describedby={undefined} onCloseAutoFocus={event => {
+            if (opener.current?.isConnected) { event.preventDefault(); opener.current.focus(); }
+          }}>
+          <DialogTitle className="sr-only">Camera</DialogTitle>
+          <WebPhotoCamera onClose={closeCamera} onPhoto={photo => void submitPhotos([photo])}
+            onChoosePhotos={choosePhotos} intent={cameraIntent} onIntentChange={intent => {
+              selectedIntentRef.current = intent; setCameraIntent(intent);
+            }} />
+        </DialogContent>
+      </Dialog>
 
       {pending && (status || (!tryOnOpen && tryOn.isProcessing)) && (
         <div className="rack-capture-status" role="status" aria-live="polite">

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import {
   ClerkProvider,
 } from '@clerk/nextjs'
@@ -19,12 +19,18 @@ const body = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: "Wardrobe",
+  title: "Lint",
+  applicationName: "Lint",
+  appleWebApp: { capable: true, title: "Lint", statusBarStyle: "black-translucent" },
   description: "Closet manager and shopping companion.",
   verification: {
     // Public ownership proof for the Google project owner; not an API credential.
     google: "5YRcxZSQHTvgJOw1GuRRzPL5Qj1J7jWnzGSGrhs9Er8",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#241426",
 };
 
 export default function RootLayout({
