@@ -1,4 +1,5 @@
 "use client";
+import { weatherCities } from "@wardrobe/shared";
 import Image from "next/image";
 import { useUser } from "@clerk/nextjs";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -31,6 +32,8 @@ type Draft = {
   review: ReviewedDay[];
   clarification: string;
   useCalendar: boolean;
+  weatherCity: string;
+  assumption: string;
 };
 const initial = (): Draft => ({
   week: localDate(),
@@ -38,6 +41,8 @@ const initial = (): Draft => ({
   review: [],
   clarification: "",
   useCalendar: true,
+  weatherCity: "",
+  assumption: "",
 });
 const dateLabel = (value: string, weekday = false) =>
   new Date(`${value}T12:00:00`).toLocaleDateString(undefined, {
@@ -83,6 +88,7 @@ function WeekPlanner({
   const [restored, setRestored] = useState(false);
   const [selected, setSelected] = useState(historyDate ?? localDate());
   const [calendar, setCalendar] = useState<CalendarWeek | null>(null);
+  const [calendarRetry, setCalendarRetry] = useState(0);
   const [calendarError, setCalendarError] = useState(false);
   const [view, setView] = useState<View>(null);
   const [busy, setBusy] = useState(false);
@@ -117,6 +123,7 @@ function WeekPlanner({
           ...initial(),
           description: saved.draft.description.slice(0, 4000),
           useCalendar: saved.draft.useCalendar !== false,
+          weatherCity: weatherCities.some(city => city.id === saved.draft.weatherCity) ? saved.draft.weatherCity : "",
         });
       }
     } catch {
@@ -178,7 +185,10 @@ function WeekPlanner({
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       })
         .then((result) => {
-          if (active) setCalendar(result);
+          if (active) {
+            if (result.days.length === 7) setCalendar(result);
+            else setCalendarError(true);
+          }
         })
         .catch(() => {
           if (active) setCalendarError(true);
@@ -186,7 +196,7 @@ function WeekPlanner({
     return () => {
       active = false;
     };
-  }, [data?.calendarEnabled, calendarKey, draft.week, restored, historyDate]);
+  }, [data?.calendarEnabled, calendarKey, draft.week, restored, historyDate, calendarRetry]);
   const perform = async <T,>(
     work: () => Promise<T>,
     reload = true,
@@ -221,14 +231,16 @@ function WeekPlanner({
   };
   const outfit = outfitForDay(data?.suggestions ?? [], selected);
   const setText = (description: string) =>
-    setDraft((d) => ({ ...d, description, review: [], clarification: "" }));
+    setDraft((d) => ({ ...d, description, review: [], clarification: "", assumption: "" }));
   const submit = async () => {
     if (voiceBusy) return;
     const result = await perform(async () => {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       let days = draft.review;
+      let interpretationFallback = false;
+      let weekdayAssumption = "";
       if (draft.description.trim() && !days.length) {
-        const interpretation = await planningRequest<WeekInterpretation>({
+        const interpretation = await planningRequest<WeekInterpretation & { fallback?: boolean; assumption?: string }>({
           operation: "planning_interpret",
           description: draft.description,
           week: draft.week,
@@ -239,28 +251,32 @@ function WeekPlanner({
           ...d,
           review: interpretation.clarification ? [] : interpretation.days,
           clarification: interpretation.clarification,
+          assumption: interpretation.assumption ?? "",
         }));
         if (interpretation.clarification)
           return { clarification: true as const };
         days = interpretation.days;
+        interpretationFallback = Boolean(interpretation.fallback);
+        weekdayAssumption = interpretation.assumption ?? "";
       }
       // No description is required for a useful suggestion from an owned closet.
       if (!draft.description.trim())
         days = [{ date: selected, description: "" }];
-      const saved = await planningRequest<{ updated: number; kept: number }>({
+      const saved = await planningRequest<{ updated: number; kept: number; calendarUnavailable?: boolean; weatherAvailable?: boolean }>({
         operation: "planning_generate_week",
         week: draft.week,
         days,
         timezone,
         useCalendar: draft.useCalendar && Boolean(data?.calendarEnabled),
+        weatherCity: draft.weatherCity,
       });
-      return { ...saved, dates: days.map((day) => day.date) };
+      return { ...saved, assumption: draft.assumption || weekdayAssumption, interpretationFallback, dates: days.map((day) => day.date) };
     }, false);
     if (result && !("clarification" in result)) {
       setMessage(
-        result.updated
+        (result.assumption ? `${result.assumption} ` : "") + (result.interpretationFallback ? "Detailed plans unavailable; everyday outfit suggested for the selected day. " : "") + (result.calendarUnavailable ? "Calendar unavailable; everyday defaults used. " : "") + (draft.weatherCity && !result.weatherAvailable ? "Forecast unavailable; layering advice included. " : "") + (result.updated
           ? `${result.updated} ${result.updated === 1 ? "day" : "days"} updated${result.kept ? ` · ${result.kept} chosen ${result.kept === 1 ? "outfit" : "outfits"} kept` : ""}`
-          : "Your chosen outfits were kept. Swap a piece to adjust them.",
+          : "Your chosen outfits were kept. Swap a piece to adjust them."),
       );
       setDraft((d) => ({ ...d, review: [], clarification: "" }));
       setView(null);
@@ -576,15 +592,14 @@ function WeekPlanner({
       ) : null}
       {calendarError && (
         <p role="status" className="text-sm">
-          Calendar could not refresh. Reconnect Calendar or continue with your
-          description.
+          Calendar unavailable. You can still get an everyday outfit or describe your plans.
         </p>
       )}
       {data?.autoPlan?.state === "error" && (
         <div role="status" className="text-sm">
           <p>
             {data.autoPlan.error === "calendar"
-              ? "Automatic outfits could not read Calendar. Reconnect it or turn calendar context off."
+              ? "Calendar unavailable. Request an everyday outfit or retry Calendar later."
               : "Automatic outfits could not finish. Your existing outfits are unchanged."}
           </p>
           <Button
@@ -648,6 +663,7 @@ function WeekPlanner({
         {view === "describe" && (
           <div className="space-y-5">
             <DayVoiceInput
+              hasText={Boolean(draft.description.trim())}
               disabled={busy}
               onBusyChange={setVoiceBusy}
               onText={(text) =>
@@ -673,6 +689,7 @@ function WeekPlanner({
               onChange={(event) => setText(event.target.value)}
               placeholder="What’s happening today or this week?"
             />
+            {draft.assumption && <p role="status" className="text-sm">{draft.assumption}</p>}
             {draft.clarification && (
               <p role="status" data-private className="text-sm">
                 {draft.clarification} Edit your description above, then update
@@ -701,7 +718,7 @@ function WeekPlanner({
               <span>
                 <CalendarDays className="mr-2 inline size-4" />
                 {data?.calendarEnabled
-                  ? "Google Calendar connected"
+                  ? "Google Calendar selected"
                   : "Connect Google Calendar"}
               </span>
               <ChevronRight className="size-4" />
@@ -713,7 +730,13 @@ function WeekPlanner({
             enabled={Boolean(data?.calendarEnabled)}
             selectedIds={data?.calendarIds}
             beforeAuthorize={persist}
-            onChange={() => void refresh()}
+            onChange={(enabled) => {
+              setCalendar(null);
+              setCalendarError(false);
+              setData(current => current ? { ...current, calendarEnabled: enabled } : current);
+              setCalendarRetry(value => value + 1);
+              void refresh().catch(() => setRefreshWarning("Calendar settings saved. The view could not refresh."));
+            }}
           />
         )}
         {view === "options" && (
@@ -730,9 +753,15 @@ function WeekPlanner({
               />
               Use Calendar for this update
             </label>
-            <p className="text-sm">
-              Weather is not checked; review the forecast.
-            </p>
+            <label className="block space-y-2 text-sm">
+              City for weather (optional)
+              <select data-private className={input} value={draft.weatherCity} disabled={busy} onChange={event => setDraft(current => ({ ...current, weatherCity: event.target.value }))}>
+                <option value="">Skip weather</option>
+                {weatherCities.map(city => <option key={city.id} value={city.id}>{city.label}</option>)}
+              </select>
+            </label>
+            <p className="text-sm">Choose a supported city, or skip if yours is not listed. Used only when you request outfits. Approximate city coordinates are sent by our server to MET Norway; no device location is requested. If unavailable, use removable layers and check rain before leaving.</p>
+            <p className="text-xs"><a className="underline" href="https://api.met.no/">Data from MET Norway</a> and <a className="underline" href="https://www.geonames.org/">GeoNames city data</a>, <a className="underline" href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Coordinates rounded; forecast periods summarized into city-local days.</p>
             {data?.inventoryTruncated && (
               <p className="text-sm">
                 Planning uses recent pieces plus pieces from saved outfits and

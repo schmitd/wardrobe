@@ -46,6 +46,7 @@ export type PlanningOperation =
       days: { date: string; description: string }[];
       timezone: string;
       useCalendar: boolean;
+      weatherCity?: string;
       planId?: string;
     }
   | {
@@ -55,6 +56,7 @@ export type PlanningOperation =
       description: string;
       planId?: string;
       useCalendar: boolean;
+      weatherCity?: string;
     }
   | {
       operation:

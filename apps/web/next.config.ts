@@ -8,6 +8,10 @@ const sharpRuntimeFiles = [
 ];
 
 const nextConfig: NextConfig = {
+  // Keep loopback requests on their original origin in development. Otherwise
+  // Clerk's pass-through rewrite uses Next's normalized localhost URL and can
+  // become an external self-proxy when the server binds to 127.0.0.1.
+  skipProxyUrlNormalize: process.env.NODE_ENV === "development",
   transpilePackages: ["@wardrobe/context-client", "@wardrobe/shared"],
   // Sharp loads its platform packages dynamically, so Next's file tracer does
   // not discover libvips on its own. Include both Linux runtime packages in the

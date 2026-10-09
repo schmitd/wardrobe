@@ -7,16 +7,19 @@ export default function DayVoiceInput({
   onText,
   disabled = false,
   onBusyChange,
+  hasText = false,
 }: {
   onText: (text: string) => void;
   disabled?: boolean;
   onBusyChange?: (busy: boolean) => void;
+  hasText?: boolean;
 }) {
   const recorder = useRef<MediaRecorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const request = useRef<AbortController | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attempt = useRef(0);
+  const recordingLock = useRef(false);
   const [phase, setPhase] = useState<
     "idle" | "starting" | "recording" | "transcribing"
   >("idle");
@@ -32,6 +35,7 @@ export default function DayVoiceInput({
   }, []);
   const discard = useCallback(() => {
     attempt.current++;
+    recordingLock.current = false;
     request.current?.abort();
     if (recorder.current) {
       recorder.current.onstop = null;
@@ -92,6 +96,7 @@ export default function DayVoiceInput({
         );
     } finally {
       if (id === attempt.current) {
+        recordingLock.current = false;
         setPhase("idle");
         request.current = null;
       }
@@ -105,7 +110,8 @@ export default function DayVoiceInput({
     release();
   };
   const start = async () => {
-    if (disabled || phase !== "idle") return;
+    if (disabled || phase !== "idle" || recordingLock.current) return;
+    recordingLock.current = true;
     const id = ++attempt.current;
     setError("");
     setPhase("starting");
@@ -146,6 +152,7 @@ export default function DayVoiceInput({
     } catch {
       if (id === attempt.current) {
         release();
+        recordingLock.current = false;
         setPhase("idle");
         setError(
           "Microphone unavailable. Allow microphone access or type your plans.",
@@ -207,8 +214,8 @@ export default function DayVoiceInput({
         </Button>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-sm text-[#B93267]">
-          {error}
+        <p role="status" className="mt-2 text-xs text-[#685e70]">
+          {hasText ? "Dictation unavailable. Your typed plans are ready to use; you can retry dictation later." : error}
         </p>
       )}
     </div>

@@ -64,9 +64,14 @@ encoded Frontend API host is `clerk.lint.fit` and its prefix is `pk_live_`.
 | Clerk webhook URL, if configured | `https://lint.fit/api/webhooks/clerk`; preserve existing signing configuration |
 | Convex issuer/JWKS | `https://clerk.lint.fit`, `https://clerk.lint.fit/.well-known/jwks.json`, strict `convex` audience |
 
-The web app uses modal sign-in and hosted Account Portal fallback; it has no
-local `/sign-in`, `/sign-up`, or `/sso-callback` routes. Do not configure links to
-nonexistent local routes. Calendar return derives its origin from the browser.
+Production at `b0c7633` uses modal sign-in and hosted Account Portal fallback;
+it has no local `/sign-in`, `/sign-up`, or `/sso-callback` routes. The recovered
+QA candidate adds `/sign-in/[[...sign-in]]` for its visible guest and session-loading
+Sign in links, with a return link to the same-tab guest wardrobe. Existing modal
+entry and hosted environment/proxy fallback remain intact. Do not configure
+links to nonexistent `/sign-up` or `/sso-callback` routes. A manual production
+`/sign-in` 404 does not establish a broken modal/hosted sign-in flow.
+Calendar return derives its origin from the browser.
 Inspect and update any existing force-redirect overrides that still point at
 the old host; do not override intentional protected-page return destinations.
 Keep current Google OAuth scopes, grants, native registration, and disabled

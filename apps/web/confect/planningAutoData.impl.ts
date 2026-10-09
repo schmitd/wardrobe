@@ -201,7 +201,7 @@ const commit = FunctionImpl.make(
       if (
         !row ||
         row.autoPlanState !== "running" ||
-        row.calendarEnabled !== args.calendarDerived ||
+        (args.calendarDerived && !row.calendarEnabled) ||
         (row.calendarRevision ?? 0) !== args.calendarRevision
       )
         return false;

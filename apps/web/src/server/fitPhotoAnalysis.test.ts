@@ -27,7 +27,7 @@ const detection = (items: unknown[], box = [0, 0, 1000, 1000]) => ({
   items,
 });
 const checked = (ok: boolean) => ({
-  checks: [{ index: 0, contains_item: ok, well_framed: ok }],
+  checks: [{ index: 0, contains_item: ok, well_framed: ok, is_independent_item: true }],
 });
 const source = async () =>
   (
@@ -114,9 +114,11 @@ describe("fit localization geometry", () => {
     ).toEqual([]);
   });
   it("fails closed for missing, duplicate or non-boolean verifier checks", () => {
+    expect([...verifiedIndices([{ index: 0, contains_item: true, well_framed: true }], 1)]).toEqual([]);
+    expect([...verifiedIndices([{ index: 0, contains_item: true, well_framed: true, is_independent_item: "true" }], 1)]).toEqual([]);
     expect([
       ...verifiedIndices(
-        [{ index: 0, contains_item: true, well_framed: false }],
+        [{ index: 0, contains_item: true, well_framed: false, is_independent_item: true }],
         1,
       ),
     ]).toEqual([]);
@@ -132,6 +134,31 @@ describe("fit localization geometry", () => {
   });
 });
 describe("automatic fit analysis", () => {
+  it("does not retry or return attached labels, pockets, and zippers as items", async () => {
+    const garment = { ...item([100, 100, 900, 900]), category: "outerwear", description: "Blue jacket" };
+    const components = ["Sewn-on brand label", "Jacket pocket", "Attached jacket zipper"].map(description => ({ ...item(), description }));
+    const s = service([
+      detection([garment, ...components]),
+      { checks: [0, 1, 2, 3].map(index => ({ index, contains_item: true, well_framed: true, is_independent_item: index === 0 })) },
+    ]);
+    const result = await Effect.runPromise(analyzeFitPhoto(await source(), "daily_fit_check").pipe(Effect.provide(s.layer)));
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].category).toBe("outerwear");
+    expect(s.calls).toHaveLength(2);
+  });
+  it("drops a visible sewn-on waistband patch without retrying it, while preserving a belt and watch", async () => {
+    const jeans = { ...item([100, 100, 900, 900]), category: "bottom", description: "Blue jeans with a sewn-on leather waistband patch" };
+    const patch = { ...item([120, 500, 220, 700]), description: "Sewn-on leather brand patch on the jeans waistband" };
+    const belt = { ...item([120, 150, 230, 850]), description: "Separate leather belt threaded through the jeans loops" };
+    const watch = { ...item([250, 800, 320, 880]), description: "Small black wristwatch" };
+    const s = service([
+      detection([jeans, patch, belt, watch]),
+      { checks: [0, 1, 2, 3].map(index => ({ index, contains_item: true, well_framed: true, is_independent_item: index !== 1 })) },
+    ]);
+    const result = await Effect.runPromise(analyzeFitPhoto(await source(), "daily_fit_check").pipe(Effect.provide(s.layer)));
+    expect(result.items.map(piece => piece.description)).toEqual([jeans.description, belt.description, watch.description]);
+    expect(s.calls).toHaveLength(2);
+  });
   it("re-localizes a failed watch crop and verifies the repair without a manual step", async () => {
     const s = service([
       detection([item()]),
@@ -180,7 +207,7 @@ describe("automatic fit analysis", () => {
     const s = service([
       detection([watch, belt], [100, 100, 900, 900]),
       detection([belt]),
-      { checks: [0, 1].map(index => ({ index, contains_item: true, well_framed: true })) },
+      { checks: [0, 1].map(index => ({ index, contains_item: true, well_framed: true, is_independent_item: true })) },
     ]);
     const result = await Effect.runPromise(analyzeFitPhoto(await source(), "daily_fit_check").pipe(Effect.provide(s.layer)));
     expect(result.items.map(piece => piece.description)).toEqual(["Brown belt", "Black watch"]);
@@ -192,7 +219,7 @@ describe("automatic fit analysis", () => {
     const s = service([
       detection(first, [100, 100, 900, 900]),
       detection(focused),
-      { checks: Array.from({ length: 12 }, (_, index) => ({ index, contains_item: true, well_framed: true })) },
+      { checks: Array.from({ length: 12 }, (_, index) => ({ index, contains_item: true, well_framed: true, is_independent_item: true })) },
     ]);
     const result = await Effect.runPromise(analyzeFitPhoto(await source(), "daily_fit_check").pipe(Effect.provide(s.layer)));
     expect(result.items).toHaveLength(12);
@@ -213,8 +240,8 @@ describe("automatic fit analysis", () => {
     const s = service([
       detection([accepted, misplaced]),
       { checks: [
-        { index: 0, contains_item: true, well_framed: true },
-        { index: 1, contains_item: true, well_framed: false },
+        { index: 0, contains_item: true, well_framed: true, is_independent_item: true },
+        { index: 1, contains_item: true, well_framed: false, is_independent_item: true },
       ] },
       detection([item(repairedBox)]),
       checked(true),

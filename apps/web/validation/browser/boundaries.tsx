@@ -5,6 +5,8 @@ export const useUser = () => ({ isLoaded: true, isSignedIn: true, user: { id: "s
 export const SignedIn = ({ children }: { children: React.ReactNode }) => <>{children}</>;
 export const SignedOut = () => null;
 export const SignInButton = SignedIn;
+export const SignUpButton = SignedIn;
+export const analyzeGuestFitCheckAction = async () => ({ kind: "error" as const, message: "Synthetic analysis unavailable. Retry or sign in." });
 export const UserButton = () => <span aria-label="Synthetic account">D</span>;
 export const usePathname = () => location.pathname;
 export const useSearchParams = () => new URLSearchParams(location.search);

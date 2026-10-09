@@ -1,8 +1,9 @@
 'use client';
+import Link from 'next/link';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SignInButton, SignUpButton } from '@clerk/nextjs';
-import { Camera, Loader2, Sparkles } from 'lucide-react';
+import { Camera, ImagePlus, Loader2, Sparkles } from 'lucide-react';
 import { analyzeGuestFitCheckAction, type GuestFitCheckAnalysisResult } from '@/app/actions/wardrobe';
 import { createTraceContext } from '@/lib/trace';
 import { loadGuestSnapshot, saveGuestSnapshot } from '@/lib/guestSnapshot';
@@ -43,6 +44,10 @@ interface GuestClosetDemoProps {
 
 export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const captureLock = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [demoComplete, setDemoComplete] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,11 +103,12 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
   }, [bio, demoComplete, items, sourceFit]);
 
   const handleFiles = async (files: File[]) => {
-    if (files.length === 0) return;
+    if (files.length === 0 || captureLock.current) return;
     if (demoComplete) {
       return;
     }
 
+    captureLock.current = true;
     setError(null);
     setIsAnalyzing(true);
     setLimitMessage(null);
@@ -117,6 +123,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
       };
 
       const trace = createTraceContext();
+      if (!mounted.current) return;
       const result: GuestFitCheckAnalysisResult = await analyzeGuestFitCheckAction({
         photo: {
           fileName: payload.fileName,
@@ -126,6 +133,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         ...trace,
       });
 
+      if (!mounted.current) return;
       if (result.kind === 'limit') {
         setLimitMessage(result.message);
         return;
@@ -160,11 +168,13 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
         item_count: result.items.length,
       });
     } catch (uploadError) {
+      if (!mounted.current) return;
       posthog.captureException(uploadError, { workflow: 'guest_demo' });
       const message = userFacingErrorMessage(uploadError, 'Analysis failed');
       setError(message);
     } finally {
-      setIsAnalyzing(false);
+      captureLock.current = false;
+      if (mounted.current) setIsAnalyzing(false);
     }
   };
 
@@ -188,7 +198,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
   );
 
   return (
-    <section className="space-y-6">
+    <section data-private className="space-y-6">
       <section
         id="rack-uploader"
         className="rack-panel rack-panel--action overflow-hidden"
@@ -217,17 +227,17 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
               </p>
             </div>
 
-            <Button
-              type="button"
-              disabled={isAnalyzing}
-              aria-describedby="guest-upload-help"
-              aria-live="polite"
-              onClick={() => fileInputRef.current?.click()}
-              className="mt-5 min-h-12 w-full rounded-none border border-[var(--rack-line)] bg-[var(--rack-action)] px-5 py-3 text-sm font-extrabold text-[var(--rack-ink)] shadow-[3px_3px_0_var(--rack-panel-shadow)] hover:bg-[var(--rack-action-hover)] sm:w-fit"
-            >
-              {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
-              {isAnalyzing ? 'Reading your fit…' : error ? 'Try another fit check' : 'Start with a fit check'}
-            </Button>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row">
+              <Button type="button" disabled={isAnalyzing} aria-describedby="guest-upload-help"
+                onClick={() => cameraInputRef.current?.click()} className="rack-primary-action min-h-12">
+                <Camera className="h-4 w-4" /> Take photo
+              </Button>
+              <Button type="button" variant="outline" disabled={isAnalyzing} aria-describedby="guest-upload-help"
+                onClick={() => fileInputRef.current?.click()} className="min-h-12">
+                <ImagePlus className="h-4 w-4" /> Choose photo
+              </Button>
+            </div>
+            {isAnalyzing && <p role="status" className="mt-3 flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Reading your fit…</p>}
 
             {error && (
               <p
@@ -254,7 +264,18 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
           </div>
         )}
 
+        <div className="mt-5 flex items-center gap-3">
+          <span className="text-sm">Already have a wardrobe?</span>
+          <Button asChild variant="outline" className="min-h-11"><Link href="/sign-in">Sign in</Link></Button>
+        </div>
+        <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
+          aria-label="Take outfit photo" onChange={(event) => {
+            const files = Array.from(event.currentTarget.files ?? []);
+            event.currentTarget.value = '';
+            void handleFiles(files);
+          }} />
         <input
+          aria-label="Choose outfit photo"
           id={uploaderInputId}
           ref={fileInputRef}
           type="file"
@@ -286,7 +307,7 @@ export default function GuestClosetDemo({ uploaderInputId }: GuestClosetDemoProp
                 Sign up
               </Button>
             </SignUpButton>
-            <SignInButton mode="modal">
+            <SignInButton mode="modal" forceRedirectUrl="/" fallbackRedirectUrl="/">
               <Button
                 type="button"
                 variant="outline"

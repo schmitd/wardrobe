@@ -9,6 +9,7 @@ import { Effect, Result } from 'effect';
 import { api } from '@convex/_generated/api';
 import AddItemSection from '@/components/AddItemSection';
 import GuestClosetDemo from '@/components/GuestClosetDemo';
+import AuthEntry from '@/components/AuthEntry';
 import CollectionsWorkspace from '@/components/CollectionsWorkspace';
 import StyleNotes from '@/components/StyleNotes';
 import {
@@ -25,9 +26,9 @@ import { openCaptureMenu } from '@/lib/captureEvents';
 import type { OptimisticWardrobeItem, WardrobeItem } from '@/types/wardrobe';
 
 export default function Home() {
-  const { isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn } = useAuth();
   const uploadInputId = 'rack-upload-input';
-  const closet = usePaginatedQuery(api.wardrobe.pageWardrobeItems, isSignedIn ? {} : 'skip', { initialNumItems: 48 });
+  const closet = usePaginatedQuery(api.wardrobe.pageWardrobeItems, isLoaded && isSignedIn ? {} : 'skip', { initialNumItems: 48 });
   const items = closet.status === 'LoadingFirstPage' ? undefined : closet.results;
   const [optimisticItems, setOptimisticItems] = useState<OptimisticWardrobeItem[]>([]);
   const [importStatus, setImportStatus] = useState<string | null>(null);
@@ -242,9 +243,9 @@ export default function Home() {
   }, [patchOptimisticItem]);
 
   useEffect(() => {
-    if (!isSignedIn) return;
+    if (!isLoaded || !isSignedIn) return;
     void importGuestSnapshot();
-  }, [importGuestSnapshot, isSignedIn]);
+  }, [importGuestSnapshot, isLoaded, isSignedIn]);
 
   const handleOptimisticAdd = (newItems: OptimisticWardrobeItem[]) => {
     setOptimisticItems((prev) => [...newItems, ...prev]);
@@ -300,7 +301,8 @@ export default function Home() {
             </div>
           )}
 
-          {isSignedIn ? (
+          <AuthEntry ready={isLoaded}>
+          {isLoaded && isSignedIn ? (
             <>
               <h1 className="sr-only">Wardrobe</h1>
               <StyleNotes />
@@ -321,6 +323,7 @@ export default function Home() {
           ) : (
             <GuestClosetDemo uploaderInputId={uploadInputId} />
           )}
+          </AuthEntry>
         </section>
       </div>
 

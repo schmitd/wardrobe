@@ -7,7 +7,7 @@ import { ActionCtx } from "./_generated/services";
 import schema from "./_generated/schema";
 import spec from "./planningAuto.spec";
 import { runInference, runServerAction } from "../src/lib/run-effect";
-import { recommendWeek } from "../src/server/inference/planning";
+import { recommendWeekBestEffort } from "../src/server/inference/planning";
 import { dateInZone } from "../src/lib/planning-time";
 import {
   PlanningCalendar,
@@ -26,7 +26,7 @@ const generate = FunctionImpl.make(
       );
       if (!settings) return null;
       const started = Date.now();
-      let error: "calendar" | "generation" = "generation";
+      const error = "generation" as const;
       const work = Effect.gen(function* () {
         const week = dateInZone(settings.timezone);
         let data = yield* Effect.promise(() =>
@@ -51,14 +51,10 @@ const generate = FunctionImpl.make(
                       settings.timezone,
                     )
                     .pipe(
-                      Effect.tapError(() =>
-                        Effect.sync(() => {
-                          error = "calendar";
-                        }),
-                      ),
+                      Effect.catch(() => Effect.succeed(null)),
                     )
                 : null;
-              return { date, description: "", calendar: context };
+              return { date, description: "", calendar: context, calendarUnavailable: settings.calendarEnabled && !context };
             }),
           ),
           { concurrency: 7 },
@@ -79,7 +75,7 @@ const generate = FunctionImpl.make(
           );
           if (!data) return "stale";
         }
-        const outfits = yield* recommendWeek({
+        const outfits = yield* recommendWeekBestEffort({
           data,
           days,
           timezone: settings.timezone,
@@ -87,7 +83,7 @@ const generate = FunctionImpl.make(
         const committed = yield* Effect.promise(() =>
           ctx.runMutation(internal.planningAutoData.commit, {
             ...args,
-            calendarDerived: settings.calendarEnabled,
+            calendarDerived: days.some(day => day.calendar !== null),
             calendarRevision: settings.calendarRevision,
             outfits: outfits.map((outfit) => ({
               ...outfit,

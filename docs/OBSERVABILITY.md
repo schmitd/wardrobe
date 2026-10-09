@@ -94,3 +94,10 @@ Last dashboard and connection verification: 2026-07-15. Production smoke `9e965e
 Catalog previews emit Axiom-only `garment_preview.finished` with model, item ID, available source trace ID, duration and bounded outcome (`ready`, `skipped`, `error`, `stale`), never prompts, images, storage URLs or raw provider failures. Native operation allowlists include `request_preview` and `restore_preview`. See [rollout checks](GARMENT_PREVIEWS.md).
 
 Automatic planning logs `planning_auto.finished` to Axiom with operation, bounded outcome (`ready`, `stale`, `calendar`, `generation`) and duration. It contains no transcript, Calendar content, prompt or generated outfit text. Configuration requests retain the existing consent-gated `planning_operation_finished` event with operation `planning_auto`. Automatic generation runs in Convex Node and requires its existing inference configuration plus `CLERK_SECRET_KEY` for connected Calendar reads; Next.js-only environment variables are not available to that action. Verify these on the intended deployment before release.
+
+Optional city weather is request-only, masked with `data-private`, and never included in analytics, logs, or preference memory. Existing `planning_operation_finished` covers the request; no city, coordinates, forecast, or provider payload is an event property. No background weather lookup or precise-location permission is added.
+
+The optional forecast uses server-side MET Norway retrieval and an explicit
+GeoNames city choice; see [provider behavior and validation limits](WEATHER.md).
+Only the finite public city ID is retained in the existing same-tab draft.
+Forecast summaries are recommendation context, not telemetry or style memory.

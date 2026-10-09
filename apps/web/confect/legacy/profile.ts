@@ -65,6 +65,30 @@ export const updateBio = mutation({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .first();
 
+    if (source === "guest_import") {
+      // Guest onboarding may seed unused notes, never replace an account's
+      // existing notes or a deliberate clearing of those notes. Keep this
+      // decision in the mutation so sign-in/retry races cannot bypass it.
+      if (!bio.trim()) return { success: true };
+      const hasBioState = Boolean(existing?.bio?.trim()) || [
+        existing?.bioSource,
+        existing?.bioManualAnchor,
+        existing?.bioRevisionId,
+        existing?.bioLastManualEditAt,
+        existing?.bioGeneratedAt,
+        existing?.bioContextFingerprint,
+        existing?.bioClosetItemCount,
+        existing?.bioFitCheckCount,
+        existing?.bioCollectionCount,
+        existing?.bioCollectionMembershipCount,
+      ].some(value => value !== undefined);
+      if (hasBioState) return { success: true };
+      // Older rows can retain history without a current revision pointer.
+      const priorBio = await ctx.db.query("profileBioRevisions")
+        .withIndex("by_user", q => q.eq("userId", userId)).first();
+      if (priorBio) return { success: true };
+    }
+
     const { counts, fingerprint } = await readStyleBioContext(ctx, userId);
 
     const timestamp = now();

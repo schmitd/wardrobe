@@ -1,6 +1,8 @@
 import { Effect, Schema } from "effect";
 import { recallCollections, validateOutfit } from "@wardrobe/shared";
 import { InferenceService } from "../../services/InferenceService";
+import { everydayOutfits } from "../planningFallback";
+import { forecastAdvice, type CityForecast } from "../../services/PlanningWeatherService";
 import { RequestFailure } from "../errors";
 
 export type PlanningSource = {
@@ -28,6 +30,8 @@ export type PlanningSource = {
 export type PlanningDay = {
   date: string;
   description: string;
+  weather?: CityForecast;
+  calendarUnavailable?: boolean;
   calendar: {
     events: { title: string; start: string; location?: string; end?: string }[];
     truncated: boolean;
@@ -146,11 +150,15 @@ export const recommendWeek = ({
               ...(Array.isArray(memory) && memory.length
                 ? ["Zep style memory"]
                 : []),
-              "Weather not checked; verify forecast",
+              ...(day.calendarUnavailable ? ["Calendar unavailable; everyday defaults used"] : []),
+              forecastAdvice(day.weather),
             ],
           };
         });
       },
       catch: invalid,
     });
-  }).pipe(Effect.timeout("55 seconds"));
+  }).pipe(Effect.timeout("35 seconds"));
+
+/** Optional provider failures must not prevent an owned-closet starting recommendation. */
+export const recommendWeekBestEffort = (input: Parameters<typeof recommendWeek>[0]) => recommendWeek(input).pipe(Effect.catch(() => Effect.succeed(everydayOutfits(input.data, input.days))));

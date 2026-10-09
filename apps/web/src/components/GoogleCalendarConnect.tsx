@@ -1,6 +1,6 @@
 "use client";
 import { useUser } from "@clerk/nextjs";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CALENDAR_SCOPES } from "@wardrobe/shared";
 import { planningRequest } from "@/lib/planning-client";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ export default function GoogleCalendarConnect({
   beforeAuthorize,
 }: {
   enabled: boolean;
-  onChange: () => void;
+  onChange: (enabled: boolean) => void;
   selectedIds?: string[];
   beforeAuthorize?: () => void;
 }) {
@@ -20,27 +20,32 @@ export default function GoogleCalendarConnect({
     { id: string; name: string; primary: boolean }[] | null
   >(null);
   const [selected, setSelected] = useState<string[]>(selectedIds);
-  const [busy, setBusy] = useState(false);
+  const [activity, setActivity] = useState<"read" | "authorize" | null>(null);
+  const busy = activity !== null;
   const [message, setMessage] = useState("");
   const [saved, setSaved] = useState(false);
   const loaded = useRef(false);
+  const lock = useRef(false);
   const mobile =
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("returnTo") === "mobile";
-  const run = async (work: () => Promise<void>) => {
-    setBusy(true);
+  const run = useCallback(async (work: () => Promise<void>, failureMessage = "Calendar could not be read. Your draft is still here; continue without Calendar or retry later.", activity: "read" | "authorize" = "read") => {
+    if (lock.current) return;
+    lock.current = true;
+    setActivity(activity);
     setMessage("");
     try {
       await work();
     } catch {
       setMessage(
-        "Calendar did not connect. Your week and draft are still here. Retry or continue without Calendar.",
+        failureMessage,
       );
     } finally {
-      setBusy(false);
+      lock.current = false;
+      setActivity(null);
     }
-  };
-  const load = async () => {
+  }, []);
+  const load = useCallback(async () => {
     const result = await planningRequest<{
       calendars: NonNullable<typeof calendars>;
       truncated: boolean;
@@ -52,7 +57,7 @@ export default function GoogleCalendarConnect({
         : result.calendars.filter((c) => c.primary).map((c) => c.id),
     );
     if (result.truncated) setMessage("Showing the first 100 calendars.");
-  };
+  }, [selectedIds]);
   useEffect(() => {
     if (loaded.current) return;
     loaded.current = true;
@@ -62,7 +67,7 @@ export default function GoogleCalendarConnect({
         "connected"
     )
       void run(load);
-  }, [enabled]);
+  }, [enabled, load, run]);
   const authorize = () =>
     run(async () => {
       if (!user) return;
@@ -83,8 +88,10 @@ export default function GoogleCalendarConnect({
           });
       const url = account.verification?.externalVerificationRedirectURL;
       if (url) window.location.assign(url.toString());
-      else await load();
-    });
+      else {
+        try { await load(); } catch { setMessage("Google authorization completed, but calendars could not be read. Continue without Calendar or retry later."); }
+      }
+    }, "Google authorization did not finish. Your draft is still here; continue without Calendar or retry later.", "authorize");
   return (
     <section aria-label="Google Calendar connection" className="space-y-4">
       <p className="text-sm">
@@ -95,7 +102,7 @@ export default function GoogleCalendarConnect({
         <div className="flex flex-wrap gap-2">
           <Button disabled={busy} onClick={authorize}>
             {busy
-              ? "Connecting…"
+              ? activity === "authorize" ? "Connecting…" : "Reading calendars…"
               : enabled
                 ? "Reconnect Google"
                 : "Continue with Google"}
@@ -139,8 +146,8 @@ export default function GoogleCalendarConnect({
                 });
                 setCalendars(null);
                 setSaved(true);
-                onChange();
-                setMessage("Calendar connected. Your week is ready.");
+                onChange(true);
+                setMessage("Calendar selection saved. Outfit planning can continue even if Calendar is unavailable.");
               })
             }
           >
@@ -173,7 +180,7 @@ export default function GoogleCalendarConnect({
                   await planningRequest({ operation: "calendar_disconnect" });
                   setCalendars(null);
                   setSaved(false);
-                  onChange();
+                  onChange(false);
                 });
             }}
           >

@@ -8,10 +8,10 @@ import { boundedInteger } from "../property-options";
 const port = boundedInteger(process.env.PROBE_PORT, 4173, 1024, 65535);
 const boundary = resolve(import.meta.dir, "boundaries.tsx");
 const modules: Record<string, string> = {
-  "@clerk/nextjs": "useUser, SignedIn, SignedOut, SignInButton, UserButton", "convex/react": "useQuery, useMutation, usePaginatedQuery",
+  "@clerk/nextjs": "useUser, SignedIn, SignedOut, SignInButton, SignUpButton, UserButton", "convex/react": "useQuery, useMutation, usePaginatedQuery",
   "next/navigation": "usePathname, useSearchParams", "@convex/_generated/api": "api",
   "next/image": "Image as default", "next/link": "Link as default", "posthog-js": "analytics as default",
-  "@/app/actions/wardrobe": "getUploadUrlAction, routeCaptureAction, recordDailyFitCheckAction, createWardrobeItemAction, checkCompatibilityAction, saveInspirationAction, enrichInspirationAction, deleteWardrobeItemAction, refreshStyleBioAction, updateProfileBioAction",
+  "@/app/actions/wardrobe": "getUploadUrlAction, routeCaptureAction, recordDailyFitCheckAction, createWardrobeItemAction, checkCompatibilityAction, saveInspirationAction, enrichInspirationAction, deleteWardrobeItemAction, refreshStyleBioAction, updateProfileBioAction, analyzeGuestFitCheckAction",
 };
 const build = await Bun.build({
   entrypoints: [resolve(import.meta.dir, "gallery.tsx")], target: "browser", minify: true,
@@ -115,7 +115,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
     case "update-bio": state.catalog.bio = String(input.bio); return Response.json({ success: true });
     case "planning_accept": state.data.suggestions[0]!.status = "planned"; return Response.json({ ok: true });
     case "planning_load": return state.stale && state.wrote ? Response.json({ error: "Synthetic refresh unavailable" }, { status: 503 }) : Response.json(state.data);
-    case "planning_week": return Response.json({ days: [{ date: input.week, events: [{ title: "Synthetic meeting", start: "09:00" }], truncated: true }] });
+    case "planning_week": return Response.json({ days: sevenDays(String(input.week)).map((date, index) => ({ date, events: index === 0 ? [{ title: "Synthetic meeting", start: "09:00" }] : [], truncated: index === 0 })) });
     case "planning_interpret": if (state.scenarioCase === "clarify" && !String(input.description).includes("today")) return Response.json({ days: [], clarification: "Which day is the meeting?" }); return Response.json({ days: sevenDays(String(input.week)).map(date => ({ date, description: "予定".repeat(600) })), clarification: "" });
     case "planning_generate_week": {
       if (state.scenarioCase === "generation-error" && !state.wrote) { state.wrote = true; return Response.json({ error: "Synthetic generation failed. Try again." }, { status: 502 }); }

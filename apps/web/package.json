@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "bun test",
+    "test": "bun run scripts/run-tests.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit --project convex/tsconfig.json",
     "benchmark:garment-identity": "bun run scripts/benchmark-garment-identity.ts"
   },

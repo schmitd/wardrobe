@@ -29,6 +29,7 @@ export default function PrivacyPage() {
       </section>
       <section className="space-y-2">
         <h2 className="text-xl font-bold">Service providers and retention</h2>
+        <p>If you select a supported city and request outfits with weather, our server sends approximate city coordinates to MET Norway. We do not request device location or send your identity or wardrobe to the weather provider. Public city forecasts are cached; the city choice stays in your same-tab planner draft. Weather can be skipped.</p>
         <p>Wardrobe uses Clerk for authentication, Convex for application data and uploaded files, Vercel for web hosting, OpenAI for text, vision, and audio processing, Google Gemini for direct image and text embeddings, Zep for style memory, and PostHog and Axiom for observability. These providers process information needed for their respective functions under their own service terms. Wardrobe does not sell your personal data.</p>
         <p>Saved wardrobe data supports your ongoing use of the app. Wardrobe retains your latest 100 outfit recommendations. You can delete pieces and request account-data deletion through the app or the contact below. Provider logs and backups may follow separate retention schedules; deletion is not a promise of immediate erasure from every backup.</p>
       </section>

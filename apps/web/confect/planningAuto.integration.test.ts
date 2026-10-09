@@ -231,3 +231,17 @@ test("a job crossing local midnight retries promptly and its old finish cannot d
     await f.t.run((ctx) => ctx.db.query("outfitSuggestions").collect()),
   ).toEqual([]);
 });
+
+test("Calendar outage fallback commits without derived data; later disconnect invalidates an in-flight job", async () => {
+  const f = await fixture();
+  await f.t.run(async ctx => {
+    const row = await ctx.db.query("planningSettings").withIndex("by_user", q => q.eq("userId", "alice")).unique();
+    await ctx.db.patch(row!._id, { calendarEnabled: true, calendarIds: ["sample"], calendarRevision: 1 });
+  });
+  await f.t.mutation(internal.planningAutoData.claim, f.args);
+  expect(await f.t.mutation(internal.planningAutoData.commit, { ...f.args, outfits: f.dates.map(f.outfit), calendarDerived: false, calendarRevision: 1 })).toBe(true);
+  const rows = await f.t.run(ctx => ctx.db.query("outfitSuggestions").collect());
+  expect(rows.every(row => !row.calendarDerived)).toBe(true);
+  await f.alice.mutation(api.planning.calendar, { enabled: false, calendarIds: [] });
+  expect(await f.t.mutation(internal.planningAutoData.commit, { ...f.args, outfits: f.dates.map(f.outfit), calendarDerived: true, calendarRevision: 1 })).toBe(false);
+});

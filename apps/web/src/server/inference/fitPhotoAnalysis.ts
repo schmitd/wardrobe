@@ -15,7 +15,7 @@ import {
 import { parseJson, ModelResponseError } from "./shared";
 
 export const FIT_DETECTOR_MODEL = INFERENCE_MODEL;
-export const FIT_DETECTOR_VERSION = "luna-outfit-focus-context-verification-v3";
+export const FIT_DETECTOR_VERSION = "luna-independent-piece-verification-v4";
 // Leave half of the mobile route's 180-second budget for embeddings and writes.
 export const FIT_LOCALIZATION_TIMEOUT_MS = 90_000;
 const MAX_FIT_ITEMS = 12;
@@ -199,10 +199,12 @@ export async function focusOutfit(source: Buffer, box: NormalizedBoundingBox) {
   };
 }
 
+const independentItemRule = `An item must be an independently wearable or carryable piece, not a component of another item. Sewn-on brand labels, leather waistband patches, appliques, pockets, buttons, zippers, buckles and attached straps belong to their parent garment/bag/watch; describe them within that parent item, never as separate accessories. A separately wearable belt, watch or piece of jewelry remains an item even when it overlaps clothing or is threaded through belt loops. Decide from the original image and attachment context, not size, material, category, or overlapping boxes alone.`;
 const prompt = `Catalog the visible worn garments and accessories of the primary outfit in this photo.
 Ignore background objects, reflections of objects, phones, skin, and bystanders. Do not identify the wearer or infer personal traits.
 Decompose the outfit into separate individual pieces. Never return a person, "clothing", "outfit" or "menswear" as an item.
 A distant subject still has separate garments. Locate each visible piece, including small watches, belts and jewelry. Do not invent hidden detail or items outside the frame.
+${independentItemRule}
 Return outfit_box enclosing ALL visible worn garments/accessories, and items with box_2d tightly enclosing the actual visible item, not the neighboring arm/body or the whole person.
 Every box uses [ymin, xmin, ymax, xmax] normalized to 0–1000 relative to THIS image, top-left origin. Never use x/y/width/height. For a watch include its face AND visible band; do not box the forearm.
 Description: concise garment color/material/shape; style_tags: up to five short tags; confidence: 0–1. Transcription: one short outfit sentence without describing the person.`;
@@ -218,8 +220,9 @@ const verificationSchema: Schema = {
           index: { type: SchemaType.INTEGER },
           contains_item: { type: SchemaType.BOOLEAN },
           well_framed: { type: SchemaType.BOOLEAN },
+          is_independent_item: { type: SchemaType.BOOLEAN },
         },
-        required: ["index", "contains_item", "well_framed"],
+        required: ["index", "contains_item", "well_framed", "is_independent_item"],
       },
     },
   },
@@ -233,6 +236,7 @@ export function verifiedIndices(value: unknown, count: number): Set<number> {
       const checks = value.filter((c) => c && c.index === i);
       return (
         checks.length === 1 &&
+        checks[0].is_independent_item === true &&
         checks[0].contains_item === true &&
         checks[0].well_framed === true
       );
@@ -325,10 +329,10 @@ export const analyzeFitPhoto = (
     }
     const verify = (candidates: FitItem[]) =>
       Effect.gen(function* () {
-        if (!candidates.length) return new Set<number>();
+        if (!candidates.length) return { valid: new Set<number>(), components: new Set<number>() };
         const parts: Part[] = [
           {
-            text: `The first image is the upright original photo; subsequent images are numbered candidate crops. Compare each crop with the original photo and check it independently against its label. Do not assume the label is true. contains_item means the named garment/accessory is actually visible. well_framed means the crop includes the visible item extent, not just a fragment at an edge, and is centered on the item rather than adjacent body/background. A watch crop showing mostly arm with a sliver of watch is NOT well_framed. Use the original photo to distinguish natural occlusion from crop-induced cutoff: a crop must include the full visible extent in the original, even when the crop alone looks plausible. Natural occlusion in the photo is acceptable, crop-induced cutoff is not. Return exactly one check for each index.`,
+            text: `The first image is the upright original photo; subsequent images are numbered candidate crops. Compare each crop with the original photo and check it independently against its label. Do not assume the label is true. contains_item means the named garment/accessory is actually visible. is_independent_item means it is a separate wearable/carryable item rather than a component of its parent item. ${independentItemRule} well_framed means the crop includes the visible item extent, not just a fragment at an edge, and is centered on the item rather than adjacent body/background. A watch crop showing mostly arm with a sliver of watch is NOT well_framed. Use the original photo to distinguish natural occlusion from crop-induced cutoff: a crop must include the full visible extent in the original, even when the crop alone looks plausible. Natural occlusion in the photo is acceptable, crop-induced cutoff is not. Return exactly one check for each index.`,
           },
           // The original-photo prefix is reused by the crop repair verification pass.
           { inlineData: { data: source.toString("base64"), mimeType: "image/jpeg" }, cache: "reuse" },
@@ -352,10 +356,15 @@ export const analyzeFitPhoto = (
           verificationSchema,
           "fitCropVerification",
         );
-        return verifiedIndices(result.checks, candidates.length);
+        return {
+          valid: verifiedIndices(result.checks, candidates.length),
+          components: new Set(result.checks.filter(check => check.is_independent_item === false).map(check => check.index)),
+        };
       });
-    const valid = yield* verify(items);
-    const rejected = items.filter((_, i) => !valid.has(i));
+    const { valid, components } = yield* verify(items);
+    // A component is not an item with bad framing. Do not spend repair calls
+    // relocalizing a correctly visible label/patch into another false accessory.
+    const rejected = items.filter((_, i) => !valid.has(i) && !components.has(i));
     const accepted = items.filter((_, i) => valid.has(i));
     if (rejected.length) {
       // Give hard accessories a real pixel-level close-up from the original photo,
@@ -377,7 +386,7 @@ export const analyzeFitPhoto = (
           }),
         { concurrency: 2 },
       )).flat();
-      const repairValid = yield* verify(repairs);
+      const { valid: repairValid } = yield* verify(repairs);
       for (const old of rejected) {
         const index = repairs.findIndex(
           (r, i) => repairValid.has(i) && r.category === old.category,
