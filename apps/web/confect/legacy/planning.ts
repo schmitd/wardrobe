@@ -37,6 +37,7 @@ export const load = query({
       }),
     ),
     history: v.array(v.string()),
+    recommendationSignals: v.array(v.object({ itemId: v.id("wardrobeItems"), at: v.number() })),
     wearHistory: v.array(v.object({ date: v.string(), itemIds: v.array(v.id("wardrobeItems")), wornAt: v.number() })),
     bio: v.string(),
     suggestions: v.array(suggestion),
@@ -94,7 +95,7 @@ export async function loadPlanningData(ctx: QueryCtx, userId: string, { week, pl
     const selectedIds = new Set([...(planId && activePlans.some(p => p._id === planId) ? [planId] : []), ...recalled.map(p => p._id)]);
     const selectedMemberships = (await Promise.all([...selectedIds].map(id =>
       ctx.db.query("wardrobeMemberships").withIndex("by_wardrobe", q => q.eq("wardrobeId", id)).take(100)
-    ))).flat().filter(m => m.userId === userId);
+    ))).flat().filter(m => m.userId === userId && !m.removed);
     const referenced = new Set([
       ...suggestions.flatMap(s => s.itemIds),
       ...selectedMemberships.flatMap(m => m.userId === userId && m.itemId ? [m.itemId] : []),
@@ -129,12 +130,18 @@ export async function loadPlanningData(ctx: QueryCtx, userId: string, { week, pl
           description: p.description ?? "",
           itemIds: selectedMemberships.flatMap(m => m.wardrobeId === p._id && m.itemId && inventory.get(m.itemId)?.userId === userId ? [m.itemId] : []),
         })),
+      recommendationSignals: recent.flatMap(row => row.recommendationSignals ?? []).filter(signal => inventory.get(signal.itemId)?.userId === userId && signal.at > Date.now() - 28 * 86400000),
       wearHistory: wearHistory.map(wear => ({ ...wear, itemIds: wear.itemIds.filter(id => inventory.get(id)?.userId === userId) })),
       history: history.map((h) =>
         (h.transcription ?? h.description ?? "").slice(0, 1200),
       ),
       bio: (profile?.bio ?? "").slice(0, 4000),
-      suggestions,
+      suggestions: suggestions.map(row => {
+        const display = { ...row };
+        delete display.recommendationSignals;
+        delete display.recommendationRequests;
+        return display;
+      }),
       calendarEnabled: settings?.calendarEnabled ?? false,
       calendarIds: settings?.calendarIds ?? [],
       calendarRevision: settings?.calendarRevision ?? 0,
@@ -256,6 +263,7 @@ export const update = mutation({
     status: v.optional(outfitStatus),
     itemIds: v.optional(v.array(v.id("wardrobeItems"))),
     reason: v.optional(v.string()),
+    requestId: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -263,6 +271,8 @@ export const update = mutation({
       row = await ctx.db.get(args.id);
     if (!userId || row?.userId !== userId)
       throw new ConvexError({ _tag: "PlanningInput", message: "Recommendation unavailable" });
+    if (args.requestId && args.requestId.length > 100) throw new ConvexError({ _tag: "PlanningInput", message: "Invalid update." });
+    if (args.requestId && row.recommendationRequests?.includes(args.requestId)) return null;
     if (args.reason && args.reason.length > 500)
       throw new ConvexError({ _tag: "PlanningInput", message: "Keep your reason under 500 characters." });
     const chosen = args.itemIds ?? row.itemIds;
@@ -273,17 +283,22 @@ export const update = mutation({
         if ((await ctx.db.get(id))?.userId !== userId)
           throw new ConvexError({ _tag: "PlanningInput", message: "Piece unavailable" });
     }
+    if (args.status === row.status && (!args.itemIds || (chosen.length === row.itemIds.length && chosen.every(id => row.itemIds.includes(id))))) return null;
     if (args.status === "planned" && row.status !== "suggested")
       throw new ConvexError({ _tag: "PlanningInput", message: "Only a suggestion can be accepted." });
     if (args.status === "worn" && row.status !== "planned")
       throw new ConvexError({ _tag: "PlanningInput", message: "Accept this suggestion first." });
     if (row.status === "dismissed" || row.status === "worn")
       throw new ConvexError({ _tag: "PlanningInput", message: "This outfit is already finished." });
-    if (args.status === "dismissed" && !args.reason?.trim())
-      throw new ConvexError({ _tag: "PlanningInput", message: "Choose a dismissal reason." });
     if (args.status === "planned" && !(args.itemIds ?? row.itemIds).length)
       throw new ConvexError({ _tag: "PlanningInput", message: "Add owned pieces before accepting." });
+    const at = Date.now();
+    const removed = args.status === "dismissed" ? row.itemIds : args.itemIds ? row.itemIds.filter(id => !chosen.includes(id)) : [];
+    const signals = [...(row.recommendationSignals ?? []).filter(signal => signal.at > at - 28 * 86400000)];
+    for (const id of new Set(removed)) if ((await ctx.db.get(id))?.userId === userId) signals.push({ itemId: id, at });
     await ctx.db.patch(args.id, {
+      ...(removed.length ? { recommendationSignals: signals.slice(-40) } : {}),
+      ...(args.requestId ? { recommendationRequests: [...(row.recommendationRequests ?? []), args.requestId].slice(-64) } : {}),
       ...(args.status ? { status: args.status } : {}),
       ...(args.itemIds ? { itemIds: [...new Set(args.itemIds)] } : {}),
       ...(args.reason ? { reason: args.reason } : {}),

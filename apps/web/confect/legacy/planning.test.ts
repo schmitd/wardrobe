@@ -136,11 +136,8 @@ describe("planning ownership and lifecycle", () => {
       invoke(update, f.ctx, { id: "suggestion", itemIds: ["shirt"] }),
     ).rejects.toThrow();
   });
-  test("requires a dismissal reason and rejects deleted pieces on accept", async () => {
+  test("accepts dismissal without a reason and rejects deleted pieces on accept", async () => {
     const f = fixture();
-    await expect(
-      invoke(update, f.ctx, { id: "suggestion", status: "dismissed" }),
-    ).rejects.toThrow();
     await f.ctx.db.delete("shirt");
     await expect(
       invoke(update, f.ctx, { id: "suggestion", status: "planned" }),
@@ -150,6 +147,20 @@ describe("planning ownership and lifecycle", () => {
       status: "dismissed",
       reason: "Pieces unavailable",
     });
+  });
+  test("swap signals deduplicate immediate and delayed retries, retain real removals and enforce ownership", async () => {
+    const f = fixture();
+    await invoke(update, f.ctx, { id: "suggestion", itemIds: ["coat"], requestId: "first" });
+    await invoke(update, f.ctx, { id: "suggestion", itemIds: ["coat"], requestId: "first" });
+    expect((await f.ctx.db.get("suggestion"))?.recommendationSignals).toHaveLength(1);
+    await invoke(update, f.ctx, { id: "suggestion", itemIds: ["shirt"], requestId: "second" });
+    await invoke(update, f.ctx, { id: "suggestion", itemIds: ["coat"], requestId: "first" });
+    expect((await f.ctx.db.get("suggestion"))?.itemIds).toEqual(["shirt"]);
+    expect((await f.ctx.db.get("suggestion"))?.recommendationSignals).toHaveLength(2);
+    await expect(invoke(update, fixture("bob").ctx, { id: "suggestion", itemIds: ["coat"], requestId: "first" })).rejects.toThrow();
+    await invoke(update, f.ctx, { id: "suggestion", status: "dismissed", requestId: "dismiss" });
+    await invoke(update, f.ctx, { id: "suggestion", status: "dismissed", requestId: "dismiss" });
+    expect((await f.ctx.db.get("suggestion"))?.recommendationSignals).toHaveLength(3);
   });
   test("disconnect removes only this user's calendar-derived outfits", async () => {
     const f = fixture();

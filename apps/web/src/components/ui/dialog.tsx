@@ -5,6 +5,7 @@ import { XIcon } from "lucide-react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { cn } from "@/lib/utils"
+import { ModalNotifications } from "../Notifications"
 import { Button } from "@/components/ui/button"
 import { HomeVisibilityContext } from "@/components/homeVisibility"
 
@@ -55,6 +56,7 @@ function DialogContent({
   children,
   showCloseButton = true,
   presentation = "dialog",
+  onEscapeKeyDown,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
@@ -71,8 +73,17 @@ function DialogContent({
           className
         )}
         {...props}
+        onEscapeKeyDown={(event) => {
+          // Radix listens on document capture, before a notice's React key handler.
+          if (event.target instanceof Element && event.target.closest("[data-notification-id]")) {
+            event.preventDefault()
+            return
+          }
+          onEscapeKeyDown?.(event)
+        }}
       >
         {children}
+        <ModalNotifications />
         {showCloseButton && (
           <DialogPrimitive.Close
             data-slot="dialog-close"

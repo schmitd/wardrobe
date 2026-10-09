@@ -1,4 +1,5 @@
 "use client";
+import { revealDecodedImage } from "@/lib/revealDecodedImage";
 import { weatherCities } from "@wardrobe/shared";
 import Image from "next/image";
 import { useUser } from "@clerk/nextjs";
@@ -7,7 +8,6 @@ import {
   CalendarDays,
   ChevronRight,
   Mic,
-  SlidersHorizontal,
   Shirt,
 } from "lucide-react";
 import {
@@ -58,7 +58,6 @@ const input =
 type View =
   | "describe"
   | "calendar"
-  | "options"
   | "swap"
   | "why"
   | "dismiss"
@@ -85,6 +84,9 @@ function WeekPlanner({
 }) {
   const [locating, setLocating] = useState(false);
   const [locationMessage, setLocationMessage] = useState("");
+  const [calendarPrompt, setCalendarPrompt] = useState(false);
+  const permissionAttempts = useRef(new Set<string>());
+  const planningEntry = useRef(0);
   const [data, setData] = useState<PlanningData | null>(null);
   const [draft, setDraft] = useState<Draft>(() => ({
     ...initial(),
@@ -127,6 +129,12 @@ function WeekPlanner({
         setDraft({
           ...initial(),
           description: saved.draft.description.slice(0, 4000),
+          ...(saved.draft.week === localDate() ? {
+            week: saved.draft.week,
+            review: Array.isArray(saved.draft.review) ? saved.draft.review.filter((day: ReviewedDay) => sevenDays(localDate()).includes(day.date) && typeof day.description === "string").slice(0,7) : [],
+            clarification: typeof saved.draft.clarification === "string" ? saved.draft.clarification : "",
+            assumption: typeof saved.draft.assumption === "string" ? saved.draft.assumption : "",
+          } : {}),
           useCalendar: saved.draft.useCalendar !== false,
           weatherCity: weatherCities.some(city => city.id === saved.draft.weatherCity) ? saved.draft.weatherCity : "",
         });
@@ -238,7 +246,8 @@ function WeekPlanner({
   const setText = (description: string) =>
     setDraft((d) => ({ ...d, description, review: [], clarification: "", assumption: "" }));
   const submit = async () => {
-    if (voiceBusy) return;
+    if (voiceBusy || locating) return;
+    setCalendarPrompt(false);
     const result = await perform(async () => {
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       let days = draft.review;
@@ -305,7 +314,8 @@ function WeekPlanner({
     }
   };
   const update = async (operation: PlanningOperation) => {
-    if (await perform(() => planningRequest(operation))) {
+    const request = "id" in operation ? { ...operation, requestId: crypto.randomUUID() } : operation;
+    if (await perform(() => planningRequest(request))) {
       setSwap(null);
       setReason("");
       setMessage("Outfit updated.");
@@ -352,10 +362,38 @@ function WeekPlanner({
     );
   };
   const open = (next: View) => {
+    if (next !== "describe") { planningEntry.current++; setCalendarPrompt(false); }
     setError("");
     setMessage("");
     setSwap(null);
     setView(next);
+  };
+  // Requests happen only in this intentional entry handler, never on load or opening Options.
+  const beginPlanning = async () => {
+    open("describe");
+    const entry = ++planningEntry.current;
+    const claim = (kind: string) => {
+      const key = `${storageKey}-permission-${kind}`;
+      if (permissionAttempts.current.has(kind)) return false;
+      try { if (sessionStorage.getItem(key)) return false; sessionStorage.setItem(key, "requested"); } catch { /* In-memory guard still prevents repeat prompts. */ }
+      permissionAttempts.current.add(kind);
+      return true;
+    };
+    if (claim("location")) {
+      setLocating(true);
+      setLocationMessage("Finding a nearby forecast… Device coordinates stay on this device.");
+      try {
+        // Start immediately inside the click handler, preserving browser user activation.
+        const city = await requestWeatherCity(navigator.geolocation);
+        if (city) {
+          setDraft(current => ({ ...current, weatherCity: city.id }));
+          setLocationMessage("Nearby city forecast added.");
+        } else setLocationMessage("No nearby forecast is available. Planning can continue.");
+      } catch { setLocationMessage("Location unavailable or access declined. Planning can continue."); }
+      finally { setLocating(false); }
+    }
+    // Present Calendar after location settles. OAuth starts from its own explicit button click.
+    if (entry === planningEntry.current && !data?.calendarEnabled && claim("calendar")) setCalendarPrompt(true);
   };
   const pieces = (
     <div data-private className="planner-outfit-photo">
@@ -365,6 +403,7 @@ function WeekPlanner({
           <div key={id} className="planner-outfit-piece">
             {item?.imageUrl ? (
               <Image
+                onLoad={revealDecodedImage}
                 src={item.imageUrl}
                 alt={item.category}
                 fill
@@ -396,7 +435,6 @@ function WeekPlanner({
   const titles = {
     describe: "Your plans",
     calendar: "Google Calendar",
-    options: "Planner options",
     swap: "Swap a piece",
     why: "Why this outfit",
     dismiss: "Dismiss suggestion",
@@ -419,13 +457,6 @@ function WeekPlanner({
               >
                 <CalendarDays />
                 <span className="hidden sm:inline">Calendar</span>
-              </Button>
-              <Button
-                variant="outline"
-                aria-label="Planner options"
-                onClick={() => open("options")}
-              >
-                <SlidersHorizontal />
               </Button>
             </div>
           </header>
@@ -551,7 +582,7 @@ function WeekPlanner({
         {!historyDate && (
           <button
             type="button"
-            onClick={() => open("describe")}
+            onClick={() => void beginPlanning()}
             disabled={!data || !restored}
             className="flex min-h-12 w-full items-center gap-3 rounded-lg border border-[#c8b9ce] bg-white p-3 text-left text-sm disabled:opacity-50"
           >
@@ -619,7 +650,7 @@ function WeekPlanner({
       <TaskSheet
         open={view !== null}
         onOpenChange={(value) => {
-          if (!value && !busy) setView(null);
+          if (!value && !busy) { planningEntry.current++; setCalendarPrompt(false); setView(null); }
         }}
         title={view ? titles[view] : "Your plans"}
         footer={
@@ -628,7 +659,7 @@ function WeekPlanner({
             {view === "describe" ? (
               <Button
                 className="rack-primary-action w-full"
-                disabled={busy || voiceBusy || !data?.items.length}
+                disabled={busy || voiceBusy || locating || !data?.items.length}
                 onClick={() => void submit()}
               >
                 {busy
@@ -641,12 +672,12 @@ function WeekPlanner({
               <Button
                 className="w-full"
                 variant="outline"
-                disabled={busy || !reason}
+                disabled={busy}
                 onClick={() =>
                   void update({
                     operation: "planning_dismiss",
                     id: outfit.id,
-                    reason,
+                    ...(reason ? { reason } : {}),
                   })
                 }
               >
@@ -667,6 +698,18 @@ function WeekPlanner({
       >
         {view === "describe" && (
           <div className="space-y-5">
+            {locationMessage && <p role="status" className="text-sm">{locationMessage}</p>}
+            <details className="text-xs"><summary className="cursor-pointer py-2">Forecast sources</summary><p><a className="underline" href="https://api.met.no/">Data from MET Norway</a> and <a className="underline" href="https://www.geonames.org/">GeoNames city data</a>, <a className="underline" href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Coordinates rounded; forecast periods summarized into city-local days.</p></details>
+            {calendarPrompt && !locating && <div className="space-y-3 rounded-xl border p-4">
+              <p className="text-sm">Use Google Calendar to plan around your week, or continue without it.</p>
+              <GoogleCalendarConnect enabled={false} selectedIds={data?.calendarIds} beforeAuthorize={persist} onChange={(enabled) => {
+                setCalendarPrompt(false);
+                setDraft(current => ({ ...current, useCalendar: enabled }));
+                setData(current => current ? { ...current, calendarEnabled: enabled } : current);
+                void refresh().catch(() => setRefreshWarning("Calendar settings saved. The view could not refresh."));
+              }} />
+              <Button type="button" variant="outline" onClick={() => { setCalendarPrompt(false); setDraft(current => ({ ...current, useCalendar: false })); }}>Continue without Calendar</Button>
+            </div>}
             <DayVoiceInput
               hasText={Boolean(draft.description.trim())}
               disabled={busy}
@@ -744,46 +787,6 @@ function WeekPlanner({
             }}
           />
         )}
-        {view === "options" && (
-          <div className="space-y-5">
-            <label className="flex min-h-11 items-center gap-3">
-              <input
-                type="checkbox"
-                className="size-5"
-                disabled={busy || !data?.calendarEnabled}
-                checked={draft.useCalendar && Boolean(data?.calendarEnabled)}
-                onChange={(event) =>
-                  setDraft((d) => ({ ...d, useCalendar: event.target.checked }))
-                }
-              />
-              Use Calendar for this update
-            </label>
-            <div className="space-y-2 text-sm">
-              <label htmlFor="weather-city">City for weather (optional)</label>
-              <Button type="button" variant="outline" disabled={busy || locating} onClick={async () => { setLocating(true); setLocationMessage(""); try { const city = await requestWeatherCity(navigator.geolocation); if (city) { setDraft(current => ({ ...current, weatherCity: city.id })); setLocationMessage(`Nearby supported city: ${city.label}. You can change it below.`); } else setLocationMessage("No supported city nearby. Choose a city or skip weather."); } catch { setLocationMessage("Location unavailable or access declined. Choose a city instead."); } finally { setLocating(false); } }}>{locating ? "Finding nearby city…" : "Use my location"}</Button>
-              {locationMessage && <p role="status" className="text-sm">{locationMessage}</p>}
-              <select id="weather-city" aria-label="City for weather (optional)" data-private className={input} value={draft.weatherCity} disabled={busy} onChange={event => setDraft(current => ({ ...current, weatherCity: event.target.value }))}>
-                <option value="">Skip weather</option>
-                {weatherCities.map(city => <option key={city.id} value={city.id}>{city.label}</option>)}
-              </select>
-            </div>
-            <p className="text-sm">Device coordinates stay here. Weather uses your selected city.</p>
-            <p className="text-xs"><a className="underline" href="https://api.met.no/">Data from MET Norway</a> and <a className="underline" href="https://www.geonames.org/">GeoNames city data</a>, <a className="underline" href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Coordinates rounded; forecast periods summarized into city-local days.</p>
-            {data?.inventoryTruncated && (
-              <p className="text-sm">
-                Planning uses recent pieces plus pieces from saved outfits and
-                relevant collections.
-              </p>
-            )}
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => void autoPlan(undefined, true)}
-            >
-              Retry auto-plan
-            </Button>
-          </div>
-        )}
         {view === "why" && outfit && (
           <div data-private className="space-y-5 text-sm leading-relaxed">
             <p className="whitespace-pre-line">{outfitText(outfit.rationale, [...(data?.items.map(item => item.id) ?? []), outfit.id])}</p>
@@ -852,7 +855,7 @@ function WeekPlanner({
             )}
           </div>
         )}
-        {view === "dismiss" && <fieldset className="space-y-3"><legend className="mb-3 text-sm">Reason</legend><div className="flex flex-wrap gap-2">{["Not my style", "Wrong for the occasion", "Pieces unavailable", "Weather mismatch"].map(value => <button type="button" key={value} disabled={busy} aria-pressed={reason === value} onClick={() => setReason(value)} className={`min-h-11 rounded-full border px-4 py-2 text-sm ${reason === value ? "border-[#241426] bg-[#E4FF91]" : "bg-white"}`}>{value}</button>)}</div></fieldset>}
+        {view === "dismiss" && <fieldset className="space-y-3"><legend className="mb-3 text-sm">Reason (optional)</legend><div className="flex flex-wrap gap-2">{["Not my style", "Wrong for the occasion", "Pieces unavailable", "Weather mismatch"].map(value => <button type="button" key={value} disabled={busy} aria-pressed={reason === value} onClick={() => setReason(value)} className={`min-h-11 rounded-full border px-4 py-2 text-sm ${reason === value ? "border-[#241426] bg-[#E4FF91]" : "bg-white"}`}>{value}</button>)}</div></fieldset>}
       </TaskSheet>
     </section>
   );

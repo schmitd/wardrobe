@@ -54,7 +54,7 @@ export const collection = query({
     const plan = await ctx.db.get(wardrobeId);
     if (!plan || plan.userId !== user.userId) return null;
     const membersPage = await ctx.db.query("wardrobeMemberships").withIndex("by_wardrobe", q => q.eq("wardrobeId", wardrobeId)).paginate({ ...paginationOpts, numItems: Math.max(1, Math.min(100, paginationOpts.numItems)), maximumRowsRead: 100 });
-    const members = membersPage.page;
+    const members = membersPage.page.filter(member => member.userId === user.userId && !member.removed);
     const references = (await Promise.all(members.filter(member => member.candidateItemId).map(member => ctx.db.get(member.candidateItemId!)))).filter(item => item !== null).filter(item => item.userId === user.userId);
     const items = await Promise.all(members.slice(0, 100).map(async membership => {
       const item = membership.itemId ? await ctx.db.get(membership.itemId) : null;

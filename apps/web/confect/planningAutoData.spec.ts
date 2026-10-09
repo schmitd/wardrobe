@@ -73,6 +73,7 @@ export default GroupSpec.make()
             ),
             bio: Schema.String,
             history: Schema.Array(Schema.String),
+            recommendationSignals: Schema.Array(Schema.Struct({ itemId, at: Schema.Number })),
             wearHistory: Schema.Array(Schema.Struct({ date: Schema.String, itemIds: Schema.Array(itemId), wornAt: Schema.Number })),
             inventoryTruncated: Schema.Boolean,
             suggestions: Schema.Array(

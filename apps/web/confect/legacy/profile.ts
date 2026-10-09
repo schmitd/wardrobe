@@ -293,7 +293,7 @@ export const internalProfileUpdate = internalMutation({
 });
 
 export async function readStyleBioContext(ctx: QueryCtx, userId: string) {
-    const [profile, items, allFitChecks, collections, memberships] = await Promise.all([
+    const [profile, items, allFitChecks, collections, allMemberships] = await Promise.all([
       ctx.db.query("profiles").withIndex("by_user", (q) => q.eq("userId", userId)).first(),
       ctx.db.query("wardrobeItems").withIndex("by_user", (q) => q.eq("userId", userId)).order("desc").take(301),
       ctx.db.query("fitChecks").withIndex("by_user", (q) => q.eq("userId", userId)).order("desc").take(51),
@@ -301,6 +301,7 @@ export async function readStyleBioContext(ctx: QueryCtx, userId: string) {
       ctx.db.query("wardrobeMemberships").withIndex("by_user", (q) => q.eq("userId", userId)).order("desc").take(501),
     ]);
 
+    const memberships = allMemberships.filter(member => !member.removed);
     const readyItems = items.filter((item) => item.analysisStatus === "ready");
     const counts = {
       closetItemCount: readyItems.length,

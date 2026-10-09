@@ -86,6 +86,7 @@ export const pageInspirationSpec = FunctionSpec.publicQuery({
   name: "pageInspiration",
   args: () => ({
     wardrobeId: Id("wardrobes"),
+    removed: Schema.optional(Schema.Boolean),
     paginationOpts: paginationOptions,
   }),
   returns: () =>
@@ -95,6 +96,7 @@ export const pageInspirationSpec = FunctionSpec.publicQuery({
         Schema.Array(
           Schema.Struct({
             _id: Id("candidateItems"),
+            membershipId: Id("wardrobeMemberships"),
             imageUrl: Schema.NullOr(Schema.String),
             category: Schema.NullOr(Schema.String),
             description: Schema.NullOr(Schema.String),
@@ -136,8 +138,15 @@ export const saveNoteSpec = FunctionSpec.publicMutation({
 }).middleware(RequireUser);
 
 export const saveLabelsSpec = FunctionSpec.publicMutation({
-  name: "saveLabels", args: () => ({ itemId: Id("wardrobeItems"), category: Schema.String, styleTags: Schema.Array(Schema.String), wearPolicy: Schema.Literals(["after_each_wear", "rewear", "check"]), readyToWear: Schema.optional(Schema.Boolean) }), returns: () => Schema.Null, error: () => CollectionInput,
+  name: "saveLabels", args: () => ({ itemId: Id("wardrobeItems"), category: Schema.String, styleTags: Schema.Array(Schema.String), wearPolicy: Schema.optional(Schema.Literals(["after_each_wear", "rewear", "check"])), readyToWear: Schema.optional(Schema.Boolean) }), returns: () => Schema.Null, error: () => CollectionInput,
 }).middleware(RequireUser);
 export const archiveCollectionSpec = FunctionSpec.publicMutation({
   name: "archiveCollection", args: () => ({ wardrobeId: Id("wardrobes"), archived: Schema.Boolean }), returns: () => Schema.Null, error: () => CollectionInput,
+}).middleware(RequireUser);
+
+export const setInspirationRemovedSpec = FunctionSpec.publicMutation({
+  name: "setInspirationRemoved",
+  args: () => ({ wardrobeId: Id("wardrobes"), membershipId: Id("wardrobeMemberships"), removed: Schema.Boolean }),
+  returns: () => Schema.Null,
+  error: () => CollectionInput,
 }).middleware(RequireUser);

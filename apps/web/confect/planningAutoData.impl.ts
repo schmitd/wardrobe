@@ -179,6 +179,7 @@ const load = FunctionImpl.make(
         bio: data.bio,
         history: data.history,
         wearHistory: data.wearHistory,
+        recommendationSignals: data.recommendationSignals,
         inventoryTruncated: data.inventoryTruncated,
         suggestions: data.suggestions.map(
           ({ date, status, itemIds, reason }) => ({

@@ -1,4 +1,5 @@
 "use client";
+import { revealDecodedImage } from "@/lib/revealDecodedImage";
 import Image from "next/image";
 import { useState } from "react";
 import { localDate } from "@wardrobe/shared";
@@ -42,6 +43,7 @@ export default function WornOutfits() {
                 const item = data?.items.find((i) => i.id === id);
                 return item?.imageUrl ? (
                   <Image
+                    onLoad={revealDecodedImage}
                     key={id}
                     src={item.imageUrl}
                     alt={item.category}

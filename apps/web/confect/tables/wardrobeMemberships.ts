@@ -8,6 +8,7 @@ export default Table.make(() => Schema.Struct({
   itemId: Schema.optionalKey(Id("wardrobeItems")),
   candidateItemId: Schema.optionalKey(Id("candidateItems")),
   membershipKind: Schema.String,
+  removed: Schema.optionalKey(Schema.Boolean),
   rationale: Schema.optionalKey(Schema.String),
   createdAt: Schema.Number,
   updatedAt: Schema.Number,
@@ -16,4 +17,5 @@ export default Table.make(() => Schema.Struct({
     .index("by_wardrobe", ["wardrobeId"])
     .index("by_item", ["itemId"])
     .index("by_candidate", ["candidateItemId"])
+    .index("by_candidate_wardrobe", ["candidateItemId", "wardrobeId"])
     .index("by_wardrobe_item", ["wardrobeId", "itemId"]);

@@ -61,6 +61,8 @@ export function collectionFixture() {
     ],
     inspirations: [0, 1, 2].map((index) => ({
       _id: `reference-${index}`,
+      membershipId: `membership-${index}`,
+      removed: false,
       wardrobeId: "ideas",
       category: "Visual reference",
       description: ["Navy layers", "Soft neutrals", "Olive textures"][index]!,

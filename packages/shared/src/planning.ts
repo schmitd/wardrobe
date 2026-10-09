@@ -67,6 +67,7 @@ export type PlanningOperation =
       id: string;
       itemIds?: string[];
       reason?: string;
+      requestId?: string;
     }
   | { operation: "planning_auto"; timezone: string; enabled?: boolean; retry?: boolean }
   | { operation: "calendar_list" }

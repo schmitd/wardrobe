@@ -1,8 +1,9 @@
 "use client";
+import { revealDecodedImage } from "@/lib/revealDecodedImage";
 
 import Image from "next/image";
 import { ArrowUpRight, Folder, Pencil } from "lucide-react";
-import { useEffect, useState, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 
 interface RackItemCardProps {
   compact?: boolean;
@@ -24,52 +25,32 @@ const compactDescription = (text: string | null, maxLength = 120) => {
 
 const fallbackAccent = "rgb(240 255 189)";
 
-const getImageAverageColor = async (imageUrl: string) => {
-  const image = document.createElement("img");
-  image.crossOrigin = "anonymous";
-  image.decoding = "async";
-  image.src = imageUrl;
-
-  await image.decode();
-
-  const canvas = document.createElement("canvas");
-  const size = 24;
-  canvas.width = size;
-  canvas.height = size;
-
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) return fallbackAccent;
-
-  context.drawImage(image, 0, 0, size, size);
-  const pixels = context.getImageData(0, 0, size, size).data;
-
-  let red = 0;
-  let green = 0;
-  let blue = 0;
-  let count = 0;
-
-  for (let index = 0; index < pixels.length; index += 4) {
-    const alpha = pixels[index + 3];
-    // White photo backdrops should not wash every garment's accent to grey.
-    if (
-      alpha < 32 ||
-      Math.min(pixels[index], pixels[index + 1], pixels[index + 2]) > 238
-    )
-      continue;
-
-    red += pixels[index];
-    green += pixels[index + 1];
-    blue += pixels[index + 2];
-    count += 1;
-  }
-
-  if (count === 0) return fallbackAccent;
-
-  const soften = (channel: number) =>
-    Math.round(channel / count + (255 - channel / count) * 0.18);
-
-  return `rgb(${soften(red)} ${soften(green)} ${soften(blue)})`;
+// Existing Convex descriptions/tags include garment color. Project a bounded
+// tint from that same reactive row so the first render and updates agree.
+// No image fetch, client cache, photo-pixel extraction or new stored field.
+const garmentTints: Record<string, string> = {
+  black: "rgb(194 190 196)", charcoal: "rgb(194 190 196)",
+  navy: "rgb(192 204 221)", "dark blue": "rgb(192 204 221)",
+  blue: "rgb(201 221 235)", denim: "rgb(201 221 235)",
+  grey: "rgb(216 215 219)", gray: "rgb(216 215 219)", silver: "rgb(216 215 219)",
+  beige: "rgb(235 222 201)", tan: "rgb(235 222 201)", khaki: "rgb(235 222 201)",
+  brown: "rgb(221 199 180)", camel: "rgb(221 199 180)", chocolate: "rgb(221 199 180)",
+  cream: "rgb(246 237 216)", ivory: "rgb(246 237 216)", "off-white": "rgb(246 237 216)",
+  white: "rgb(238 235 233)", olive: "rgb(215 219 187)",
+  green: "rgb(202 225 202)", sage: "rgb(202 225 202)",
+  burgundy: "rgb(229 196 207)", maroon: "rgb(229 196 207)",
+  red: "rgb(241 202 198)", pink: "rgb(242 214 228)",
+  purple: "rgb(222 206 234)", lavender: "rgb(222 206 234)",
+  orange: "rgb(248 221 191)", rust: "rgb(248 221 191)",
+  yellow: "rgb(244 237 192)", gold: "rgb(244 237 192)", mustard: "rgb(244 237 192)",
 };
+const garmentColor = /\b(off-white|dark blue|black|charcoal|navy|blue|denim|grey|gray|silver|beige|tan|khaki|brown|camel|chocolate|cream|ivory|white|olive|green|sage|burgundy|maroon|red|pink|purple|lavender|orange|rust|yellow|gold|mustard)\b/i;
+function synchronizedAccent(description: string | null, tags: string[] | null) {
+  const text = [description?.slice(0, 2000) ?? "", ...(tags ?? []).slice(0, 20).map(tag => tag.slice(0, 80))].join(" ");
+  const color = text.match(garmentColor)?.[1].toLowerCase();
+  return color ? garmentTints[color] : fallbackAccent;
+}
+
 
 export default function RackItemCard({
   compact,
@@ -82,23 +63,7 @@ export default function RackItemCard({
   badgeLabel,
   className,
 }: RackItemCardProps) {
-  const [accentColor, setAccentColor] = useState(fallbackAccent);
-
-  useEffect(() => {
-    let isActive = true;
-
-    getImageAverageColor(imageUrl)
-      .then((color) => {
-        if (isActive) setAccentColor(color);
-      })
-      .catch(() => {
-        if (isActive) setAccentColor(fallbackAccent);
-      });
-
-    return () => {
-      isActive = false;
-    };
-  }, [imageUrl]);
+  const accentColor = synchronizedAccent(description, styleTags);
 
   if (compact)
     return (
@@ -133,6 +98,7 @@ export default function RackItemCard({
           <div className="rack-piece-photo">
             <Image
               src={imageUrl}
+              onLoad={revealDecodedImage}
               alt={description ?? category ?? "Closet item"}
               fill
               sizes="(max-width: 640px) 44vw, (max-width: 1024px) 40vw, 280px"
@@ -203,6 +169,7 @@ export default function RackItemCard({
       <div className="rack-item-image-wrap relative">
         <Image
           src={imageUrl}
+          onLoad={revealDecodedImage}
           alt={description ?? category ?? "Closet item"}
           fill
           sizes="(max-width: 640px) 55vw, (max-width: 1024px) 45vw, 35vw"

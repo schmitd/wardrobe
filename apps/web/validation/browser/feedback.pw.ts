@@ -23,7 +23,7 @@ test("piece selection and dismissal stay inside the sheet with images and inline
   await choices.getByRole("searchbox").fill("coat");await expect(choices.getByRole("button")).toHaveCount(1);await choices.getByRole("button").click();
   await expect(page.getByRole("dialog").getByText("Synthetic coat",{exact:true})).toBeVisible();await page.getByRole("button",{name:"Done",exact:true}).click();
   await page.getByRole("button",{name:"Dismiss suggestion",exact:true}).click();await expect(page.getByRole("dialog").getByRole("combobox")).toHaveCount(0);
-  await page.getByRole("button",{name:"Not my style",exact:true}).click();await expect(page.getByRole("button",{name:"Not my style",exact:true})).toHaveAttribute("aria-pressed","true");
+  await expect(page.getByRole("button",{name:"Dismiss outfit",exact:true})).toBeEnabled();
   await page.getByRole("button", {name:"Dismiss outfit",exact:true}).click(); await expect(page.getByRole("dialog")).toHaveCount(0); await page.reload();
   const dismissed = await page.request.get("/__fixture/state").then(r=>r.json()); expect(dismissed.data.suggestions[0].status).toBe("dismissed");
 });
@@ -31,6 +31,7 @@ test("piece selection and dismissal stay inside the sheet with images and inline
 test("labels save and collection removal restores while preserving pieces",async({page})=>{
   await page.setViewportSize({width:390,height:844});await page.goto("/?scenario=wardrobe");
   await page.getByRole("button",{name:"Open Overshirt details",exact:true}).click();await page.getByRole("button",{name:"Labels",exact:false}).click();
+  await expect(page.getByText("Between wears",{exact:true})).toHaveCount(0); await expect(page.getByRole("checkbox",{name:/ready to wear/})).toHaveCount(0); await expect(page.getByRole("button",{name:/check before wearing|Wash or prepare|suitable to rewear/})).toHaveCount(0);
   await page.getByRole("textbox",{name:"Category",exact:true}).fill("Personal category");await page.getByRole("textbox",{name:"Labels, separated by commas",exact:true}).fill("My label, Cotton");await page.getByRole("button",{name:"Save labels",exact:true}).click();await expect(page.getByText("Labels saved.",{exact:true})).toBeVisible();
   await page.getByRole("button",{name:"Close",exact:true}).click();
   await page.reload(); await page.getByRole("button",{name:"Open Personal category details",exact:true}).click(); await page.getByRole("button",{name:"Labels",exact:false}).click(); await expect(page.getByRole("textbox",{name:"Category",exact:true})).toHaveValue("Personal category"); await expect(page.getByRole("textbox",{name:"Labels, separated by commas",exact:true})).toHaveValue("My label, Cotton"); await page.getByRole("button",{name:"Close",exact:true}).click();
@@ -42,12 +43,22 @@ test("labels save and collection removal restores while preserving pieces",async
 });
 
 
-test("location choice is visible in planner options and denial preserves manual weather selection", async ({page}) => {
+test("intentional planning requests location once; denial allows planning and options contain no manual city picker", async ({page}) => {
   await page.setViewportSize({width:390,height:844});
-  await page.addInitScript(() => { Object.defineProperty(navigator, "geolocation", { configurable:true,value:{getCurrentPosition:(_success:unknown,failure:(error:{code:number})=>void)=>failure({code:1})} }); });
-  await page.goto("/?scenario=planner"); await page.getByRole("button",{name:"Planner options",exact:true}).click();
-  await page.getByRole("button",{name:"Use my location",exact:true}).click(); await expect(page.getByRole("status").filter({hasText:"access declined"})).toBeVisible();
-  await page.getByRole("combobox",{name:"City for weather (optional)",exact:true}).selectOption({index:1});
-  await expect(page.getByRole("combobox",{name:"City for weather (optional)",exact:true})).not.toHaveValue("");
-  const state=await page.request.get("/__fixture/state").then(r=>r.json());expect(state.calls.some((call:{operation:string})=>call.operation==="planning_generate_week")).toBe(false);
+  await page.addInitScript(() => { let calls = 0; Object.defineProperty(navigator, "geolocation", { configurable:true,value:{getCurrentPosition:(_success:unknown,failure:(error:{code:number})=>void)=>{ calls++; (window as unknown as {geoCalls:number}).geoCalls = calls; failure({code:1}); }} }); });
+  await page.goto("/?scenario=planner&case=permissions");
+  expect(await page.evaluate(() => (window as unknown as {geoCalls?:number}).geoCalls ?? 0)).toBe(0);
+  await expect(page.getByRole("button",{name:"Planner options",exact:true})).toHaveCount(0);
+  await expect(page.getByRole("combobox",{name:"City for weather (optional)"})).toHaveCount(0);
+  await expect(page.getByRole("button",{name:"Use my location",exact:true})).toHaveCount(0);
+  await page.getByRole("button",{name:"Describe your day or week",exact:true}).click();
+  await expect(page.getByRole("status").filter({hasText:"access declined"})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Continue without Calendar",exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Continue without Calendar",exact:true}).click();
+  await expect(page.getByRole("button",{name:"Suggest outfit",exact:true})).toBeEnabled();
+  await page.getByRole("button",{name:"Close",exact:true}).click();
+  await page.getByRole("button",{name:"Describe your day or week",exact:true}).click();
+  expect(await page.evaluate(() => (window as unknown as {geoCalls?:number}).geoCalls)).toBe(1);
+  await expect(page.getByRole("button",{name:"Continue without Calendar",exact:true})).toHaveCount(0);
+  const state=await page.request.get("/__fixture/state").then(r=>r.json());expect(state.calls.some((call:{operation:string})=>call.operation==="calendar_connect")).toBe(false);
 });

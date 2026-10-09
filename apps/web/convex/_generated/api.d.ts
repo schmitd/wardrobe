@@ -15,6 +15,7 @@ import type * as garmentIdentityQueries from "../garmentIdentityQueries.js";
 import type * as garmentPreview from "../garmentPreview.js";
 import type * as garmentPreviewData from "../garmentPreviewData.js";
 import type * as http from "../http.js";
+import type * as inspirationRecall from "../inspirationRecall.js";
 import type * as mobile from "../mobile.js";
 import type * as planning from "../planning.js";
 import type * as planningAuto from "../planningAuto.js";
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   garmentPreview: typeof garmentPreview;
   garmentPreviewData: typeof garmentPreviewData;
   http: typeof http;
+  inspirationRecall: typeof inspirationRecall;
   mobile: typeof mobile;
   planning: typeof planning;
   planningAuto: typeof planningAuto;

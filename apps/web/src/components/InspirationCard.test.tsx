@@ -1,0 +1,43 @@
+import { afterEach, expect, test } from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import React from "react";
+GlobalRegistrator.register();
+const { render, screen, fireEvent, cleanup, waitFor } = await import("@testing-library/react");
+const { default: InspirationCard } = await import("./InspirationCard");
+afterEach(cleanup);
+const reference = { imageUrl: null, description: "Synthetic reference", category: null };
+test("visible Remove opens inline confirmation; Cancel and Escape preserve data and return focus", async () => {
+  const changes: boolean[] = [];
+  render(<InspirationCard reference={reference} onChange={async removed => { changes.push(removed); }} />);
+  fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Remove" })));
+  fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+  fireEvent.keyDown(screen.getByRole("button", { name: "Remove inspiration" }), { key: "Escape" });
+  expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+  expect(changes).toEqual([]);
+});
+test("pending writes prevent repeats; failure retains confirmation for retry and restore is direct", async () => {
+  let reject!: (error: Error) => void;
+  const changes: boolean[] = [];
+  let fail = true;
+  const view = render(<InspirationCard reference={reference} onChange={removed => {
+    changes.push(removed);
+    return fail ? new Promise((_, no) => { reject = no; }) : Promise.resolve();
+  }} />);
+  fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+  fireEvent.click(screen.getByRole("button", { name: "Remove inspiration" }));
+  fireEvent.click(screen.getByRole("button", { name: "Removing…" }));
+  expect(changes).toEqual([true]);
+  expect((screen.getByRole("button", { name: "Cancel" }) as HTMLButtonElement).disabled).toBe(true);
+  reject(new Error("Synthetic failure"));
+  await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Try again"));
+  fail = false;
+  fireEvent.click(screen.getByRole("button", { name: "Remove inspiration" }));
+  await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  expect(changes).toEqual([true, true]);
+  view.rerender(<InspirationCard reference={reference} removed onChange={async removed => { changes.push(removed); }} />);
+  fireEvent.click(screen.getByRole("button", { name: "Restore" }));
+  await waitFor(() => expect(changes).toEqual([true, true, false]));
+});

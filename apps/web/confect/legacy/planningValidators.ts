@@ -17,5 +17,7 @@ export const outfitFields = {
   calendarDerived: v.boolean(),
   createdAt: v.number(),
   updatedAt: v.number(),
+  recommendationRequests: v.optional(v.array(v.string())),
+  recommendationSignals: v.optional(v.array(v.object({ itemId: v.id("wardrobeItems"), at: v.number() }))),
   reason: v.optional(v.string()),
 };

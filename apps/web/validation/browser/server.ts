@@ -32,7 +32,7 @@ function fixture(url: URL): State {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   return {
     uploadImages: [], fixtureKey: url.search, previews: {}, catalog: collectionFixture(),
-    data: { items: ["Shirt", "Trousers", "Coat"].map((category, i) => ({ id: `piece-${i}`, category, description: `Synthetic ${category.toLowerCase()}`, imageUrl: `/__fixture/piece-${i}.svg` })), plans: [], calendarEnabled: true, calendarIds: ["synthetic-calendar"], suggestions: [{ id: "outfit", date: url.searchParams.get("scenario") === "history" ? shiftDay(today, -1) : today, title: "Easy structure for your day", rationale: "Relaxed tailoring draws on Work edit; the cotton layers work together for your client meeting.", itemIds: ["piece-0", "piece-1"], missing: [], context: ["Collection: Work edit", "Style profile"], status: "planned", calendarDerived: false }] },
+    data: { items: ["Shirt", "Trousers", "Coat"].map((category, i) => ({ id: `piece-${i}`, category, description: `Synthetic ${category.toLowerCase()}`, imageUrl: `/__fixture/piece-${i}.svg` })), plans: [], calendarEnabled: url.searchParams.get("case") !== "permissions", calendarIds: url.searchParams.get("case") === "permissions" ? [] : ["synthetic-calendar"], suggestions: [{ id: "outfit", date: url.searchParams.get("scenario") === "history" ? shiftDay(today, -1) : today, title: "Easy structure for your day", rationale: "Relaxed tailoring draws on Work edit; the cotton layers work together for your client meeting.", itemIds: ["piece-0", "piece-1"], missing: [], context: ["Collection: Work edit", "Style profile"], status: "planned", calendarDerived: false }] },
     calls: [], stale: url.searchParams.get("case") === "stale", latency: boundedInteger(url.searchParams.get("latency") ?? undefined, 0, 0, 5000), scenarioCase: url.searchParams.get("case"), scope: url.searchParams.get("scope") === "single_piece" ? "single_piece" : "full_fit", wrote: false,
   };
 }
@@ -89,7 +89,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
     }
     switch (input.query) {
       case "mobile.plans": case "wardrobes.listWardrobes": return Response.json(c.collections.filter(collection => !collection.archived));
-      case "wardrobe.pageCollections": return Response.json(c.collections.filter(collection => Boolean(collection.archived) === Boolean(args.archived)).map(collection => ({ ...collection, previews: [...c.items.filter(i => c.memberships.some(m => m.wardrobeId === collection._id && m.itemId === i.id)), ...c.inspirations.filter(r => r.wardrobeId === collection._id).map(r => ({ id: r._id, imageUrl: r.imageUrl, category: r.category }))].slice(0, 3) })));
+      case "wardrobe.pageCollections": return Response.json(c.collections.filter(collection => Boolean(collection.archived) === Boolean(args.archived)).map(collection => ({ ...collection, previews: [...c.items.filter(i => c.memberships.some(m => m.wardrobeId === collection._id && m.itemId === i.id)), ...c.inspirations.filter(r => r.wardrobeId === collection._id && !r.removed).map(r => ({ id: r._id, imageUrl: r.imageUrl, category: r.category }))].slice(0, 3) })));
       case "wardrobe.pageWardrobeItems": return Response.json(c.items);
       case "wardrobe.pagePieces": return Response.json(c.items.filter(i => c.memberships.some(m => m.wardrobeId === args.wardrobeId && m.itemId === i.id)));
       case "garmentPreviewData.status": return Response.json({ status: state.previews[args.itemId!] ?? "original", enabled: true, imageUrl: c.items.find(i => i.id === args.itemId)?.imageUrl ?? null });
@@ -97,7 +97,7 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
       case "wardrobe.itemCollectionMembership": return Response.json(c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === args.wardrobeId));
       case "profile.getProfile": return Response.json({ bio: c.bio });
       case "planning.load": return Response.json(state.data);
-      case "wardrobe.pageInspiration": case "candidates.listInspirationByWardrobe": return Response.json(c.inspirations.filter(r => r.wardrobeId === args.wardrobeId));
+      case "wardrobe.pageInspiration": case "candidates.listInspirationByWardrobe": return Response.json(c.inspirations.filter(r => r.wardrobeId === args.wardrobeId && Boolean(r.removed) === Boolean(args.removed)));
       default: return Response.json([]);
     }
   }
@@ -111,8 +111,12 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
       if (input.name === "garmentPreviewData.request") { state.previews[args.itemId!] = "ready"; return Response.json(true); }
       if (input.name === "garmentPreviewData.restore") { state.previews[args.itemId!] = "original"; return Response.json(null); }
       if (input.name === "wardrobe.getUploadUrl") return Response.json(`http://127.0.0.1:${port}/__fixture/upload`);
-      if (input.name === "candidates.createInspiration") { const id = `reference-${c.inspirations.length}`; c.inspirations.unshift({ _id: id, wardrobeId: args.wardrobeId!, category: args.category!, description: args.description!, imageUrl: "/__fixture/piece-0.svg" }); return Response.json({ id }); }
-      if (input.name === "wardrobe.saveLabels") { const item = c.items.find(i => i.id === args.itemId); if (item) { item.category = args.category.trim(); item.styleTags = [...new Set((input.args as {styleTags: string[]}).styleTags.map(tag => tag.trim()).filter(Boolean))]; item.wearPolicy = (input.args as {wearPolicy: "check" | "rewear" | "after_each_wear"}).wearPolicy; } }
+      if (input.name === "candidates.createInspiration") { const id = `reference-${c.inspirations.length}`; c.inspirations.unshift({ _id: id, membershipId: id, removed: false, wardrobeId: args.wardrobeId!, category: args.category!, description: args.description!, imageUrl: "/__fixture/piece-0.svg" }); return Response.json({ id }); }
+      if (input.name === "wardrobe.setInspirationRemoved") {
+        const ref = c.inspirations.find(r => r.membershipId === args.membershipId && r.wardrobeId === args.wardrobeId);
+        if (ref) ref.removed = Boolean((input.args as {removed:boolean}).removed);
+      }
+      else if (input.name === "wardrobe.saveLabels") { const item = c.items.find(i => i.id === args.itemId); if (item) { item.category = args.category.trim(); item.styleTags = [...new Set((input.args as {styleTags: string[]}).styleTags.map(tag => tag.trim()).filter(Boolean))]; if ((input.args as {wearPolicy?: "check" | "rewear" | "after_each_wear"}).wearPolicy) item.wearPolicy = (input.args as {wearPolicy: "check" | "rewear" | "after_each_wear"}).wearPolicy; } }
       else if (input.name === "wardrobe.archiveCollection") { const collection = c.collections.find(collection => collection._id === args.wardrobeId); if (collection) collection.archived = Boolean((input.args as {archived:boolean}).archived); }
       else if (input.name === "wardrobe.saveNote") { const item = c.items.find(i => i.id === args.itemId); if (item) item.note = args.note.trim(); }
       else if (input.name === "wardrobes.addItemToWardrobe") { if (!c.memberships.some(m => m.itemId === args.itemId && m.wardrobeId === args.wardrobeId)) c.memberships.push({ itemId: args.itemId!, wardrobeId: args.wardrobeId! }); }
@@ -160,7 +164,9 @@ Bun.serve({ hostname: "127.0.0.1", port, async fetch(request) {
     case "create-piece": {
       const count = state.calls.filter(call => call.operation === "create-piece").length;
       if (state.scenarioCase === "import-create-error" && count === 2 && !state.wrote) { state.wrote = true; return Response.json({error:"Synthetic transient create failure"},{status:503}); }
-      return Response.json({ id: `synthetic-piece-${count}` });
+      const id = `synthetic-piece-${count}`;
+      state.catalog.items.unshift({id,category:"Synthetic added piece",description:"Synthetic saved capture",styleTags:[],imageUrl:"/__fixture/piece-0.svg",analysisStatus:"ready",createdAt:0});
+      return Response.json({id});
     }
     case "complete-onboarding": {
       if (state.scenarioCase === "import-completion-error" && !state.wrote) { state.wrote = true; return Response.json({error:"Synthetic transient completion failure"},{status:503}); }

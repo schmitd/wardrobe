@@ -18,7 +18,7 @@ const refresh = FunctionImpl.make(schema, spec, "refresh", ({ userId }): Effect.
     if (!context.shouldRefresh) return;
     const currentBio = context.profile?.bio ?? "";
     const manualAnchor = context.profile?.bioManualAnchor ?? "";
-    const graphFacts = yield* Effect.tryPromise({ try: () => searchStyleBioGraphContext(userId), catch: () => new Error("Style graph unavailable") }).pipe(Effect.timeout("10 seconds"), Effect.catch(() => Effect.succeed([] as string[])));
+    const graphFacts = yield* Effect.tryPromise({ try: () => searchStyleBioGraphContext(userId, references => ctx.runQuery(internal.inspirationRecall.active, { userId, references })), catch: () => new Error("Style graph unavailable") }).pipe(Effect.timeout("10 seconds"), Effect.catch(() => Effect.succeed([] as string[])));
     const generated = context.counts.closetItemCount + context.counts.fitCheckCount + context.counts.collectionCount === 0
       ? { bio: manualAnchor || currentBio || "I'm building a clearer picture of what I like to wear. As my closet and outfit notes grow, this space will track the colors, shapes, textures, and combinations I return to without guessing ahead of the evidence." }
       : yield* generateMaintainedStyleBio({ currentBio, manualAnchor, refreshReason: context.refreshReason, closetItems: context.closetItems, recentFits: context.recentFits, collections: context.collections, graphFacts }).pipe(Effect.provide(InferenceLive));

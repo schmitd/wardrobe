@@ -77,7 +77,7 @@ export const enrichInspiration = mutation({
       .query("wardrobeMemberships")
       .withIndex("by_candidate", (q) => q.eq("candidateItemId", args.candidateItemId))
       .first();
-    if (!membership || membership.userId !== user.userId) throw new Error("Collection membership not found");
+    if (!membership || membership.removed || membership.membershipKind !== "inspiration" || membership.userId !== user.userId) throw new Error("Collection membership not found");
     const wardrobe = await ctx.db.get(membership.wardrobeId);
     if (!wardrobe || wardrobe.userId !== user.userId) throw new Error("Collection not found");
     const { traceId, traceparent } = ensureTraceContext(args);
@@ -127,9 +127,9 @@ export const listInspirationByWardrobe = query({
     const wardrobe = await ctx.db.get(wardrobeId);
     if (!wardrobe || wardrobe.userId !== userId) return [];
     const memberships = await ctx.db.query("wardrobeMemberships").withIndex("by_wardrobe", (q) => q.eq("wardrobeId", wardrobeId)).collect();
-    const items = await Promise.all(memberships.filter((membership) => membership.candidateItemId).map(async (membership) => {
+    const items = await Promise.all(memberships.filter((membership) => membership.userId === userId && !membership.removed && membership.membershipKind === "inspiration" && membership.candidateItemId).map(async (membership) => {
       const candidate = membership.candidateItemId ? await ctx.db.get(membership.candidateItemId) : null;
-      if (!candidate || candidate.userId !== userId) return null;
+      if (!candidate || candidate.userId !== userId || candidate.kind !== "inspiration") return null;
       return { ...candidate, membershipId: membership._id, membershipKind: membership.membershipKind, rationale: membership.rationale ?? null, imageUrl: candidate.storageId ? await ownedStorageUrl(ctx, userId, candidate.storageId) : null };
     }));
     return items.filter((item) => item !== null);

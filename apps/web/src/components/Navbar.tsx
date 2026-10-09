@@ -4,9 +4,10 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { SignInButton, SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
-import { Sparkles, Shirt } from 'lucide-react';
+import { Sparkles, Shirt, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { UnifiedCaptureController, UnifiedCaptureTrigger } from '@/components/UnifiedCapture';
+import { clerkAppearance } from '@/lib/clerk-appearance';
 import { cn } from '@/lib/utils';
 import InstallLint from '@/components/InstallLint';
 
@@ -63,7 +64,11 @@ export default function Navbar() {
 
           <SignedIn>
             <div className="grid min-h-11 min-w-11 place-items-center border border-[var(--rack-line)] bg-white shadow-[2px_2px_0_var(--rack-panel-shadow)]" aria-label="Account, privacy, and sign out">
-              <UserButton />
+              <UserButton userProfileProps={{ appearance: clerkAppearance }}>
+                <UserButton.MenuItems>
+                  <UserButton.Link label="Privacy" href="/privacy" labelIcon={<Shield aria-hidden="true" size={16} />} />
+                </UserButton.MenuItems>
+              </UserButton>
             </div>
           </SignedIn>
 

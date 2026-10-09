@@ -1,43 +1,33 @@
-import type { Metadata } from "next";
-import Link from "next/link";
+import type { Metadata } from 'next';
+import Link from 'next/link';
 
-export const metadata: Metadata = { title: "Privacy | Wardrobe" };
+export const metadata: Metadata = { title: 'Privacy | Lint' };
 
 export default function PrivacyPage() {
   return (
     <main className="mx-auto w-full max-w-3xl space-y-6 px-5 py-10 pb-32">
-      <h1 className="text-3xl font-bold">Wardrobe privacy</h1>
-      <p>Updated September 22, 2026. Wardrobe is a beta closet and outfit-planning application operated by David Schmitt.</p>
+      <h1 className="text-3xl font-bold">Lint privacy</h1>
+      <p>Updated October 9, 2026. Lint (formerly Wardrobe) is a beta closet and outfit planner operated by David Schmitt.</p>
       <section className="space-y-2">
-        <h2 className="text-xl font-bold">What Wardrobe processes</h2>
-        <p>Wardrobe processes your account identity, uploaded photos, clothing descriptions, style notes, saved plans, outfit history, and feedback to provide the features you request. Photos and relevant style context may be sent to AI services for garment analysis and recommendations. Review suggestions before relying on them.</p>
+        <h2 className="text-xl font-bold">Your closet and suggestions</h2>
+        <p>We use your account details, photos, clothing descriptions, style notes, plans, outfit history, and feedback to run Lint. Relevant photos and text go to OpenAI for analysis and recommendations, Google Gemini for search embeddings, and Zep for style memory. Voice recordings you choose to transcribe go to OpenAI; Lint handles that audio temporarily rather than saving it in your closet.</p>
       </section>
       <section className="space-y-2">
-        <h2 className="text-xl font-bold">Optional Google Calendar connection</h2>
-        <p>Google sign-in alone does not grant calendar access. If you choose to connect Calendar, Wardrobe requests read-only access to your calendar list and events so you can select calendars and request an outfit for a particular day. Wardrobe does not create, change, or delete Google Calendar events.</p>
-        <p>Opening a week reads event titles and times from your selected calendars for display. When you explicitly include Calendar in an outfit request, Wardrobe also uses event locations for the reviewed dates, up to seven days per request. It does not request attendee lists or event descriptions. Outfit-request context is sent to OpenAI to generate your personalized recommendations. Do not include a calendar whose contents you do not want processed for that purpose.</p>
-        <p>Google access tokens are handled server-side through Clerk. Selected calendar identifiers and connection settings are stored in Wardrobe. Raw event responses are not saved to the Wardrobe database or Zep style memory. Generated outfit explanations can reflect event context and are saved with your recommendations. Calendar contents and identifiers are excluded from product analytics and session replay.</p>
-        <p>Disconnecting Calendar in Wardrobe stops further reads and deletes saved calendar-derived recommendations, including planned and worn entries, after confirmation. This leaves your other wardrobe data and Google sign-in intact. You may separately revoke access for Wardrobe in your <a className="underline" href="https://myaccount.google.com/connections">Google Account connections</a>.</p>
+        <h2 className="text-xl font-bold">Optional Calendar and weather</h2>
+        <p>Google sign-in alone does not connect Calendar. Connecting gives Lint read-only access to the calendars you choose. We read event titles and times to show your week, and titles, times, and locations for requested or automatic outfit planning. That planning context goes to OpenAI. We do not read event descriptions or attendees, or change your Google events.</p>
+        <p>Clerk handles Google access tokens on our server. Lint saves your calendar selection and settings, not raw event responses. Saved outfit explanations can include event context. Disconnecting stops further reads and deletes saved calendar-derived outfits, including planned and worn entries, after confirmation. Other closet data remains. You can also revoke Google access in <a className="underline" href="https://myaccount.google.com/connections">Google Account connections</a>.</p>
+        <p>Calendar and weather are optional. If you include weather, our server requests a forecast from MET Norway using approximate city coordinates. Device location requested while planning, when you allow it, is matched to a supported city on your device; raw device coordinates are not sent to our server. The forecast provider does not receive your account or closet.</p>
       </section>
       <section className="space-y-2">
-        <h2 className="text-xl font-bold">Voice input</h2>
-        <p>Recording starts only when you choose Dictate and grant microphone permission. Recordings are limited to 60 seconds. Choosing Transcribe sends the recording to OpenAI; you can edit the resulting text before requesting an outfit. Wardrobe handles audio in server memory rather than storing it in its database or style memory, and deletes its temporary native recording file after use or cancellation.</p>
+        <h2 className="text-xl font-bold">Services and usage tracking</h2>
+        <p>Clerk manages accounts, Convex stores app data and uploads, and Vercel hosts the web app. PostHog collects usage activity and errors, and receives account ID, email, and name on the web. Web session replay is configured to mask text and inputs and block private media. The mobile app has an analytics switch in Account. Axiom receives operational logs and AI-operation metrics. These services process data for their roles under their own terms.</p>
       </section>
       <section className="space-y-2">
-        <h2 className="text-xl font-bold">Analytics and reliability</h2>
-        <p>PostHog receives bounded usage events and sanitized errors to help improve the app. Where session replay is enabled, media and input masking is applied; private photos, style notes, calendar content, and credentials are excluded. Native replay is disabled until its platform masking checks are verified. You can disable optional analytics in the app privacy controls. Essential server reliability logs remain enabled in Axiom.</p>
+        <h2 className="text-xl font-bold">Keeping and deleting data</h2>
+        <p>Saved closet data stays available for your ongoing use. Lint keeps up to 100 outfit recommendations. You can delete pieces in the app; deleting your account starts cleanup of app data and style memory. For help with access, correction, or deletion, email <a className="underline" href="mailto:davidschmittgit@gmail.com">davidschmittgit@gmail.com</a>. Provider logs and backups have separate retention schedules, so deletion does not mean immediate removal from every backup.</p>
+        <p>We will update this page and its date when our practices change. Check it for material changes.</p>
       </section>
-      <section className="space-y-2">
-        <h2 className="text-xl font-bold">Service providers and retention</h2>
-        <p>If you select a supported city and request outfits with weather, our server sends approximate city coordinates to MET Norway. If you choose Use my location, your browser asks permission and matches a nearby supported city on your device. Raw coordinates are not saved or sent to our server; your identity and wardrobe are not sent to the weather provider. Public city forecasts are cached; the city choice stays in your same-tab planner draft. Weather can be skipped.</p>
-        <p>Wardrobe uses Clerk for authentication, Convex for application data and uploaded files, Vercel for web hosting, OpenAI for text, vision, and audio processing, Google Gemini for direct image and text embeddings, Zep for style memory, and PostHog and Axiom for observability. These providers process information needed for their respective functions under their own service terms. Wardrobe does not sell your personal data.</p>
-        <p>Saved wardrobe data supports your ongoing use of the app. Wardrobe retains your latest 100 outfit recommendations. You can delete pieces and request account-data deletion through the app or the contact below. Provider logs and backups may follow separate retention schedules; deletion is not a promise of immediate erasure from every backup.</p>
-      </section>
-      <section className="space-y-2">
-        <h2 className="text-xl font-bold">Questions and requests</h2>
-        <p>Contact <a className="underline" href="mailto:davidschmittgit@gmail.com">davidschmittgit@gmail.com</a> about privacy, access, correction, or deletion. This notice will be updated when data practices change.</p>
-      </section>
-      <Link href="/" className="inline-block underline">Back to Wardrobe</Link>
+      <Link href="/" className="inline-block underline">Back to Lint</Link>
     </main>
   );
 }

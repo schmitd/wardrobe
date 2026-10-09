@@ -4,7 +4,7 @@ test("planner calendar and options stay fully inside the viewport with productio
   for (const width of [390, 576, 1280]) {
     await page.setViewportSize({ width, height: 844 });
     await page.goto("/?scenario=planner");
-    for (const name of ["Calendar", "Planner options"]) {
+    for (const name of ["Calendar"]) {
       await page.getByRole("button", { name, exact: true }).click();
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();

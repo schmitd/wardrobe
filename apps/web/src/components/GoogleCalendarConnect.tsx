@@ -95,8 +95,9 @@ export default function GoogleCalendarConnect({
   return (
     <section aria-label="Google Calendar connection" className="space-y-4">
       <p className="text-sm">
-        Read-only access to calendars you choose. Wardrobe never adds or changes
-        events.
+        Read-only Calendar titles, times, and locations go to OpenAI for requested
+        or automatic outfit planning. Attendees and event descriptions are not
+        read. Wardrobe never adds or changes events. Calendar is optional.
       </p>
       {!calendars && !saved ? (
         <div className="flex flex-wrap gap-2">

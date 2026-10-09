@@ -245,3 +245,30 @@ test("Calendar outage fallback commits without derived data; later disconnect in
   await f.alice.mutation(api.planning.calendar, { enabled: false, calendarIds: [] });
   expect(await f.t.mutation(internal.planningAutoData.commit, { ...f.args, outfits: f.dates.map(f.outfit), calendarDerived: true, calendarRevision: 1 })).toBe(false);
 });
+
+test("manual and scheduled context share owned wear and removal signals; retried swaps do not repeat penalties", async () => {
+  const f = await fixture();
+  const { spare, foreign, suggestion } = await f.t.run(async ctx => {
+    const item = await ctx.db.get(f.item);
+    const spare = await ctx.db.insert("wardrobeItems", { userId:"alice", storageId:item!.storageId, category:"Shirt", analysisStatus:"ready", createdAt:2, updatedAt:2 });
+    const foreign = await ctx.db.insert("wardrobeItems", { userId:"bob", storageId:item!.storageId, category:"Shirt", analysisStatus:"ready", createdAt:2, updatedAt:2 });
+    const suggestion = await ctx.db.insert("outfitSuggestions", { ...f.outfit(f.dates[0]), userId:"alice", status:"suggested", calendarDerived:false, createdAt:Date.now(), updatedAt:Date.now(), recommendationSignals:[{itemId:foreign,at:Date.now()}] });
+    await ctx.db.insert("outfitSuggestions", { ...f.outfit(shiftDay(f.dates[0], -1)), userId:"alice", status:"worn", calendarDerived:false, createdAt:Date.now(), updatedAt:Date.now(), recommendationSignals:[{itemId:foreign,at:Date.now()}] });
+    return { spare, foreign, suggestion };
+  });
+  await f.alice.mutation(api.planning.update, { id:suggestion, itemIds:[spare], requestId:"swap-1" });
+  await f.alice.mutation(api.planning.update, { id:suggestion, itemIds:[spare], requestId:"swap-1" });
+  await expect(f.t.withIdentity({subject:"bob"}).mutation(api.planning.update, {id:suggestion,itemIds:[foreign],requestId:"swap-1"})).rejects.toThrow();
+  const manual = await f.alice.query(api.planning.load, {week:f.dates[0]});
+  expect(manual.recommendationSignals).toEqual([{itemId:f.item,at:Date.now()}]);
+  expect(manual.suggestions[0].recommendationSignals).toBeUndefined();
+  expect(manual.suggestions[0].recommendationRequests).toBeUndefined();
+  expect(manual.wearHistory).toEqual([{date:shiftDay(f.dates[0],-1),itemIds:[f.item],wornAt:Date.now()}]);
+  await f.t.mutation(internal.planningAutoData.claim, f.args);
+  const scheduled = await f.t.query(internal.planningAutoData.load, {...f.args,week:f.dates[0]});
+  expect(scheduled?.recommendationSignals).toEqual(manual.recommendationSignals);
+  expect(scheduled?.wearHistory).toEqual(manual.wearHistory);
+  await f.alice.mutation(api.wardrobe.saveLabels, {itemId:spare,category:"Blouse",styleTags:["Work"]});
+  const edited = await f.t.run(ctx=>ctx.db.get(spare));
+  expect(edited?.category).toBe("Blouse"); expect(edited?.wearPolicy).toBeUndefined(); expect(edited?.wearReadyAt).toBeUndefined();
+});

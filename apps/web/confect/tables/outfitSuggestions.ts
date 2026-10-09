@@ -14,6 +14,8 @@ export default Table.make(() => Schema.Struct({
   calendarDerived: Schema.Boolean,
   createdAt: Schema.Number,
   updatedAt: Schema.Number,
+  recommendationRequests: Schema.optionalKey(Schema.Array(Schema.String)),
+  recommendationSignals: Schema.optionalKey(Schema.Array(Schema.Struct({ itemId: Id("wardrobeItems"), at: Schema.Number }))),
   reason: Schema.optionalKey(Schema.String),
 }))
     .index("by_user", ["userId"])

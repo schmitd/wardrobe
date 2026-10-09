@@ -28,3 +28,4 @@ export const searchGarmentIdentityCandidates = registeredFunctions.searchGarment
 export const searchSimilarItems = registeredFunctions.searchSimilarItems;
 export const setAnalysisError = registeredFunctions.setAnalysisError;
 export const setAnalysisStatus = registeredFunctions.setAnalysisStatus;
+export const setInspirationRemoved = registeredFunctions.setInspirationRemoved;

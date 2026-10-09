@@ -522,10 +522,6 @@ h4 {
 
 .rack-capture-status,
 .rack-capture-toast {
-  position: fixed;
-  right: 1.5rem;
-  bottom: 1.5rem;
-  z-index: 75;
   display: flex;
   width: min(28rem, calc(100vw - 2rem));
   align-items: center;
@@ -539,8 +535,19 @@ h4 {
 }
 
 .rack-capture-status {
+  position:fixed; right:1.5rem; bottom:1.5rem; z-index:75;
   font-weight: 800;
 }
+
+.rack-notifications { position:fixed; right:1rem; bottom:max(1rem,env(safe-area-inset-bottom)); z-index:75; max-height:40dvh; overflow-y:auto; }
+.rack-notifications:empty { display:none; }
+.rack-capture-toast { width:100%; margin-top:8px; }
+.rack-notifications { width:min(28rem,calc(100vw - 2rem)); }
+.rack-modal-notifications { min-height:0; }
+.task-sheet > .rack-modal-notifications { grid-row:1; }
+.rack-notifications--modal { max-height:25dvh; overflow-y:auto; padding:0 24px; }
+.rack-notifications--modal:has(.rack-capture-toast) { padding-top:12px; padding-bottom:12px; border-bottom:1px solid var(--rack-line); }
+.rack-notifications:focus-visible, .rack-notifications--modal:focus-visible { outline:2px solid #735079; outline-offset:-2px; }
 
 .rack-capture-toast--error {
   border-color: var(--rack-danger);
@@ -606,7 +613,7 @@ h4 {
   }
 
   .rack-capture-status,
-  .rack-capture-toast {
+  .rack-notifications {
     right: 50%;
     bottom: calc(6.15rem + env(safe-area-inset-bottom));
     transform: translateX(50%);
@@ -746,7 +753,7 @@ h4 {
 .task-sheet[data-slot="dialog-content"] {
   top:auto; bottom:0; left:0; right:0; width:100%; max-width:none;
   height:min(86dvh,760px); max-height:100dvh; transform:none; translate:none;
-  display:grid; grid-template-rows:auto auto minmax(0,1fr) auto;
+  display:grid; grid-template-rows:auto auto auto minmax(0,1fr) auto;
   padding:0; gap:0; overflow:hidden; border-radius:24px 24px 0 0; background:#fff;
   animation:none;
 }
@@ -798,6 +805,8 @@ h4 {
 
 /* Capture owns the usable viewport, independent of the detail-sheet shell. */
 .lint-camera-surface[data-slot="dialog-content"] { inset:0; z-index:90; width:100%; max-width:none; height:100vh; height:100dvh; border:0; border-radius:0; padding:0; gap:0; background:#080808; box-shadow:none; overflow:hidden; }
+.lint-camera-surface > .rack-modal-notifications { position:absolute; top:104px; left:max(16px,env(safe-area-inset-left)); right:max(16px,env(safe-area-inset-right)); z-index:1; }
+.lint-camera-surface .rack-notifications--modal { padding:0; border:0; }
 .lint-camera { position:relative; width:100%; height:100%; overflow:hidden; color:#fff; background:#080808; }
 .lint-camera-preview { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 .lint-camera-header { position:absolute; inset:0 0 auto; display:flex; align-items:center; gap:16px; padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) 36px max(16px,env(safe-area-inset-left)); background:linear-gradient(#0008,transparent); }
@@ -816,6 +825,7 @@ h4 {
 .lint-camera-choose { min-height:48px; padding:12px 24px; border-radius:24px; color:#241426; background:#fff; font-weight:700; }
 .lint-camera button:focus-visible { outline:3px solid #DCE66E; outline-offset:4px; }
 @media (orientation:landscape) and (max-height:500px) {
+  .lint-camera-surface > .rack-modal-notifications { top:80px; right:128px; }
   .lint-camera-controls { left:auto; top:0; width:112px; flex-direction:column; padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) 16px; background:linear-gradient(90deg,transparent,#0008); }
   .lint-camera-controls-spacer { height:48px; }
   .lint-camera-header { right:112px; padding-bottom:16px; }

@@ -39,7 +39,7 @@ const request = <T>(getToken: GetToken, path: string, init?: RequestInit, operat
 };
 
 export const loadBootstrap = (getToken: GetToken) => Effect.runPromise(request<MobileBootstrap>(getToken, "/api/mobile/bootstrap?v=2"));
-export const planningRequest = <T>(getToken: GetToken, input: PlanningOperation) => Effect.runPromise(request<T>(getToken, "/api/planning", { method: "POST", body: JSON.stringify(input) }, input.operation));
+export const planningRequest = <T>(getToken: GetToken, input: PlanningOperation) => Effect.runPromise(request<T>(getToken, "/api/planning", { method: "POST", body: JSON.stringify("id" in input ? { ...input, requestId: input.requestId ?? createTraceId() } : input) }, input.operation));
 export const transcribeDay = (getToken: GetToken, audio: string, signal?: AbortSignal) => Effect.runPromise(request<{ text: string }>(getToken, "/api/transcribe", { method: "POST", signal, body: JSON.stringify({ audio, mimeType: "audio/mp4", confirmed: true }) }, "transcribe"));
 
 export const getUploadUrl = (getToken: GetToken) =>

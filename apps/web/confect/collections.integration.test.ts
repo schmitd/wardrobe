@@ -305,6 +305,7 @@ test("inspiration pages isolate owners and return only display fields", async ()
     "category",
     "description",
     "imageUrl",
+    "membershipId",
   ]);
   const collections = await alice.query(api.wardrobe.pageCollections, {
     paginationOpts: { numItems: 12, cursor: null },

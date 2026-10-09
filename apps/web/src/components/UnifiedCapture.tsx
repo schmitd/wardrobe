@@ -2,16 +2,13 @@
 
 import { uploadPhoto } from "@/services/photoUpload";
 
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useNotifications } from "./Notifications";
 import WebPhotoCamera from "./WebPhotoCamera";
 import { ChangeEvent, createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  Check,
-  ImagePlus,
   Loader2,
   Sparkles,
-  X,
 } from 'lucide-react';
 import posthog from 'posthog-js';
 import { Effect } from 'effect';
@@ -45,12 +42,6 @@ type PendingCapture = {
   previewUrl: string;
   route: CaptureRoute;
   intent: CaptureIntent;
-};
-
-type Toast = {
-  message: string;
-  href?: string;
-  error?: boolean;
 };
 
 type SavedCapture =
@@ -132,6 +123,18 @@ export function UnifiedCaptureTrigger({ variant }: { variant: 'mobile' | 'deskto
 export function UnifiedCaptureController({ children }: { children: ReactNode }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const locked = useRef(false);
+  const active = useRef(true);
+  const previewUrls = useRef(new Set<string>());
+  const releasePreview = (url: string) => { previewUrls.current.delete(url); URL.revokeObjectURL(url); };
+  useEffect(() => {
+    active.current = true;
+    const urls = previewUrls.current;
+    return () => {
+      active.current = false;
+      for (const url of urls) URL.revokeObjectURL(url);
+      urls.clear();
+    };
+  }, []);
   const [source, setSource] = useState<"camera" | null>(null);
   const [cameraIntent, setCameraIntent] = useState<CaptureIntent>("my_wardrobe");
   const opener = useRef<HTMLElement | null>(null);
@@ -145,7 +148,7 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
   const selectedIntentRef = useRef<CaptureIntent>('my_wardrobe');
   const [pending, setPending] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [toast, setToast] = useState<Toast | null>(null);
+  const { notify } = useNotifications();
   const [tryOnOpen, setTryOnOpen] = useState(false);
   const [tryOnPreview, setTryOnPreview] = useState<string | null>(null);
   const tryOn = useCompatibilityCheck();
@@ -154,7 +157,6 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
     if (pending || locked.current) return;
     selectedIntentRef.current = intent;
     setCameraIntent(intent);
-    setToast(null);
     opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     // Native pickers require this original click, before an async permission result.
     if (!navigator.mediaDevices?.getUserMedia) { choosePhotos(); return; }
@@ -162,10 +164,11 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
   };
 
   const completeCapture = async (capture: PendingCapture, scope: CaptureScope) => {
+    if (!active.current) { releasePreview(capture.previewUrl); return; }
     setPending(true);
 
     if (capture.intent === 'just_trying') {
-      if (tryOnPreview) URL.revokeObjectURL(tryOnPreview);
+      if (tryOnPreview) releasePreview(tryOnPreview);
       setTryOnPreview(capture.previewUrl);
       setTryOnOpen(true);
       setStatus(null);
@@ -174,10 +177,11 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
         startMessage: 'Checking outfit…',
         fallbackErrorMessage: 'Try-on feedback failed.',
       });
+      if (!active.current) return;
       setPending(false);
       setStatus(null);
       if (!result) {
-        setToast({ message: 'Try-on feedback failed. Please try another photo.', error: true });
+        notify({ message: 'Try-on feedback failed. Please try another photo.', error: true });
         return;
       }
       posthog.capture('unified_capture_completed', { intent: capture.intent, scope });
@@ -202,6 +206,7 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
                 ...trace,
               })
             );
+            if (!active.current) return yield* Effect.fail(new Error('Capture interrupted.'));
             yield* waitForWardrobeItem({
               itemId: String(created.id),
               ...trace,
@@ -210,12 +215,12 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
             return { kind: 'piece' as const, id: String(created.id) } satisfies SavedCapture;
           });
     const outcome = await runEffectResult(captureEffect);
-
+    releasePreview(capture.previewUrl);
+    if (!active.current) return;
     setPending(false);
     setStatus(null);
-    URL.revokeObjectURL(capture.previewUrl);
     if (Result.isFailure(outcome)) {
-      setToast({
+      notify({
         message: userFacingErrorMessage(outcome.failure, 'This photo could not be saved. Please try again.'),
         error: true,
       });
@@ -223,7 +228,7 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
     }
 
     const saved = outcome.success;
-    setToast(
+    notify(
       saved.kind === 'fit'
         ? { message: 'Outfit saved.', href: `/fits?view=diary#fit-${saved.id}` }
         : { message: 'Piece added.', href: '/' }
@@ -234,17 +239,19 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
   const processFile = async (file: File) => {
     const intent = selectedIntentRef.current;
     if (!file.type.startsWith('image/')) {
-      setToast({ message: 'Choose a photo to continue.', error: true });
+      notify({ message: 'Choose a photo to continue.', error: true });
       return;
     }
 
     setPending(true);
     setStatus('Adding photo…');
     const previewUrl = URL.createObjectURL(file);
+    previewUrls.current.add(previewUrl);
     const trace = createTraceContext();
     const outcome = await runEffectResult(
       Effect.gen(function* () {
         const storageId = yield* uploadCapture(file);
+        if (!active.current) return yield* Effect.fail(new Error('Capture interrupted.'));
         const route = yield* promiseEffect(() => routeCaptureAction({ storageId, ...trace }));
         return {
           file,
@@ -255,12 +262,12 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
         } satisfies PendingCapture;
       })
     );
-
+    if (!active.current) { releasePreview(previewUrl); return; }
     if (Result.isFailure(outcome)) {
       setPending(false);
       setStatus(null);
-      URL.revokeObjectURL(previewUrl);
-      setToast({
+      releasePreview(previewUrl);
+      notify({
         message: userFacingErrorMessage(outcome.failure, 'This photo could not be read. Please try again.'),
         error: true,
       });
@@ -272,9 +279,9 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
 
   const submitPhotos = async (files: File[]) => {
     if (locked.current || pending || !files.length) return;
-    if (files.length > 8) { setToast({ message: "Choose up to 8 photos at a time.", error: true }); return; }
+    if (files.length > 8) { notify({ message: "Choose up to 8 photos at a time.", error: true }); return; }
     locked.current = true; setSource(null);
-    try { for (const file of files) await processFile(file); }
+    try { for (const file of files) { if (!active.current) break; await processFile(file); } }
     finally { locked.current = false; setPending(false); }
   };
   const onFileChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -293,7 +300,7 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
   };
 
   return (
-    <CaptureContext.Provider value={{ pending, chooseIntent, onOpen: () => setToast(null) }}>
+    <CaptureContext.Provider value={{ pending, chooseIntent, onOpen: () => {} }}>
       {children}
       <input ref={inputRef} type="file" aria-label="Choose photos" accept="image/*" multiple={selectedIntentRef.current === "my_wardrobe"} className="hidden" onChange={onFileChange} />
 
@@ -317,13 +324,6 @@ export function UnifiedCaptureController({ children }: { children: ReactNode }) 
         </div>
       )}
 
-      {toast && !(tryOnOpen && tryOn.status && !tryOn.result) && (
-        <div className={`rack-capture-toast ${toast.error ? 'rack-capture-toast--error' : ''}`} role={toast.error ? 'alert' : 'status'} aria-live="polite">
-          {toast.error ? <ImagePlus className="h-5 w-5" /> : <Check className="h-5 w-5" />}
-          {toast.href ? <Link href={toast.href} className="min-w-0 flex-1 font-extrabold underline decoration-2 underline-offset-4">{toast.message}</Link> : <span className="min-w-0 flex-1 font-semibold">{toast.message}</span>}
-          <button type="button" onClick={() => setToast(null)} aria-label="Dismiss notification" className="grid h-8 w-8 shrink-0 place-items-center hover:bg-black/5"><X className="h-4 w-4" /></button>
-        </div>
-      )}
 
       <Dialog open={tryOnOpen} onOpenChange={setTryOnOpen}>
         <DialogContent aria-describedby={undefined} className="max-h-[92dvh] max-w-5xl overflow-y-auto rounded-none border border-[var(--rack-line)] bg-[var(--rack-paper)] p-5 sm:p-7">

@@ -1,16 +1,17 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useMutation, usePaginatedQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import type { WardrobeItem } from "@/types/wardrobe";
-import { FolderHeart, Pencil, Plus } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import CollectionEnsemble from "./CollectionEnsemble";
 import WardrobeGrid, { type WardrobeGridProps } from "./WardrobeGrid";
 import ItemDetailsDrawer from "./ItemDetailsDrawer";
 import InspirationIntake from "./InspirationIntake";
+import InspirationCard from "./InspirationCard";
 import { Button } from "./ui/button";
 import TaskSheet from "./TaskSheet";
 import { createTraceContext } from "@/lib/trace";
@@ -42,12 +43,23 @@ export default function CollectionsWorkspace({
     selectedId && tab === "inspiration" ? { wardrobeId: selectedId } : "skip",
     { initialNumItems: 24 },
   );
+  const [showRemovedInspiration, setShowRemovedInspiration] = useState(false);
+  const removedInspiration = usePaginatedQuery(api.wardrobe.pageInspiration, selectedId && tab === "inspiration" && showRemovedInspiration ? { wardrobeId: selectedId, removed: true } : "skip", { initialNumItems: 24 });
+  const recoveryButton = useRef<HTMLButtonElement>(null);
+  const setInspirationRemoved = useMutation(api.wardrobe.setInspirationRemoved);
+  const changeInspiration = async (wardrobeId: Id<"wardrobes">, membershipId: Id<"wardrobeMemberships">, removed: boolean) => {
+    await setInspirationRemoved({ wardrobeId, membershipId, removed });
+    posthog.capture("inspiration_membership_changed", { operation: removed ? "removed" : "restored", surface: "wardrobe" });
+    if (removed) setShowRemovedInspiration(true);
+    recoveryButton.current?.focus();
+  };
   const [item, setItem] = useState<WardrobeItem | null>(null);
   const [modal, setModal] = useState<"create" | "edit" | "add" | "remove" | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [collectionRecoveryError, setCollectionRecoveryError] = useState("");
   const create = useMutation(api.wardrobes.createWardrobe);
   const update = useMutation(api.wardrobes.updateWardrobe);
   const add = useMutation(api.wardrobes.addItemToWardrobe);
@@ -62,6 +74,17 @@ export default function CollectionsWorkspace({
       setBusy(false);
     }
   };
+  const restoreCollection = async (wardrobeId: Id<"wardrobes">) => {
+    setBusy(true);
+    setCollectionRecoveryError("");
+    try {
+      await archive({ wardrobeId, archived: false });
+    } catch {
+      setCollectionRecoveryError("Could not restore this collection. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <section
       id="collections"
@@ -70,7 +93,7 @@ export default function CollectionsWorkspace({
     >
       <div>
         <Button variant="ghost" onClick={() => setShowRemoved(value => !value)}>{showRemoved ? "Hide removed collections" : "Removed collections"}</Button>
-        {showRemoved && <section aria-label="Removed collections" className="space-y-2">{removed.results.map(collection => <div key={collection._id} className="flex items-center justify-between gap-3 rounded-lg border p-3" data-private><span>{collection.name}</span><Button variant="outline" disabled={busy} onClick={() => void run(async () => { await archive({ wardrobeId: collection._id, archived: false }); })}>Restore</Button></div>)}{removed.status === "CanLoadMore" && <Button variant="outline" onClick={() => removed.loadMore(12)}>More removed collections</Button>}{removed.status === "Exhausted" && !removed.results.length && <p>No removed collections.</p>}</section>}
+        {showRemoved && <section aria-label="Removed collections" className="space-y-2">{collectionRecoveryError && <p role="alert" className="text-sm">{collectionRecoveryError}</p>}{removed.results.map(collection => <div key={collection._id} className="flex items-center justify-between gap-3 rounded-lg border p-3" data-private><span>{collection.name}</span><Button variant="outline" disabled={busy} onClick={() => void restoreCollection(collection._id)}>Restore</Button></div>)}{removed.status === "CanLoadMore" && <Button variant="outline" onClick={() => removed.loadMore(12)}>More removed collections</Button>}{removed.status === "Exhausted" && !removed.results.length && <p>No removed collections.</p>}</section>}
         <h2 className="mb-3 text-sm font-semibold text-[#56345c]">
           Collections
         </h2>
@@ -222,31 +245,8 @@ export default function CollectionsWorkspace({
             />
           )}
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-            {inspirations.results.map((reference) => (
-              <article
-                key={reference._id}
-                data-private
-                className="overflow-hidden rounded-xl border border-[#d8c9dc] bg-white"
-              >
-                <div className="relative aspect-square bg-[#eee7ee]">
-                  {reference.imageUrl ? (
-                    <Image
-                      src={reference.imageUrl}
-                      alt={reference.description ?? "Saved inspiration"}
-                      fill
-                      sizes="(max-width: 640px) 45vw, 250px"
-                      className="object-contain"
-                    />
-                  ) : (
-                    <FolderHeart className="m-auto h-full w-10" />
-                  )}
-                </div>
-                <p className="p-3 text-sm">
-                  {reference.description ??
-                    reference.category ??
-                    "Saved reference"}
-                </p>
-              </article>
+            {selectedId && inspirations.results.map(reference => (
+              <InspirationCard key={reference.membershipId} reference={reference} onChange={removed => changeInspiration(selectedId, reference.membershipId, removed)} />
             ))}
           </div>
           {inspirations.status === "LoadingFirstPage" && (
@@ -265,6 +265,15 @@ export default function CollectionsWorkspace({
               More inspiration
             </Button>
           )}
+          <Button ref={recoveryButton} type="button" variant="ghost" className="min-h-11" aria-expanded={showRemovedInspiration} onClick={() => setShowRemovedInspiration(value => !value)}>{showRemovedInspiration ? "Hide removed inspiration" : "Removed inspiration"}</Button>
+          {showRemovedInspiration && <section aria-label="Removed inspiration" className="space-y-3">
+            <p role="status" className="text-sm">Removed inspiration stays here so you can restore it to this collection.</p>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3">{selectedId && removedInspiration.results.map(reference => <InspirationCard key={reference.membershipId} reference={reference} removed onChange={removed => changeInspiration(selectedId, reference.membershipId, removed)} />)}</div>
+            {removedInspiration.status === "LoadingFirstPage" && <p role="status">Loading removed inspiration…</p>}
+            {removedInspiration.status === "Exhausted" && !removedInspiration.results.length && <p>No removed inspiration.</p>}
+            {removedInspiration.status === "CanLoadMore" && <Button variant="outline" onClick={() => removedInspiration.loadMore(24)}>More removed inspiration</Button>}
+          </section>}
+
         </div>
       )}
       {item && (

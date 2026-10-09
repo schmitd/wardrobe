@@ -42,6 +42,7 @@ Native TestFlight instrumentation and release checks are documented in [TESTFLIG
 | `guest_signup_prompted` | `source` | Where did the conversion prompt occur? |
 | `wardrobe_item_added` | `content_type` | Are signed-in users activating their closet? |
 | `compatibility_check_completed` | `category`, `verdict`, `score`, item counts | Is the core decision workflow used and useful? |
+| `inspiration_membership_changed` | `operation` (`removed`, `restored`), `surface` (`wardrobe`) | Are users managing saved inspiration? |
 | `inspiration_saved` | `has_photo`, `collection_type` | Are users returning to product discovery? |
 | `unified_capture_completed` | bounded `intent`, `scope` | Which capture flows complete? |
 | `planning_operation_finished` | bounded `operation`, `outcome`, `duration_ms`, `source`, `analytics_schema` | Where do planning requests fail or slow down? |

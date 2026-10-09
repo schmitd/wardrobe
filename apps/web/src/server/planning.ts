@@ -121,6 +121,7 @@ export async function executePlanning(body: PlanningOperation) {
             }
           : {}),
         ...(input.reason ? { reason: input.reason } : {}),
+        ...(input.requestId ? { requestId: input.requestId } : {}),
       },
       options,
     );

@@ -167,11 +167,11 @@ export const syncProfileUpdate = internalAction({
 
 export const getStyleBioGraphContext = action({
   args: {},
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<string[]> => {
     const user = await getAuthenticatedUser(ctx);
     if (!user) throw new Error("Unauthorized");
     try {
-      return await searchStyleBioGraphContext(user.userId);
+      return await searchStyleBioGraphContext(user.userId, references => ctx.runQuery(internal.inspirationRecall.active, { userId: user.userId, references }));
     } catch (error) {
       console.warn("zep.style_bio_context.failed", {
         userId: redactUserId(user.userId),
@@ -344,10 +344,10 @@ export const syncCandidateComparison = action({
 
 export const searchStyleContext = action({
   args: { query: v.string(), traceId: v.optional(v.string()), traceparent: v.optional(v.string()) },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<Array<{ fact: string; relation: string; relevance: number | null }>> => {
     const user = await getAuthenticatedUser(ctx);
     if (!user) throw new Error("Unauthorized");
-    return searchWardrobeStyleMemory(user.userId, args.query, user);
+    return searchWardrobeStyleMemory(user.userId, args.query, user, references => ctx.runQuery(internal.inspirationRecall.active, { userId: user.userId, references }));
   },
 });
 

@@ -14,7 +14,7 @@ export function nearbyWeatherCity(latitude: number, longitude: number) {
 }
 export function requestWeatherCity(geolocation: Pick<Geolocation, "getCurrentPosition"> | undefined) {
   return new Promise<ReturnType<typeof nearbyWeatherCity>>((resolve, reject) => {
-    if (!geolocation) { reject(new Error("Location unavailable. Choose a city instead.")); return; }
-    geolocation.getCurrentPosition(position => resolve(nearbyWeatherCity(position.coords.latitude, position.coords.longitude)), () => reject(new Error("Location unavailable or access declined. Choose a city instead.")), { enableHighAccuracy: false, maximumAge: 300000, timeout: 8000 });
+    if (!geolocation) { reject(new Error("Location unavailable. Planning can continue.")); return; }
+    geolocation.getCurrentPosition(position => resolve(nearbyWeatherCity(position.coords.latitude, position.coords.longitude)), () => reject(new Error("Location unavailable or access declined. Planning can continue.")), { enableHighAccuracy: false, maximumAge: 300000, timeout: 8000 });
   });
 }

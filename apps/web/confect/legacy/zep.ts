@@ -1,6 +1,7 @@
 "use node";
 
 import { Zep, ZepClient } from "@getzep/zep-cloud";
+import { filterInspirationRecall, type RecallAccess } from "../inspirationRecall";
 import { wardrobeEdgeTypes, wardrobeEntityTypes } from "./zepOntology";
 import type { AuthenticatedUser } from "./authIdentity";
 
@@ -654,7 +655,7 @@ export const updateProfileMemory = async (
   }
 };
 
-export const searchStyleBioGraphContext = async (userId: string) => {
+export const searchStyleBioGraphContext = async (userId: string, access: RecallAccess) => {
   if (!apiKey) return [];
   const client = ensureClient();
   const result = await client.graph.search({
@@ -663,8 +664,7 @@ export const searchStyleBioGraphContext = async (userId: string) => {
     scope: "edges",
     limit: 20,
   });
-  return (result.edges ?? [])
-    .filter((edge) => !edge.invalidAt && !edge.expiredAt)
+  return (await filterInspirationRecall(result.edges ?? [], uuid => client.graph.node.get(uuid), access))
     .map((edge) => `${edge.validAt ?? edge.createdAt}: ${edge.fact}`)
     .filter(Boolean)
     .slice(0, 20);
@@ -1030,13 +1030,14 @@ export const addCandidateInspirationMemory = async (
 export const searchWardrobeStyleMemory = async (
   userId: string,
   query: string,
-  user?: AuthenticatedUser | null
+  user: AuthenticatedUser | null | undefined,
+  access: RecallAccess
 ) => {
   if (!apiKey) return [];
   const client = ensureClient();
   await ensureUser(client, userId, user);
   const results = await client.graph.search({ userId, query: truncate(query, 500), limit: 8, scope: "edges" });
-  return (results.edges ?? []).map((edge) => ({ fact: edge.fact, relation: edge.name, relevance: edge.relevance ?? edge.score ?? null }));
+  return (await filterInspirationRecall(results.edges ?? [], uuid => client.graph.node.get(uuid), access)).map((edge) => ({ fact: edge.fact, relation: edge.name, relevance: edge.relevance ?? edge.score ?? null }));
 };
 
 export const setWardrobeOntology = async (targets?: { userIds?: string[]; graphIds?: string[] }) => {

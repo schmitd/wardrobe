@@ -1,3 +1,4 @@
+import { scheduleStyleBioRefresh } from "./styleBioQueue";
 import { wardrobeDisplayUrl } from "./previewQueue";
 import { FunctionImpl } from "@confect/server";
 import { Effect } from "effect";
@@ -193,7 +194,7 @@ export const pageInspiration = FunctionImpl.make(
   schema,
   spec,
   "pageInspiration",
-  ({ wardrobeId, paginationOpts }) =>
+  ({ wardrobeId, paginationOpts, removed }) =>
     Effect.gen(function* () {
       const ctx = yield* QueryCtx;
       const { userId } = yield* CurrentUser;
@@ -214,7 +215,7 @@ export const pageInspiration = FunctionImpl.make(
       );
       const references = yield* Effect.forEach(result.page, (member) =>
         Effect.gen(function* () {
-          if (member.userId !== userId || !member.candidateItemId) return null;
+          if (member.userId !== userId || member.membershipKind !== "inspiration" || Boolean(member.removed) !== Boolean(removed) || !member.candidateItemId) return null;
           const reference = yield* Effect.promise(() =>
             ctx.db.get(member.candidateItemId!),
           );
@@ -231,6 +232,7 @@ export const pageInspiration = FunctionImpl.make(
             : null;
           return {
             _id: reference._id,
+            membershipId: member._id,
             category: reference.category ?? null,
             description: reference.description ?? null,
             imageUrl,
@@ -273,7 +275,7 @@ export const saveLabels = FunctionImpl.make(schema, spec, "saveLabels", ({ itemI
   if (!item || item.userId !== userId) return yield* new CollectionInput({ message: "This piece is no longer available." });
   const tags = [...new Set(styleTags.map(tag => tag.trim()).filter(Boolean))];
   if (!category.trim() || category.length > 80 || tags.length > 20 || tags.some(tag => tag.length > 60)) return yield* new CollectionInput({ message: "Use a category and up to 20 short labels." });
-  yield* Effect.promise(() => ctx.db.patch(itemId, { category: category.trim(), styleTags: tags, labelsEdited: true, wearPolicy, ...(readyToWear ? { wearReadyAt: Date.now() } : {}), updatedAt: Date.now() }));
+  yield* Effect.promise(() => ctx.db.patch(itemId, { category: category.trim(), styleTags: tags, labelsEdited: true, ...(wearPolicy ? { wearPolicy } : {}), ...(readyToWear ? { wearReadyAt: Date.now() } : {}), updatedAt: Date.now() }));
   return null;
 }));
 export const archiveCollection = FunctionImpl.make(schema, spec, "archiveCollection", ({ wardrobeId, archived }) => Effect.gen(function* () {
@@ -282,5 +284,23 @@ export const archiveCollection = FunctionImpl.make(schema, spec, "archiveCollect
   if (!collection || collection.userId !== userId) return yield* new CollectionInput({ message: "Collection unavailable." });
   // Keep pieces and memberships intact so restore can recover the exact collection.
   yield* Effect.promise(() => ctx.db.patch(wardrobeId, { archived, updatedAt: Date.now() }));
+  return null;
+}));
+
+// Remove only this relationship. Shared photos, candidates, closet pieces and fits survive.
+export const setInspirationRemoved = FunctionImpl.make(schema, spec, "setInspirationRemoved", ({ wardrobeId, membershipId, removed }) => Effect.gen(function* () {
+  const ctx = yield* MutationCtx;
+  const { userId } = yield* CurrentUser;
+  const collection = yield* Effect.promise(() => ctx.db.get(wardrobeId));
+  const member = yield* Effect.promise(() => ctx.db.get(membershipId));
+  if (!collection || collection.userId !== userId || !member || member.userId !== userId || member.wardrobeId !== wardrobeId || member.membershipKind !== "inspiration" || !member.candidateItemId || member.itemId)
+    return yield* new CollectionInput({ message: "Inspiration unavailable." });
+  const candidate = yield* Effect.promise(() => ctx.db.get(member.candidateItemId!));
+  if (!candidate || candidate.userId !== userId || candidate.kind !== "inspiration")
+    return yield* new CollectionInput({ message: "Inspiration unavailable." });
+  if (Boolean(member.removed) === removed) return null;
+  yield* Effect.promise(() => ctx.db.patch(membershipId, { removed, updatedAt: Date.now() }));
+  yield* Effect.promise(() => ctx.db.patch(wardrobeId, { updatedAt: Date.now() }));
+  yield* Effect.promise(() => scheduleStyleBioRefresh(ctx, userId));
   return null;
 }));

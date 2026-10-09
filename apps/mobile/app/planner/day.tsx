@@ -1,6 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
-import { Alert } from "react-native";
 import { outfitForDay, type PlanningOperation } from "@wardrobe/shared";
 import { PostHogMaskView } from "posthog-react-native";
 import { usePlanner } from "@/planner-context";
@@ -115,28 +114,7 @@ export default function Day() {
               secondary
               title="Dismiss outfit"
               disabled={p.busy}
-              onPress={() =>
-                Alert.alert(
-                  "Why dismiss?",
-                  "Your other outfits will stay unchanged.",
-                  [
-                    { text: "Cancel", style: "cancel" },
-                    ...[
-                      "Not my style",
-                      "Wrong for the occasion",
-                      "Pieces unavailable",
-                    ].map((reason) => ({
-                      text: reason,
-                      onPress: () =>
-                        void update({
-                          operation: "planning_dismiss",
-                          id: s.id,
-                          reason,
-                        }),
-                    })),
-                  ],
-                )
-              }
+              onPress={() => void update({ operation: "planning_dismiss", id: s.id })}
             />
           ) : null}
         </>

@@ -13,7 +13,7 @@ export const SignedOut = () => null;
 export const SignInButton = SignedIn;
 export const SignUpButton = SignedIn;
 export const analyzeGuestFitCheckAction = async () => ({ kind: "error" as const, message: "Synthetic analysis unavailable. Retry or sign in." });
-export const UserButton = () => <span aria-label="Synthetic account">D</span>;
+export const UserButton = Object.assign(() => <span aria-label="Synthetic account">D</span>, { MenuItems: () => null, Link: () => null });
 export const usePathname = () => useSyncExternalStore(listener => { window.addEventListener("fixture-navigation",listener); return () => window.removeEventListener("fixture-navigation",listener); }, () => location.pathname);
 export const useSearchParams = () => new URLSearchParams(location.search);
 export const api = new Proxy({}, { get: (_, group: string) => new Proxy({}, { get: (_, name: string) => `${group}.${name}` }) });
