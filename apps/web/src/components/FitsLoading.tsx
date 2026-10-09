@@ -132,9 +132,7 @@ export function HistoryLoading() {
             <h3 className={HISTORY_TITLE}>
               <span className="loading-text-line !mt-0" />
             </h3>
-            <div className={HISTORY_PHOTOS}>
-              <div className="loading-image-region" />
-            </div>
+            <div className={HISTORY_PHOTOS} />
             <div className="min-h-11" />
             <div className="h-5">
               <span className="loading-text-line !mt-0" />

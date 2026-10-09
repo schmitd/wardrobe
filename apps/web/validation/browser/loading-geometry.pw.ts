@@ -363,6 +363,8 @@ test("saved outfit history placeholder matches a real planned card without wrapp
   const card = page.locator("[data-history-card]").first();
   await card.waitFor();
   const pending = await card.boundingBox();
+  await expect(card.locator(".loading-image-region")).toHaveCount(0);
+  expect(await card.locator(".my-3").evaluate(node => ({children:node.childElementCount, height:node.getBoundingClientRect().height, background:getComputedStyle(node).backgroundColor}))).toEqual({children:0,height:84,background:"rgba(0, 0, 0, 0)"});
   release();
   await page
     .getByText("Easy structure for your day", { exact: true })

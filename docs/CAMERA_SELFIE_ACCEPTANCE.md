@@ -1,0 +1,22 @@
+# Camera framing and switching correction
+
+Base: deployed 678d5ce3da469e0e98c4ed6b41cc8b0201dd56aa. Isolated source /tmp/lint-camera-selfie-678d. Product changes only WebPhotoCamera.tsx and camera-specific globals.css.
+
+The old full-screen object-fit:cover preview and matching canvas crop removed much of a 4:3 camera's field of view on tall screens, making it appear zoomed. Preview now contains the full frame, and output captures the complete source scaled only to a maximum 1600px edge. Native hardware zoom is untouched; no PTZ request, slider or optical-lens assumption. Front/rear uses ideal facingMode; an unavailable or unconfirmed result is disclosed while the available camera remains usable. Mirror only a confirmed user-facing preview; saved JPEG remains scene-oriented so garment text and mirror selfies are not reversed a second time.
+
+Controls use equal side columns to center shutter and photo-mode controls, 48px camera buttons/44px mode buttons, existing safe-area insets and a portrait/landscape control layout. Close and library remain available through pending permissions/errors. Every switch releases previous tracks; serialized permission promises, live-track readiness, ended-track retry and capture generation guards prevent stale streams/photos after close/background/reopen. No UnifiedCapture, upload, auth, route, native or backend changes.
+
+## Executed evidence
+
+- Headless installed Chrome with synthetic canvas streams only: 14/14 camera-install + camera-selfie journeys passed, no skips/retries. Final log /tmp/lint-selfie-browser-final14.log. Checks actual Add entry, front/rear constraints, known fallback and unknown settings, confirmed preview mirror, full 640x480 unmirrored synthetic JPEG edge pixels, denial/busy/missing API/library cancel/retry, background/history close, stopped/late streams and encoded callbacks, ended-track retry, one upload/save, and existing install/manifest controls.
+- 320/390/430 portrait and 844x390 landscape screenshots at output/playwright/selfie-*.png; actual production CSS, full-frame contain and exact center axis measured; all camera/mode controls in bounds, >=44px, mode/close do not overlap. 320px screenshot visually reviewed.
+- Nonincremental web tsc and changed-file ESLint pass: /tmp/lint-selfie-types-current-shared.log and /tmp/lint-selfie-lint-current.log. Frozen workspace package symlink initially resolved older shared declarations (requestId errors); task-local web @wardrobe/shared link fixed resolution without changing preserved dependencies.
+- Bun Playwright CLI stalled before discovery; stopped task-owned runs. Supported official Node22 CLI completed with PLAYWRIGHT_CHANNEL=chrome, PROBE_PORT=4197. No install/copy/build performed. Full validate ux/root checks belong to source integrator against combined exact head.
+
+Command (apps/web): PROBE_PORT=4197 PLAYWRIGHT_CHANNEL=chrome PATH=<preserved Node22>/bin:$PATH node ../../node_modules/playwright/cli.js test -c validation/browser/playwright.config.ts camera-selfie.pw.ts camera-install.pw.ts. Types/lint invoked via bun x --no-install with preserved Node22 PATH and NODE_OPTIONS/NODE_PATH unset.
+
+## Primary-source rationale and limits
+
+[facingMode](https://developer.mozilla.org/en-US/docs/Web/API/MediaTrackConstraints/facingMode) describes ideal/exact selection; ideal tolerates available-camera fallback. [Track capabilities](https://developer.mozilla.org/en-US/docs/Web/API/MediaStreamTrack/getCapabilities) are per returned track, not a promise that every device has a feature. [Chrome PTZ](https://web.dev/articles/camera-pan-tilt-zoom) distinguishes browser supported-constraint names from camera capabilities and explicit PTZ permission. [W3C Image Capture](https://www.w3.org/TR/image-capture/) defines capability-based zoom, not universal optical focal-length selection. [WebKit Safari18.4](https://webkit.org/blog/16574/webkit-features-in-safari-18-4/) adds Image Capture; do not generalize old Safari support assumptions. No getCapabilities/applyConstraints PTZ was added because preserving native zoom and removing artificial crop addresses the proven issue without another hardware permission.
+
+Synthetic desktop Chrome viewport coverage is not physical-device, Safari or Android camera-quality acceptance. Native focal length, ultrawide availability, camera sensors/orientation and hardware-optical quality remain unverified. No real camera/location grants, user photos, records, accounts, notices, push or deploy.

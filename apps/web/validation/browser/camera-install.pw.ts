@@ -5,7 +5,7 @@ import { cameraFixture } from "./camera-fixture";
 const photo = { name: "synthetic.png", mimeType: "image/png", buffer: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==", "base64") };
 const add = (page: import("playwright/test").Page) => page.getByRole("button", { name: "Add outfit", exact: true });
 
-test("actual Add captures the cover crop, saves once and releases camera in portrait and landscape", async ({ page }) => {
+test("actual Add captures the complete frame, saves once and releases camera in portrait and landscape", async ({ page }) => {
   await cameraFixture(page);
   for (const size of [{ width: 390, height: 844 }, { width: 844, height: 390 }]) {
     await page.setViewportSize(size); await page.goto(`/?scenario=wardrobe&case=crop-${size.width}`);
@@ -26,7 +26,7 @@ test("actual Add captures the cover crop, saves once and releases camera in port
     await upload;
     await expect.poll(async () => (await page.request.get("/__fixture/state").then(r => r.json())).uploadImages.length).toBe(1);
     const image = (await page.request.get("/__fixture/state").then(r => r.json())).uploadImages[0];
-    expect(image.width! / image.height!).toBeCloseTo(size.width / size.height, 2);
+    expect(image.width! / image.height!).toBeCloseTo(640 / 480, 2);
     await expect(camera).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => window.cameraProbe.active)).toBe(0);
     await expect(page.getByText("Outfit saved.", { exact: true })).toBeVisible();
